@@ -1,0 +1,6 @@
+# Python
+.env
+.venv
+.venv/__pychache__
+*.pkl
+*.csv
