@@ -2,6 +2,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from router import router
+
 app = FastAPI()
 
 # CORSMiddleware 추가
@@ -16,3 +18,5 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"]
 )
+
+app.include_router(router)
