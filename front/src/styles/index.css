@@ -1,0 +1,31 @@
+/* ============================================================
+ * 전역 스타일 진입점. main.jsx에서 이 파일 하나만 import 합니다.
+ * 순서: 토큰(변수) → 리셋 → 레이아웃(헤더/푸터/앱셸) → 컴포넌트 → 페이지 전용
+ * ============================================================ */
+
+@import './tokens.css';
+@import './reset.css';
+
+@import './layout/appShell.css';
+@import './layout/header.css';
+@import './layout/footer.css';
+
+@import './components/button.css';
+@import './components/misc.css';
+@import './components/tabs.css';
+@import './components/table.css';
+@import './components/stat.css';
+@import './components/profile.css';
+@import './components/match.css';
+@import './components/map.css';
+@import './components/analysis.css';
+@import './components/aim.css';
+@import './components/predict.css';
+@import './components/aiReport.css';
+@import './components/popup.css';
+@import './components/playerList.css';
+@import './components/auth.css';
+
+@import './pages/home.css';
+@import './pages/login.css';
+@import './pages/signup.css';

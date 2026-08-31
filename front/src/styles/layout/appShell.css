@@ -1,0 +1,19 @@
+/* 최상위 앱 셸 (app-frame) */
+
+.app-frame {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-void);
+  color: var(--text-1);
+}
+
+.app-frame > .page-body {
+  flex: 1;
+}
+
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--sp-8);
+}

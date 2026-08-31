@@ -1,0 +1,154 @@
+/* QuickAnalysisModal (3초 상대분석 팝업) */
+
+.wl-legend {
+  display:flex;
+   justify-content:center;
+   gap:14px;
+   font-size:11px;
+   color:var(--text-2);
+   margin-bottom:10px;
+}
+
+.wl-legend .dot {
+  width:8px;
+   height:8px;
+   border-radius:50%;
+   display:inline-block;
+   margin-right:5px;
+}
+
+/* ============ 3초 상대 분석 POPUP ============ */
+.popup-overlay {
+  background:rgba(0,0,0,0.55);
+   min-height:960px;
+   display:flex;
+   align-items:center;
+   justify-content:center;
+   padding:60px;
+}
+
+.popup-card {
+  width:600px;
+   background:var(--bg-panel);
+   border:1px solid var(--accent-dim);
+   border-radius:8px;
+   overflow:hidden;
+   box-shadow:0 0 0 1px rgba(255,70,85,0.1), 0 30px 60px rgba(0,0,0,0.5);
+}
+
+.popup-body {
+  padding:24px 26px;
+}
+
+.p-box {
+  margin-bottom:22px;
+}
+
+.p-box-title {
+  font-size:13px;
+   color:var(--text-1);
+   margin-bottom:12px;
+   display:flex;
+   align-items:center;
+   gap:8px;
+}
+
+.p-box-title .num {
+  color:var(--accent);
+}
+
+.wl-strip {
+  display:flex;
+   gap:6px;
+   margin-bottom:12px;
+}
+
+.wl-chip {
+  flex:1;
+   height:30px;
+   border-radius:4px;
+   display:flex;
+   align-items:center;
+   justify-content:center;
+   font-size:11px;
+   font-weight:700;
+   color:#fff;
+}
+
+.wl-chip.w {
+  background:var(--success);
+}
+
+.wl-chip.l {
+  background:var(--lose);
+}
+
+.tier-row {
+  display:flex;
+   align-items:center;
+   gap:20px;
+}
+
+.tier-badge-img {
+  width:64px;
+   height:64px;
+   background:var(--bg-panel-3);
+   border:1px dashed var(--border);
+   border-radius:6px;
+   flex-shrink:0;
+   display:flex;
+   align-items:center;
+   justify-content:center;
+   font-size:9px;
+   color:var(--text-3);
+   text-align:center;
+}
+
+.tier-info {
+  flex-shrink:0;
+}
+
+.tier-info .tdiv {
+  font-size:16px;
+   color:var(--text-2);
+   margin-bottom:2px;
+}
+
+.tier-info .trp {
+  font-size:24px;
+   font-weight:700;
+   font-family:'JetBrains Mono',monospace;
+   color:var(--text-1);
+}
+
+.barplot-wrap {
+  width:120px;
+   flex-shrink:0;
+   margin-left:auto;
+}
+
+.barplot-track {
+  height:8px;
+   background:var(--border);
+   border-radius:4px;
+   overflow:hidden;
+   margin-bottom:5px;
+}
+
+.barplot-fill {
+  height:100%;
+   background:var(--accent);
+}
+
+.barplot-wrap .barplot-label {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.p-box:last-child {
+  margin-bottom: 0;
+}
+
+.p-stats-row .rate-lose {
+  color: var(--lose);
+}

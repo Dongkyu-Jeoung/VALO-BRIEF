@@ -1,0 +1,38 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg-void);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+a { color: inherit; text-decoration: none; }
+button, input { font-family: inherit; }
+button { cursor: pointer; }
+ul, ol { list-style: none; }
+img { max-width: 100%; display: block; }
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 키보드 탐색 시에만 포커스 링 표시 (마우스 클릭 시엔 안 보이게) */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 인터랙션 요소에 공통 트랜지션 */
+a, button, input, .player-row, .match-row, .team-match-row {
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
