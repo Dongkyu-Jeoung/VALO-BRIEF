@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Logo from './Logo';
-import SearchBox from '../search/SearchBox';
 import EmptyImageBox from '../common/EmptyImageBox';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
@@ -22,11 +21,12 @@ export default function UtilHeader() {
   const navigate = useNavigate();
   const { isAuthenticated, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <header className="util-header">
       <Link to="/"><Logo size="sm" /></Link>
-      <SearchBox variant="header" />
+
       <nav className="nav-menu">
         {NAV_ITEMS.map((item) => (
           <Link
@@ -37,6 +37,9 @@ export default function UtilHeader() {
             {item.label}
           </Link>
         ))}
+      </nav>
+
+      <div className="header-right">
         {isAuthenticated ? (
           <div className="profile-menu">
             <button
@@ -63,9 +66,42 @@ export default function UtilHeader() {
             ) : null}
           </div>
         ) : (
-          <Link to="/login">MY</Link>
+          <Link to="/login" className="btn-pill">MY</Link>
         )}
-      </nav>
+
+        <button
+          type="button"
+          className="hamburger"
+          aria-label="메뉴 열기"
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen(true)}
+        >
+          <span /><span /><span />
+        </button>
+      </div>
+
+      {sidebarOpen ? (
+        <>
+          <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+          <nav className="sidebar-panel">
+            <button
+              type="button"
+              className="sidebar-close"
+              aria-label="메뉴 닫기"
+              onClick={() => setSidebarOpen(false)}
+            >
+              ✕
+            </button>
+            <div className="sidebar-links">
+              {NAV_ITEMS.map((item) => (
+                <Link key={item.label} to={item.to} onClick={() => setSidebarOpen(false)}>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        </>
+      ) : null}
     </header>
   );
 }

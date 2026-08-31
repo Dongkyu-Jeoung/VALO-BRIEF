@@ -31,15 +31,15 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   /* ===== 타이포 스케일 ===== */
-  --fs-xs: 11px;
-  --fs-sm: 12.5px;
-  --fs-base: 14px;
-  --fs-md: 15px;
-  --fs-lg: 17px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
-  --fs-3xl: 34px;
-  --fs-display: 52px;
+  --fs-xs: 12px;        
+  --fs-sm: 14px;        
+  --fs-base: 16px;      
+  --fs-md: 18px;       
+  --fs-lg: 20px;        
+  --fs-xl: 24px;        
+  --fs-2xl: 30px;       
+  --fs-3xl: 40px;       
+  --fs-display: 56px;   
 
   --lh-tight: 1.2;
   --lh-normal: 1.5;

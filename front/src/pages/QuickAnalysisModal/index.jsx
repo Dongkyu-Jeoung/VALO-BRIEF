@@ -25,8 +25,19 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
     <div className="popup-overlay" onClick={onClose}>
       <div className="popup-card" onClick={(e) => e.stopPropagation()}>
         <div className="popup-head">
-          <div className="bolt" />
-          <div className="popup-title display">3초 상대 분석 리포트</div>
+          <div className="popup-title-wrap">
+            <div className="bolt" />
+            <div className="popup-title display">3초 상대 분석 리포트</div>
+          </div>
+          {/* 닫기 (✕) 버튼 추가 */}
+          <button
+            type="button"
+            className="popup-close-btn"
+            onClick={onClose}
+            aria-label="팝업 닫기"
+          >
+            ✕
+          </button>
         </div>
         <div className="popup-body">
           <div className="p-box">
@@ -69,9 +80,12 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
             <MiniRankTable players={data.playerRanking} showAdr />
           </div>
         </div>
+        
+        {/* 클릭 시 팝업이 닫히도록 onClick={onClose} 연결 */}
         <Link
           to={ROUTES.team(data.teamName.replace(/\s+/g, '-').toLowerCase(), data.teamTag)}
           className="popup-cta"
+          onClick={onClose}
         >
           상세 정보 보기 →
         </Link>

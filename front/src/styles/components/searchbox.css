@@ -1,0 +1,127 @@
+/* ==========================================================================
+   SearchBox Component Module
+   ========================================================================== */
+
+/* 1. 최상위 루트 래퍼 */
+.search-box {
+  position: relative;
+  width: 100%;
+}
+
+/* 히어로 전용 (화면 전체 밸런스 560px) */
+.search-box-hero {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* 헤더 전용 */
+.search-box-header {
+  max-width: 320px;
+}
+
+/* 2. 상단 [개인 / 팀] 선택 토글 버튼 */
+.search-box .search-type-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  justify-content: flex-start;
+}
+
+.search-box .search-type-toggle button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  padding: 5px 15px;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-box .search-type-toggle button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.search-box .search-type-toggle button.is-active {
+  background: #ff4655;
+  border-color: #ff4655;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* 3. 단일 외곽선 통합 검색 박스 (패딩 조절로 상하 여백 확보) */
+.search-box .hero-search-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 56px;
+  background: rgba(18, 20, 29, 0.88);
+  border: 1.5px solid #ff4655;
+  border-radius: 6px;
+  padding: 6px 6px 6px 18px; /* 버튼 상하 여백 확보를 위해 패딩 확장 */
+  box-sizing: border-box;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* 4. 텍스트 입력 영역 */
+.search-box .hero-search-row .hero-search-input {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 12px 0 0;
+}
+
+.search-box .hero-search-row .hero-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* 5. SEARCH 버튼 (위아래 여백이 들어간 안쪽 내부 버튼) */
+.search-box .hero-search-row .btn-search {
+  height: 100%;
+  padding: 0 24px;
+  background-color: #ff4655;
+  border: 0;
+  border-radius: 4px;
+  color: #ffffff;
+  font-family: var(--font-display, sans-serif);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.search-box .hero-search-row .btn-search:hover {
+  background-color: #e03e4d;
+}
+
+.search-box .hero-search-row .btn-search:active {
+  transform: scale(0.98);
+}
+
+/* 6. 에러 토스트 */
+.search-box .search-error-toast {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(20, 10, 12, 0.95);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 70, 85, 0.4);
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10;
+}

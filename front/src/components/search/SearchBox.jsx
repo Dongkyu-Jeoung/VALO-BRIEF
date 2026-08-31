@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkPlayerExists, checkTeamExists } from '../../api/search';
 import { ROUTES } from '../../constants/routes';
+import '../../styles/components/searchbox.css';
 
 // 이름#태그 형식 검사 (개인/팀 공통)
 const isValidFormat = (input) => /^.+#.+$/.test(input.trim());
