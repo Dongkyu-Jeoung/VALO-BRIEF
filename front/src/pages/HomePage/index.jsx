@@ -15,9 +15,9 @@ export default function HomePage() {
   const closeQuickAnalysis = () => setQuickAnalysisTeamTag(null);
 
   const PILLS = [
-    { label: '정확한 승률 예측', to: ROUTES.predict(DEMO_TEAM_NAME, DEMO_TEAM_TAG) },
-    { label: 'AI 전술 분석', onClick: openQuickAnalysis },
-    { label: '맞춤 전략 제안', to: `${ROUTES.myTeam}?tab=${encodeURIComponent('AI 리포트')}` },
+    { label: '정확한 승률 예측' },
+    { label: 'AI 전술 분석' },
+    { label: '맞춤 전략 제안' },
   ];
 
   const FEATURES = [
