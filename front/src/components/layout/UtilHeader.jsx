@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Logo from './Logo';
-import SearchBox from '../search/SearchBox';
 import EmptyImageBox from '../common/EmptyImageBox';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
@@ -26,7 +25,6 @@ export default function UtilHeader() {
   return (
     <header className="util-header">
       <Link to="/"><Logo size="sm" /></Link>
-      <SearchBox variant="header" />
       <nav className="nav-menu">
         {NAV_ITEMS.map((item) => (
           <Link
