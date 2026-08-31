@@ -356,7 +356,9 @@
   }
 
   .feature-row-media {
-    display: none;
+    display: block; 
+    width: 100%;
+    opacity: 0.2;
   }
 
   .feature-row-content {

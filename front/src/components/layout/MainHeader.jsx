@@ -16,12 +16,35 @@ const MENU_LINKS = [
 export default function MainHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const user = { nickname: 'VALO' };
+  const avatarText = user?.nickname ? user.nickname.charAt(0).toUpperCase() : '?';
+
   return (
     <header className="site-header">
       <Link to="/"><Logo /></Link>
+
+      <nav className="nav-menu">
+        {MENU_LINKS.map((item) => (
+          <Link key={item.label} to={item.to}>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
       <div className="header-right">
-        <Link to="/login" className="btn-pill">login</Link>
-        <Link to="/signup" className="btn-pill">signup</Link>
+        {user ? (
+          <div className="profile-menu">
+            <button type="button" className="profile-avatar-btn" title={user.nickname}>
+              <span className="profile-avatar-img">{avatarText}</span>
+            </button>
+          </div>
+        ) : (
+          <>
+            <Link to="/login" className="btn-pill">login</Link>
+            <Link to="/signup" className="btn-pill">signup</Link>
+          </>
+        )}
+
         <button
           type="button"
           className="hamburger"
