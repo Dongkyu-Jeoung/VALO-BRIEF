@@ -1,0 +1,228 @@
+/* ==========================================================================
+   0. 공통 변수 정의 (최상단 배치)
+   ========================================================================== */
+:root {
+  --color-error: #ff4655;
+  --font-size-placeholder: 0.8rem;
+  --font-size-error: 0.75rem;
+}
+
+/* ===================== SIGNUP PAGE ===================== */
+
+.auth-col {
+  width: 100%;
+  max-width: 500px; 
+  margin: 0 auto;
+}
+
+/* 0. 상단 진행 바 (피그마 100% 폭 대응 및 얇은 빨간선) */
+.auth-col .signup-progress-wrap {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.auth-col .signup-progress {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+
+.auth-col .signup-progress-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.auth-col .signup-progress-bar.active {
+  background: #ff4655;
+}
+
+.auth-col .signup-step-label {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-align: left;
+}
+
+.auth-col .signup-step-label.right {
+  text-align: right;
+}
+
+/* 1. 타이틀 영역 */
+.auth-col .auth-title {
+  margin-bottom: 2.5rem;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.03em;
+}
+
+/* 2. 입력 필드 스타일 */
+.auth-col .field-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem; 
+}
+
+/* 약관 영역 블록 전용 여백 조절 클래스 추가 */
+.auth-col .field-block.agree-block {
+  margin-bottom: 1.5rem;
+}
+
+.auth-col .field {
+  width: 100%;
+  margin-bottom: 0; 
+}
+
+.auth-col .field input {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #111111;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+/* placeholder 글자 크기 축소 */
+.auth-col .field input::placeholder {
+  font-size: var(--font-size-placeholder);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* 에러 발생 시 input 테두리 및 에러 메시지 스타일 추가 */
+.auth-col .field.is-invalid input {
+  border-color: var(--color-error);
+}
+
+.auth-col .field-error-msg {
+  color: var(--color-error);
+  font-size: var(--font-size-error);
+  text-align: left;
+  margin-top: 0.35rem;
+  padding-left: 0.25rem;
+}
+
+/* 3. 라이엇 인증 박스 */
+.auth-col .riot-verify-box {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.auth-col .riot-status-text {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.auth-col .btn-riot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.auth-col .btn-riot:hover {
+  background: #222222;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* 4. 약관 동의 영역 */
+.auth-col .checkbox-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem; 
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  justify-content: flex-start;
+}
+
+/* 5. 하단 안내 문구 */
+.auth-col .auth-disclaimer {
+  width: 100%;
+  text-align: center;
+  margin-top: 0.2rem;
+  margin-bottom: 2rem;
+  font-size: 0.7rem; 
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.4;
+  white-space: nowrap; 
+}
+
+/* 6. NEXT / SIGNUP 알약 버튼 */
+.auth-col .btn-auth-pill {
+  width: 100%;
+  max-width: 280px;
+  padding: 1rem 0;
+  border-radius: 9999px;
+  background: #ff4655;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.2s ease;
+}
+
+.auth-col .btn-auth-pill:hover {
+  background: #e03e4c;
+  transform: translateY(-1px);
+}
+
+/* 빨간색 라이엇 버튼 */
+.auth-col .btn-riot-red {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: #ff4655;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.auth-col .btn-riot-red:hover {
+  background: #e03e4c;
+  transform: translateY(-1px);
+}
+
+.auth-col .btn-riot-red:disabled {
+  background: #666;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 로고 이미지 아이콘 크기 제어 */
+.auth-col .riot-logo-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}

@@ -1,0 +1,67 @@
+.display {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.section-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+
+.section-title.mb {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.section-title.spaced {
+  display: block;
+  margin: 34px 0 14px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid var(--border);
+}
+
+.empty-image-box {
+  background: var(--bg-panel-2);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 11px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.text-win {
+  color: var(--win);
+}
+
+.text-lose {
+  color: var(--lose);
+}
+
+.loading-text {
+  color: var(--text-2);
+}
+
+.dot.win {
+  background: var(--win);
+}
+
+.dot.lose {
+  background: var(--lose);
+}

@@ -1,0 +1,215 @@
+/* AnalysisSection 계열: RoundInfo/MapInfo/EngagementInfo/ComboBlock */
+
+.analysis-row {
+background:var(--bg-panel);
+   border:1px solid var(--border);
+   border-radius:6px;
+   padding:28px 30px;
+   margin-bottom:22px;
+}
+
+.analysis-row-head {
+display:flex;
+   align-items:center;
+   justify-content:space-between;
+   margin-bottom:22px;
+}
+
+.analysis-row-head h5 {
+font-size:17px;
+   display:flex;
+   align-items:center;
+   gap:10px;
+}
+
+.combo-block {
+margin-top:20px;
+   padding-top:18px;
+   border-top:1px solid var(--border-soft);
+}
+
+.combo-block-title {
+font-size:12.5px;
+   color:var(--text-2);
+   margin-bottom:14px;
+   font-weight:700;
+}
+
+.combo-row {
+display:flex;
+   align-items:center;
+   gap:14px;
+   margin-bottom:12px;
+}
+
+.combo-label {
+width:70px;
+   font-size:11.5px;
+   color:var(--text-3);
+   flex-shrink:0;
+}
+
+.combo-agents {
+display:flex;
+   gap:6px;
+}
+
+.combo-agent-icon {
+width:38px;
+   height:38px;
+   border-radius:5px;
+   background:var(--bg-panel-3);
+   border:1px solid var(--border-soft);
+   flex-shrink:0;
+}
+
+.combo-detail-cols {
+display:grid;
+   grid-template-columns:1fr 1fr;
+   gap:26px;
+   margin-top:16px;
+}
+
+.combo-detail-title {
+font-size:11.5px;
+   color:var(--text-2);
+   margin-bottom:8px;
+   font-weight:700;
+}
+
+.combo-detail-row {
+display:flex;
+   justify-content:space-between;
+   font-size:12px;
+   color:var(--text-2);
+   padding:7px 0;
+   border-bottom:1px solid var(--border-soft);
+}
+
+.combo-detail-row b {
+color:var(--text-1);
+   font-family:'JetBrains Mono',monospace;
+}
+
+.skill-box-row {
+display:grid;
+   grid-template-columns:repeat(3,1fr);
+   gap:14px;
+   margin-bottom:22px;
+}
+
+.skill-box {
+background:var(--bg-panel-2);
+   border:1px solid var(--border-soft);
+   border-radius:5px;
+   padding:16px;
+   text-align:center;
+}
+
+.skill-box .sk-name {
+font-size:13.5px;
+   font-weight:700;
+   margin-bottom:12px;
+}
+
+.skill-box .sk-metrics {
+display:flex;
+   justify-content:space-around;
+}
+
+.skill-box .sk-metrics div {
+font-size:10.5px;
+   color:var(--text-2);
+}
+
+.skill-box .sk-metrics b {
+display:block;
+   color:var(--text-1);
+   font-family:'JetBrains Mono',monospace;
+   font-size:16px;
+   margin-top:4px;
+}
+
+.duel-compare-block {
+margin-bottom:22px;
+}
+
+.duel-compare-title {
+font-size:12.5px;
+   color:var(--text-2);
+   margin-bottom:10px;
+   font-weight:700;
+}
+
+.duel-compare {
+display:flex;
+   align-items:center;
+   gap:14px;
+}
+
+.duel-side-label {
+font-size:12px;
+   color:var(--text-2);
+   width:110px;
+   flex-shrink:0;
+}
+
+.duel-side-label b {
+color:var(--text-1);
+   font-family:'JetBrains Mono',monospace;
+   display:block;
+   font-size:16px;
+}
+
+.duel-bar {
+flex:1;
+   height:14px;
+   border-radius:7px;
+   overflow:hidden;
+   display:flex;
+}
+
+.duel-bar .us {
+background:var(--win);
+}
+
+.duel-bar .them {
+background:var(--lose);
+}
+
+/* ===== 개인 상세 : stat-inline pattern ===== */
+.analysis-row {
+background:var(--bg-panel);
+   border:1px solid var(--border);
+   border-radius:6px;
+   padding:28px 30px;
+   margin-bottom:22px;
+}
+
+.subsection-title {
+font-size:12.5px;
+   color:var(--text-2);
+   margin:20px 0 12px;
+   font-weight:700;
+   padding-top:18px;
+   border-top:1px solid var(--border-soft);
+}
+
+.subsection-title:first-of-type {
+padding-top:0;
+   border-top:none;
+   margin-top:0;
+}
+
+/* ===== v3 fix additions ===== */
+.combo-pct {
+margin-left:auto;
+   font-size:12.5px;
+   color:var(--accent);
+   font-family:'JetBrains Mono',monospace;
+   font-weight:700;
+}
+
+.duel-compare-block:last-child {
+margin-bottom: 0;
+}

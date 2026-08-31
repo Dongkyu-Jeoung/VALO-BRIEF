@@ -1,0 +1,73 @@
+:root {
+  /* ===== 색상 ===== */
+  --canvas: #E9E9EC;
+  --bg-void: #0A0B0F;
+  --bg-panel: #14161D;
+  --bg-panel-2: #1B1E27;
+  --bg-panel-3: #22252F;
+  --bg-panel-hover: #262A35;
+  --border: #282C37;
+  --border-soft: #1D2029;
+  --border-strong: #383E4D;
+  --text-1: #F3F4F6;
+  --text-2: #9199A8;
+  --text-3: #565D6B;
+
+  --accent: #FF4655;
+  --accent-hover: #FF5D6B;
+  --accent-soft: rgba(255, 70, 85, 0.14);
+  --accent-dim: #B8323F;
+
+  --win: #4C7EFF;
+  --win-soft: rgba(76, 126, 255, 0.14);
+  --lose: #FF4655;
+  --lose-soft: rgba(255, 70, 85, 0.14);
+  --gold: #F4C550;
+  --success: #2FB170;
+
+  /* ===== 폰트 ===== */
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Noto Sans KR', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* ===== 타이포 스케일 ===== */
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 34px;
+  --fs-display: 52px;
+
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+  --lh-loose: 1.75;
+
+  /* ===== 스페이싱 스케일 (8px 기준) ===== */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* ===== 모서리 / 그림자 / 전환 ===== */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+}

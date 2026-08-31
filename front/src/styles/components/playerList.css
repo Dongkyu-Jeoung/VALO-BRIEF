@@ -1,0 +1,119 @@
+/* 우리팀 분석 - 개인분석 탭 유저 리스트 */
+
+.player-list-head {
+  display: grid;
+  grid-template-columns: 2.4fr 1fr 1.6fr 0.8fr 0.8fr 0.8fr 0.8fr 24px;
+  gap: 12px;
+  padding: 0 20px 10px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.player-list-sort-head {
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+}
+
+.player-list-sort-head:hover {
+  color: var(--text-1);
+}
+
+.player-row {
+  display:grid;
+   grid-template-columns:2.4fr 1fr 1.6fr 0.8fr 0.8fr 0.8fr 0.8fr 24px;
+   gap:12px;
+   align-items:center;
+   background:var(--bg-panel);
+   border:1px solid var(--border);
+   border-radius:6px;
+   padding:14px 20px;
+   margin-bottom:10px;
+   cursor: pointer;
+}
+
+.player-row:hover {
+  background: var(--bg-panel-hover);
+  border-color: var(--border-strong);
+}
+
+.player-row.selected {
+  border-color: var(--accent);
+}
+
+.player-stat-val.selected {
+  color: var(--accent);
+}
+
+.player-id-cell {
+  display:flex;
+   align-items:center;
+   gap:12px;
+}
+
+.player-avatar {
+  width:40px;
+   height:40px;
+   border-radius:6px;
+   background:var(--bg-panel-3);
+   flex-shrink:0;
+}
+
+.player-id-cell .pid {
+  font-size:14px;
+   font-weight:700;
+}
+
+.player-id-cell .ptag {
+  font-size:11px;
+   color:var(--text-3);
+}
+
+.player-role-badge {
+  font-size:11px;
+   padding:4px 10px;
+   border-radius:4px;
+   background:var(--bg-panel-2);
+   border:1px solid var(--border-soft);
+   color:var(--text-2);
+   text-align:center;
+   width:fit-content;
+}
+
+.player-agent-cell {
+  display:flex;
+   align-items:center;
+   gap:8px;
+   font-size:12px;
+   color:var(--text-2);
+}
+
+.player-agent-thumb {
+  width:28px;
+   height:28px;
+   border-radius:5px;
+   background:var(--bg-panel-3);
+   flex-shrink:0;
+}
+
+.player-stat-val {
+  font-family:'JetBrains Mono',monospace;
+   font-weight:700;
+   font-size:14px;
+   color:var(--text-1);
+   text-align:center;
+}
+
+.player-row-arrow {
+  color:var(--text-3);
+   text-align:center;
+   font-size:12px;
+}
+
+.user-select .player-name {
+  color: var(--text-1);
+}
+
+.user-select-link {
+  cursor: pointer;
+}

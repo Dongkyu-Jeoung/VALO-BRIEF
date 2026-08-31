@@ -1,0 +1,230 @@
+/* 숫자 통계 카드: StatInlineGrid, 모드별 스탯카드, DonutChart */
+
+.stat-grid {
+  display:grid;
+   grid-template-columns:repeat(4,1fr);
+   gap:16px;
+   margin-bottom:30px;
+}
+
+.stat-card {
+  background:var(--bg-panel);
+   border:1px solid var(--border);
+   border-radius:5px;
+   padding:18px;
+}
+
+.stat-card .mode-name {
+  font-size:12px;
+   color:var(--text-2);
+   margin-bottom:10px;
+   display:flex;
+   justify-content:space-between;
+   align-items:center;
+}
+
+.stat-rows {
+  display:grid;
+   grid-template-columns:1fr 1fr;
+   gap:8px 14px;
+   margin-top:8px;
+}
+
+.stat-rows div {
+  font-size:11px;
+   color:var(--text-3);
+}
+
+.stat-rows b {
+  display:block;
+   color:var(--text-1);
+   font-family:'JetBrains Mono',monospace;
+   font-size:15px;
+   font-weight:600;
+}
+
+.donut-chart {
+  width: var(--donut-size, 96px);
+  height: var(--donut-size, 96px);
+  border-radius: 50%;
+  background: conic-gradient(var(--win) 0deg var(--donut-deg, 216deg), var(--lose) var(--donut-deg, 216deg) 360deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  flex-shrink: 0;
+}
+
+.donut-chart-inner {
+  width: calc(var(--donut-size, 96px) - 26px);
+  height: calc(var(--donut-size, 96px) - 26px);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.metric-row {
+  display:flex;
+   justify-content:space-between;
+   font-size:12px;
+   color:var(--text-2);
+   padding:7px 0;
+   border-bottom:1px solid var(--border-soft);
+}
+
+.metric-row:last-child {
+  border:none;
+}
+
+.metric-row b {
+  color:var(--text-1);
+   font-family:'JetBrains Mono',monospace;
+}
+
+.stat-inline-grid {
+  display:grid;
+   grid-template-columns:repeat(var(--stat-cols, 6), 1fr);
+   gap:14px;
+}
+
+.stat-inline-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.stat-inline {
+  background:var(--bg-panel-2);
+   border:1px solid var(--border-soft);
+   border-radius:5px;
+   padding:16px 10px;
+   text-align:center;
+}
+
+.stat-inline .lbl {
+  font-size:12px;
+   color:var(--text-2);
+   margin-bottom:8px;
+}
+
+.stat-inline .val {
+  font-family:'JetBrains Mono',monospace;
+   font-weight:700;
+   font-size:19px;
+   color:var(--text-1);
+}
+
+.stat-inline .val.sm {
+  font-size: 14px;
+}
+
+.stat-inline .sub {
+  font-size:9.5px;
+   color:var(--text-3);
+   margin-top:4px;
+}
+
+/* 역할군 분포 (PlayerProfilePage) */
+.role-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.role-row:last-child {
+  border: none;
+}
+
+.role-name {
+  width: 52px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.role-bar-short {
+  flex: 1;
+  height: 7px;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.role-bar-short span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+
+.role-wl {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.role-wl b {
+  color: var(--text-1);
+}
+
+/* 즐겨쓰는 요원 TOP 3 (PlayerProfilePage) */
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.agent-row:last-child {
+  border: none;
+}
+
+.agent-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  background: var(--bg-panel-3);
+  flex-shrink: 0;
+}
+
+.agent-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 3px;
+}
+
+.agent-stat-header {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.agent-stat-values {
+  font-size: 12px;
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.agent-wl {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.agent-wl b {
+  color: var(--text-1);
+}
