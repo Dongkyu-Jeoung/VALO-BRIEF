@@ -20,3 +20,4 @@ holidays
 httpx
 openai
 gunicorn
+watchfiles
