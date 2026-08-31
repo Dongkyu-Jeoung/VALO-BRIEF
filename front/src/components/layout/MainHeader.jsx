@@ -15,28 +15,49 @@ const MENU_LINKS = [
 
 export default function MainHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState({ nickname: 'VALO' });
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const user = { nickname: 'VALO' };
   const avatarText = user?.nickname ? user.nickname.charAt(0).toUpperCase() : '?';
+
+  const handleLogout = () => {
+    setUser(null);
+    setDropdownOpen(false);
+  };
 
   return (
     <header className="site-header">
       <Link to="/"><Logo /></Link>
 
-      <nav className="nav-menu">
-        {MENU_LINKS.map((item) => (
-          <Link key={item.label} to={item.to}>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      {user && (
+        <nav className="nav-menu">
+          {MENU_LINKS.map((item) => (
+            <Link key={item.label} to={item.to}>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      )}
 
       <div className="header-right">
         {user ? (
           <div className="profile-menu">
-            <button type="button" className="profile-avatar-btn" title={user.nickname}>
+            <button 
+              type="button" 
+              className="profile-avatar-btn" 
+              title={user.nickname}
+              onClick={() => setDropdownOpen((prev) => !prev)}
+            >
               <span className="profile-avatar-img">{avatarText}</span>
             </button>
+
+            {dropdownOpen && (
+              <div className="profile-dropdown">
+                <button type="button" onClick={handleLogout}>
+                  로그아웃
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -56,7 +77,7 @@ export default function MainHeader() {
         </button>
       </div>
 
-      {sidebarOpen ? (
+      {sidebarOpen && (
         <>
           <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
           <nav className="sidebar-panel">
@@ -77,7 +98,7 @@ export default function MainHeader() {
             </div>
           </nav>
         </>
-      ) : null}
+      )}
     </header>
   );
 }

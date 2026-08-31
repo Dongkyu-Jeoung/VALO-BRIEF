@@ -48,9 +48,8 @@
 .header-right {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--sp-4);
-  flex-shrink: 0; 
+  margin-left: auto; 
 }
 
 .btn-pill {
@@ -115,7 +114,7 @@
 /* ===== 2. 네비게이션 & 프로필 드롭다운 ===== */
 .nav-menu {
   display: flex;
-  gap: var(--sp-6);
+  gap: 50px;
   font-size: var(--fs-sm);
   color: var(--text-2);
 }
@@ -356,5 +355,11 @@
 
   .hamburger {
     display: flex;
+  }
+
+  .site-header,
+  .util-header {
+    display: flex;
+    justify-content: space-between;
   }
 }
