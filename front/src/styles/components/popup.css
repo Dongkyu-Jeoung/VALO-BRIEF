@@ -1,143 +1,202 @@
 /* QuickAnalysisModal (3초 상대분석 팝업) */
 
 .wl-legend {
-  display:flex;
-   justify-content:center;
-   gap:14px;
-   font-size:11px;
-   color:var(--text-2);
-   margin-bottom:10px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 10px;
 }
 
 .wl-legend .dot {
-  width:8px;
-   height:8px;
-   border-radius:50%;
-   display:inline-block;
-   margin-right:5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
 }
 
 /* ============ 3초 상대 분석 POPUP ============ */
 .popup-overlay {
-  background:rgba(0,0,0,0.55);
-   min-height:960px;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   padding:60px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
 }
 
 .popup-card {
-  width:600px;
-   background:var(--bg-panel);
-   border:1px solid var(--accent-dim);
-   border-radius:8px;
-   overflow:hidden;
-   box-shadow:0 0 0 1px rgba(255,70,85,0.1), 0 30px 60px rgba(0,0,0,0.5);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(255, 70, 85, 0.1), 0 30px 60px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 10000;
+  overflow: hidden;
 }
 
+/* 팝업 헤더 */
+.popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 26px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+
+.popup-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.popup-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.popup-close-btn:hover {
+  color: var(--text-1);
+}
+
+/* 팝업 바디 */
 .popup-body {
-  padding:24px 26px;
+  padding: 24px 26px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.popup-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.popup-body::-webkit-scrollbar-thumb {
+  background: var(--border-soft, rgba(255, 255, 255, 0.15));
+  border-radius: 3px;
 }
 
 .p-box {
-  margin-bottom:22px;
+  margin-bottom: 22px;
+}
+
+.p-box:last-child {
+  margin-bottom: 0;
 }
 
 .p-box-title {
-  font-size:13px;
-   color:var(--text-1);
-   margin-bottom:12px;
-   display:flex;
-   align-items:center;
-   gap:8px;
+  font-size: 13px;
+  color: var(--text-1);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .p-box-title .num {
-  color:var(--accent);
+  color: var(--accent);
 }
 
 .wl-strip {
-  display:flex;
-   gap:6px;
-   margin-bottom:12px;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
 .wl-chip {
-  flex:1;
-   height:30px;
-   border-radius:4px;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   font-size:11px;
-   font-weight:700;
-   color:#fff;
+  flex: 1;
+  height: 30px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
 }
 
 .wl-chip.w {
-  background:var(--success);
+  background: var(--success);
 }
 
 .wl-chip.l {
-  background:var(--lose);
+  background: var(--lose);
 }
 
 .tier-row {
-  display:flex;
-   align-items:center;
-   gap:20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 .tier-badge-img {
-  width:64px;
-   height:64px;
-   background:var(--bg-panel-3);
-   border:1px dashed var(--border);
-   border-radius:6px;
-   flex-shrink:0;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   font-size:9px;
-   color:var(--text-3);
-   text-align:center;
+  width: 64px;
+  height: 64px;
+  background: var(--bg-panel-3);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: var(--text-3);
+  text-align: center;
 }
 
 .tier-info {
-  flex-shrink:0;
+  flex-shrink: 0;
 }
 
 .tier-info .tdiv {
-  font-size:16px;
-   color:var(--text-2);
-   margin-bottom:2px;
+  font-size: 16px;
+  color: var(--text-2);
+  margin-bottom: 2px;
 }
 
 .tier-info .trp {
-  font-size:24px;
-   font-weight:700;
-   font-family:'JetBrains Mono',monospace;
-   color:var(--text-1);
+  font-size: 24px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-1);
 }
 
 .barplot-wrap {
-  width:120px;
-   flex-shrink:0;
-   margin-left:auto;
+  width: 120px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .barplot-track {
-  height:8px;
-   background:var(--border);
-   border-radius:4px;
-   overflow:hidden;
-   margin-bottom:5px;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 5px;
 }
 
 .barplot-fill {
-  height:100%;
-   background:var(--accent);
+  height: 100%;
+  background: var(--accent);
 }
 
 .barplot-wrap .barplot-label {
@@ -145,10 +204,32 @@
   color: var(--text-2);
 }
 
-.p-box:last-child {
-  margin-bottom: 0;
-}
-
 .p-stats-row .rate-lose {
   color: var(--lose);
+}
+
+/* [수정] 볼록함(Shadow/Border/Highlight) 제거 후 완전 평평한 리포트 상세보기 버튼 */
+.popup-cta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 16px 26px;
+  background: rgba(0, 0, 0, 0.2);
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  box-shadow: none;
+  outline: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.popup-cta:hover {
+  background: rgba(255, 70, 85, 0.08);
+  opacity: 0.9;
+  text-decoration: underline;
+  box-shadow: none;
 }

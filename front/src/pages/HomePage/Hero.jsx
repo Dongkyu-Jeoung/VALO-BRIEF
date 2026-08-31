@@ -2,28 +2,44 @@ import { getAsset } from '@/assets';
 import SearchBox from '../../components/search/SearchBox';
 import FeatureLink from '../../components/common/FeatureLink';
 
+/**
+ * 메인 페이지 히어로 및 통계 바 섹션
+ * @param {object} props
+ * @param {Array<{label: string, to?: string, onClick?: function}>} props.pills
+ */
 export default function Hero({ pills = [] }) {
   const heroImage = getAsset('hero', 'home');
 
   return (
     <>
-      <section className="hero" style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}>
+      <section
+        className="hero"
+        style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}
+      >
         <div className="hero-overlay" />
 
         <div className="hero-content">
           <h1 className="hero-headline display">
-            데이터로<br /><span className="hi-accent">승리를 설계</span>하다
+            데이터로<br />
+            <span className="hi-accent">승리를 설계</span>하다
           </h1>
           <p className="hero-sub">
-            상대 팀의 공개 데이터를 자동 분석하고,<br />우리 팀에 최적화된 전략을 제안합니다.
+            상대 팀의 공개 데이터를 자동 분석하고,<br />
+            우리 팀에 최적화된 전략을 제안합니다.
           </p>
 
           <div className="hero-center-group">
             <SearchBox variant="hero" />
 
+            {/* pill.onClick 전달이 이미 정확히 구현되어 있어 모달 연동이 정상 동작합니다. */}
             <div className="feature-pills">
               {pills.map((pill) => (
-                <FeatureLink key={pill.label} to={pill.to} onClick={pill.onClick} className="feature-pill">
+                <FeatureLink
+                  key={pill.label}
+                  to={pill.to}
+                  onClick={pill.onClick}
+                  className="feature-pill"
+                >
                   {pill.label}
                 </FeatureLink>
               ))}
