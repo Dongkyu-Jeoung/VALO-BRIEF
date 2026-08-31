@@ -13,56 +13,109 @@
 }
 
 .pv-team {
-  text-align:center;
+  text-align: center;
   flex: 0 0 auto;
 }
 
 .pv-team .avatar-frame {
-  margin:0 auto 12px;
+  margin: 0 auto 12px;
 }
 
 .pv-team .tname {
-  font-size:20px;
+  font-size: 20px;
 }
 
-.pv-label {
-  font-size:11px;
-   color:var(--text-2);
-   letter-spacing:0.08em;
-   text-transform:uppercase;
-   margin-bottom:6px;
+/* 팀 라벨 (우리팀, 상대팀) */
+.pv-team .pv-label {
+  font-size: 12px;
+  color: var(--text-2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
 }
 
 .pv-center {
-  text-align:center;
+  text-align: center;
   flex: 1;
-  max-width: 320px;
+  max-width: 540px;
+}
+
+/* 예상 승률 라벨 (크기 확대 적용) */
+.pv-center .pv-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+/* 가로 정렬 래퍼 */
+.pv-vs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+
+/* 텍스트 영역 고정 너비 지정 */
+.pv-percent-wrapper {
+  width: 110px;
+  display: flex;
+  align-items: center;
+}
+
+.pv-percent-wrapper.left {
+  justify-content: flex-start;
+  padding-left: 8px;
+}
+
+.pv-percent-wrapper.right {
+  justify-content: flex-end;
+  padding-right: 8px;
 }
 
 .pv-percent {
-  font-family:'JetBrains Mono',monospace;
-   font-size:32px;
-   font-weight:700;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
 }
 
+/* 높은 승률 폰트 커스텀 */
+.pv-percent.is-high {
+  font-size: 34px;
+  opacity: 1;
+}
+
+/* 낮은 승률 폰트 커스텀 */
+.pv-percent.is-low {
+  font-size: 22px;
+  opacity: 0.55;
+}
+
+/* 중앙 승률 바 고정 */
 .pv-vs-bar {
-  width:220px;
-   height:10px;
-   border-radius:5px;
-   overflow:hidden;
-   display:flex;
-   margin:12px 0;
+  width: 220px;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+  flex-shrink: 0;
 }
 
 .pv-vs-bar .a {
-  background:var(--win);
+  background: var(--win);
+  height: 100%;
 }
 
 .pv-vs-bar .b {
-  background:var(--lose);
+  background: var(--lose);
+  height: 100%;
 }
 
 .pv-recent20 {
-  font-size:11px;
-   color:var(--text-2);
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 8px;
 }

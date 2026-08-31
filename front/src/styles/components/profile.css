@@ -1,103 +1,128 @@
 /* ProfileHeader, 최근 20게임 요약 스트립 */
 
 .profile-card {
-display:flex;
-   align-items:center;
-   gap:22px;
-   padding:26px 0;
-   border-bottom:1px solid var(--border-soft);
-   margin-bottom:24px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 26px 0;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 24px;
 }
 
 .avatar-frame {
-width:84px;
-   height:84px;
-   border-radius:8px;
-   background:var(--bg-panel-3);
-   border:2px solid var(--accent);
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   color:var(--text-3);
-   font-size:11px;
+  width: 84px;
+  height: 84px;
+  border-radius: 8px;
+  background: var(--bg-panel-3);
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 11px;
 }
 
 .profile-name {
-font-size:26px;
-   margin-bottom:6px;
+  font-size: 26px;
+  margin-bottom: 6px;
 }
 
 .profile-name .tagline {
-color:var(--text-3);
-   font-weight:400;
-   font-size:18px;
+  color: var(--text-3);
+  font-weight: 400;
+  font-size: 18px;
 }
 
 .profile-meta {
-display:flex;
-   gap:18px;
-   font-size:12.5px;
-   color:var(--text-2);
-   align-items:center;
+  display: flex;
+  gap: 18px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  align-items: center;
 }
 
 .profile-meta b {
-color:var(--text-1);
+  color: var(--text-1);
 }
 
 .profile-side {
-margin-left:auto;
-   display:flex;
-   gap:10px;
-   align-items:center;
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
+/* ===== 커스텀 드롭다운 세그먼트 (Select Box) ===== */
 .select-box {
-background:var(--bg-panel);
-   border:1px solid var(--border);
-   border-radius:5px;
-   padding:9px 16px;
-   font-size:13px;
-   color:var(--text-2);
-   display:flex;
-   align-items:center;
-   gap:8px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.select-box:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .select-box select {
-  appearance:none;
-  -webkit-appearance:none;
-  background:transparent;
-  border:none;
-  color:var(--text-2);
-  font-size:13px;
-  font-family:inherit;
-  cursor:pointer;
-  outline:none;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  padding: 8px 32px 8px 14px;
+  /* 커스텀 화살표 아이콘 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
 }
 
+.select-box select:focus {
+  color: var(--accent);
+}
+
+/* Option 목록 다크 테마 지정 */
 .select-box select option {
-  background:var(--bg-panel-2);
-  color:var(--text-1);
+  background: #14161d;
+  color: var(--text-1);
+  padding: 10px;
 }
 
+/* ===== 리프레시 버튼 ===== */
 .refresh-btn {
-display:flex;
-   align-items:center;
-   gap:6px;
-   background:var(--bg-panel-2);
-   border:1px solid var(--border);
-   color:var(--text-1);
-   padding:7px 14px;
-   border-radius:5px;
-   font-size:12px;
-   font-weight:700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  padding: 7px 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  border-color: var(--border-strong);
 }
 
 .refresh-btn .time {
-color:var(--text-3);
-   font-weight:400;
-   font-family:'JetBrains Mono',monospace;
+  color: var(--text-3);
+  font-weight: 400;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .refresh-btn.active {
@@ -112,79 +137,70 @@ color:var(--text-3);
 }
 
 .rank-chip {
-display:flex;
-   align-items:center;
-   gap:6px;
-   font-size:11px;
-   color:var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--gold);
 }
 
 .rank-icon-img {
-width:22px;
-   height:22px;
-   border-radius:4px;
-   background:var(--bg-panel-3);
-   border:1px dashed var(--border);
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   font-size:6.5px;
-   color:var(--text-3);
-   line-height:1.1;
-   text-align:center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--bg-panel-3);
+  border: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6.5px;
+  color: var(--text-3);
+  line-height: 1.1;
+  text-align: center;
 }
 
-/* ===== BOX 1 : team profile ===== */
-.profile-card {
-display:flex;
-   align-items:center;
-   gap:22px;
-   padding:26px 0;
-   border-bottom:1px solid var(--border-soft);
-   margin-bottom:20px;
-}
-
+/* ===== 최근 20게임 요약 스트립 ===== */
 .summary-title {
-font-size:13px;
-   color:var(--text-2);
-   margin-bottom:10px;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 10px;
 }
 
 .summary-wl {
-display:flex;
-   gap:14px;
-   font-size:12px;
-   color:var(--text-2);
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 .summary-wl .dot {
-width:8px;
-   height:8px;
-   border-radius:50%;
-   display:inline-block;
-   margin-right:5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
 }
 
 .summary-stats {
-display:flex;
-   gap:40px;
-   margin-left:auto;
+  display: flex;
+  gap: 40px;
+  margin-left: auto;
 }
 
 .summary-stat {
-text-align:center;
+  text-align: center;
 }
 
 .summary-stat .lbl {
-font-size:11px;
-   color:var(--text-3);
-   margin-bottom:6px;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 6px;
 }
 
 .summary-stat .val {
-font-family:'JetBrains Mono',monospace;
-   font-weight:700;
-   font-size:22px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 22px;
 }
 
 .recent-summary-box {
