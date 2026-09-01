@@ -90,7 +90,7 @@ export default function SearchBox({ variant = 'hero' }) {
       <div className="hero-search-row">
         <input
           className="hero-search-input"
-          placeholder={searchType === 'player' ? '닉네임#태그 (예: 뇽따까리#0208)' : '팀명#태그'}
+          placeholder={searchType === 'player' ? '닉네임 # 태그 ' : '팀명 # 태그'}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           onKeyDown={handleKeyDown}
