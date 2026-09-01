@@ -1,3 +1,5 @@
+import EmptyImageBox from '../common/EmptyImageBox';
+
 export default function ComboBlock({ title = '선호 요원 조합', combos = [], ace = [], weakness = [] }) {
   return (
     <div className="combo-block">
@@ -6,7 +8,9 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
         <div className="combo-row" key={c.label}>
           <span className="combo-label">{c.label}</span>
           <div className="combo-agents">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {c.agents ? c.agents.map((agentKey, i) => (
+              <EmptyImageBox className="combo-agent-icon" folder="agents" assetKey={agentKey} key={i} />
+            )) : Array.from({ length: 5 }).map((_, i) => (
               <div className="combo-agent-icon" key={i} />
             ))}
           </div>

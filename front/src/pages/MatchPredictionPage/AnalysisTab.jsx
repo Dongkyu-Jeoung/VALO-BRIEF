@@ -7,7 +7,11 @@ export default function AnalysisTab({ analysis }) {
 
   const currentMapObj = gameData.maps.find(m => m.name === selectedMap) || gameData.maps[0];
 
-  const currentMapData = analysis?.mapInfoByMap?.[selectedMap] || {
+  const mapKey = Object.keys(analysis?.mapInfoByMap || {}).find(
+    key => key.toLowerCase() === currentMapObj.id.toLowerCase()
+  );
+
+  const currentMapData = analysis?.mapInfoByMap?.[mapKey] || {
     mapWinRate: 0,
     atkWinRate: 0,
     defWinRate: 0,
