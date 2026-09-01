@@ -3,8 +3,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.search import router as search_router
 from routers.players import router as players_router
+from services import henrik_api
 
 app = FastAPI()
+
+
+@app.on_event("shutdown")
+async def _close_henrik_client():
+    await henrik_api.aclose_client()
 
 # CORSMiddleware 추가
 origins = os.getenv(

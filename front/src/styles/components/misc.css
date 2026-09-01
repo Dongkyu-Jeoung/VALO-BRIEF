@@ -1,19 +1,22 @@
+/* 글로벌/공통 폰트 설정 */
 .display {
-  font-family: 'Rajdhani', sans-serif;
+  font-family: 'Rajdhani', 'Pretendard', sans-serif;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', 'Pretendard', monospace;
 }
 
+/* 섹션 타이틀 */
 .section-title {
-  font-family: 'Rajdhani', sans-serif;
+  font-family: 'Rajdhani', 'Pretendard', sans-serif;
   font-weight: 700;
   font-size: 20px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  color: var(--text-1, #ffffff);
 }
 
 .section-title.mb {
@@ -26,14 +29,21 @@
   margin: 34px 0 14px;
 }
 
+/* 태그 & 배지 (한글+숫자 호환 설정) */
 .tag {
   font-size: 11px;
+  font-weight: 600;
   padding: 3px 8px;
-  border-radius: 3px;
-  font-family: 'JetBrains Mono', monospace;
+  border-radius: 4px;
+  /* 영문/숫자는 JetBrains Mono, 한글은 Pretendard로 매끄럽게 처리 */
+  font-family: 'JetBrains Mono', 'Pretendard', -apple-system, sans-serif;
   border: 1px solid var(--border);
+  color: var(--text-2, #888888);
+  background: rgba(255, 255, 255, 0.03);
+  letter-spacing: 0.02em;
 }
 
+/* 플레이스홀더 박스 */
 .empty-image-box {
   background: var(--bg-panel-2);
   border: 1px dashed var(--border);
@@ -43,25 +53,31 @@
   justify-content: center;
   color: var(--text-3);
   font-size: 11px;
+  font-family: 'Pretendard', sans-serif;
   text-align: center;
   flex-shrink: 0;
 }
+
+/* 상태 컬러 텍스트 */
 .text-win {
-  color: var(--win);
+  color: var(--win, #4c7eff);
 }
 
 .text-lose {
-  color: var(--lose);
+  color: var(--lose, #ff4655);
 }
 
 .loading-text {
   color: var(--text-2);
+  font-family: 'Pretendard', sans-serif;
+  font-size: 13px;
 }
 
+/* 승/패 인디케이터 도트 */
 .dot.win {
-  background: var(--win);
+  background: var(--win, #4c7eff);
 }
 
 .dot.lose {
-  background: var(--lose);
+  background: var(--lose, #ff4655);
 }

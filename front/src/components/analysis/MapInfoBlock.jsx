@@ -14,8 +14,16 @@ export default function MapInfoBlock({ data, onMapChange }) {
       sub: `센터 ${data.preferredSites.center}%`,
       smallValue: true,
     },
-    { label: '평균 스파이크 설치 시간', value: `${data.avgSpikePlantTime}초` },
-    { label: '경기 표본', value: `${data.matchSample}경기` },
+    { 
+      label: '평균 스파이크 설치 시간', 
+      value: data.avgSpikePlantTime,
+      unit: '초'
+    },
+    { 
+      label: '경기 표본', 
+      value: data.matchSample,
+      unit: '경기'
+    },
   ];
 
   return (
@@ -37,6 +45,17 @@ export default function MapInfoBlock({ data, onMapChange }) {
               <div className="lbl">{item.label}</div>
               <div className={`val ${item.smallValue ? 'sm' : ''}`.trim()}>
                 {item.value}
+                {item.unit && (
+                  <span style={{ 
+                    fontFamily: 'var(--font-body)', 
+                    fontSize: '14px', 
+                    fontWeight: 500, 
+                    marginLeft: '3px',
+                    color: 'var(--text-2)'
+                  }}>
+                    {item.unit}
+                  </span>
+                )}
               </div>
               {item.sub ? <div className="sub">{item.sub}</div> : null}
             </div>

@@ -10,7 +10,6 @@ export default function SelectBox({ label, options, value, onChange, className =
           <option key={opt} value={opt}>{opt}</option>
         ))}
       </select>
-      <span aria-hidden="true">▾</span>
     </div>
   );
 }
