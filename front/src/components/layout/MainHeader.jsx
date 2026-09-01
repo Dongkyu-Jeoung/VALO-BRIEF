@@ -28,7 +28,7 @@ export default function MainHeader() {
   };
 
   return (
-    <header className="site-header">
+    <header className={`site-header ${!isAuthenticated ? 'logged-out' : ''}`}>
       <Link to="/"><Logo /></Link>
 
       {isAuthenticated && (
@@ -41,7 +41,7 @@ export default function MainHeader() {
         </nav>
       )}
 
-      <div className={`header-right ${!isAuthenticated ? 'ml-auto' : ''}`}>
+      <div className="header-right">
         {isAuthenticated ? (
           <div className="profile-menu">
             <button 
