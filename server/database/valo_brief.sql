@@ -216,8 +216,10 @@ CREATE TABLE riot_accounts (
     riot_tag            VARCHAR(10)     NOT NULL,
     region              VARCHAR(10)     NOT NULL,
     platform            VARCHAR(10)     NOT NULL DEFAULT 'pc',
-    current_rank        VARCHAR(30)     NULL,
-    current_rr          INT             NULL,
+    account_level       INT             NULL COMMENT 'Henrik account API account_level',
+    title               VARCHAR(64)     NULL COMMENT 'Henrik account API title (칭호 uuid)',
+    current_rank        VARCHAR(30)     NULL COMMENT 'Henrik mmr API current.tier.name',
+    current_rr          INT             NULL COMMENT 'Henrik mmr API current.rr',
     verification_status ENUM('none','pending','verified','failed')
                                         NOT NULL DEFAULT 'none'
                                         COMMENT '팀 대표 계정만 실질적으로 사용',
