@@ -4,3 +4,5 @@
 .venv/__pychache__
 *.pkl
 *.csv
+__pycache__/
+*.__pycache__

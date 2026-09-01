@@ -1,6 +1,8 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routers.search import router as search_router
+from routers.players import router as players_router
 
 app = FastAPI()
 
@@ -16,3 +18,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"]
 )
+
+# 개인 검색 or 팀 검색 Header/Main
+app.include_router(search_router)
+
+# 개인 검색 (Frame 04) - 선수 프로필
+app.include_router(players_router)

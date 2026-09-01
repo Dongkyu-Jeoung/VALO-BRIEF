@@ -1,3 +1,4 @@
+/* Mode Tabs (상단 구분 탭) */
 .mode-tabs {
   display: flex;
   gap: var(--sp-2);
@@ -10,7 +11,9 @@
   font-size: var(--fs-sm);
   border: 1px solid var(--border);
   color: var(--text-2);
+  background: transparent;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .mode-tab:hover {
@@ -24,35 +27,48 @@
   border-color: var(--accent);
 }
 
+/* Filter Tabs (통계 / 분석 / AI 리포트 메인 탭) */
 .filter-tabs-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
   margin-bottom: var(--sp-6);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
 }
 
 .filter-tabs {
   display: flex;
-  gap: 0;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
 }
 
 .filter-tab {
-  padding: var(--sp-3) var(--sp-6);
-  font-size: var(--fs-base);
+  padding: 8px 20px;
+  font-size: var(--fs-sm);
   color: var(--text-2);
-  border-bottom: 2px solid transparent;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .filter-tab:hover {
   color: var(--text-1);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .filter-tab.on {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent, #ff4655);
+  border-color: var(--accent, #ff4655);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(255, 70, 85, 0.3);
 }
