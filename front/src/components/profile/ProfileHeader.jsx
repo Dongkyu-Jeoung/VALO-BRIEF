@@ -9,6 +9,8 @@ import { SEASONS, ACTS } from '../../constants/seasons';
  * team 모드: name, tag, division, avatarKey(팀 로고 asset key, 기본값 = tag)
  * showSeasonSelect: 시즌/Act 선택박스 표시 여부
  * season/onSeasonChange, act/onActChange: 필터 상태(부모의 useSeasonActFilter에서 전달)
+ * seasons/acts: 선택박스 옵션 목록(useSeasonActFilter가 반환하는 값 그대로). 안 넘기면
+ * constants/seasons.js의 고정 목록을 씀(백엔드 연동 전 팀 프로필 등).
  * refreshDisabled: 전적갱신 쿨다운 활성화 여부(true면 비활성 스타일)
  */
 export default function ProfileHeader({
@@ -26,6 +28,8 @@ export default function ProfileHeader({
   onSeasonChange,
   act,
   onActChange,
+  seasons = SEASONS,
+  acts = ACTS,
   avatarKey,
 }) {
   return (
@@ -72,8 +76,8 @@ export default function ProfileHeader({
         ) : null}
         {showSeasonSelect ? (
           <>
-            <SelectBox label={season} options={SEASONS} value={season} onChange={onSeasonChange} />
-            <SelectBox label={act} options={ACTS} value={act} onChange={onActChange} />
+            <SelectBox label={season} options={seasons} value={season} onChange={onSeasonChange} />
+            <SelectBox label={act} options={acts} value={act} onChange={onActChange} />
           </>
         ) : null}
       </div>

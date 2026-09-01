@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchPlayerProfile } from '../../api/players';
+import { fetchPlayerProfile, fetchPlayerModeStats } from '../../api/players';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import ModeStatCards from './ModeStatCards';
 import RoleDistribution from './RoleDistribution';
@@ -16,28 +16,60 @@ import { MODES } from '../../constants/modes';
 export default function PlayerProfilePage() {
   const { riotId, tag } = useParams();
   const [profile, setProfile] = useState(null);
+  const [modeStats, setModeStats] = useState(null);
   const [mode, setMode] = useState('전체');
-  const { season, setSeason, act, setAct } = useSeasonActFilter();
+  // actOptions: 백엔드가 실제 데이터 기준으로 내려주는 [{season, acts}] (프로필 로드 전엔 없음)
+  const { season, setSeason, act, setAct, seasons, acts } = useSeasonActFilter(profile?.actOptions);
   const { isReady, trigger } = useCooldown(`${riotId}-${tag}`);
 
   useEffect(() => {
     let active = true;
     fetchPlayerProfile(riotId, tag).then((data) => {
-      if (active) setProfile(data);
+      if (active) {
+        setProfile(data);
+        setModeStats(data.modeStats); // 기본 선택 Act(actOptions[0]) 스탯은 이미 여기 포함됨
+      }
     });
     return () => { active = false; };
   }, [riotId, tag]);
 
+  // 시즌/Act 선택박스 전용 - ModeStatCards만 이 구간 스탯으로 갱신한다.
+  // 매치 기록(matchHistory)은 season/act와 무관하게 항상 최근 20게임 그대로 보여준다.
+  // 현재 선택이 프로필 응답의 기본 Act와 같으면(최초 로드, 또는 기본 Act로 되돌아온 경우)
+  // 이미 갖고 있는 profile.modeStats를 그대로 쓰고 재조회하지 않는다 - 사용자가 실제로
+  // 다른 Act를 선택했을 때만 호출한다.
+  useEffect(() => {
+    if (!profile) return;
+    const defaultOption = profile.actOptions?.[0];
+    if (defaultOption && season === defaultOption.season && act === defaultOption.acts[0]) {
+      setModeStats(profile.modeStats);
+      return;
+    }
+    let active = true;
+    fetchPlayerModeStats(riotId, tag, season, act).then((data) => {
+      if (active) setModeStats(data);
+    });
+    return () => { active = false; };
+  }, [riotId, tag, season, act, profile]);
+
   const filteredHistory = useListFilter(
     profile?.matchHistory,
-    (m) => (mode === '전체' || m.mode === mode) && m.season === season && m.act === act
+    (m) => mode === '전체' || m.mode === mode
   );
 
   if (!profile) return <LoadingText />;
 
   function handleRefresh() {
     trigger();
-    fetchPlayerProfile(riotId, tag).then(setProfile);
+    fetchPlayerProfile(riotId, tag).then((data) => {
+      setProfile(data);
+      const defaultOption = data.actOptions?.[0];
+      if (defaultOption && season === defaultOption.season && act === defaultOption.acts[0]) {
+        setModeStats(data.modeStats);
+      } else {
+        fetchPlayerModeStats(riotId, tag, season, act).then(setModeStats);
+      }
+    });
   }
 
   return (
@@ -55,6 +87,8 @@ export default function PlayerProfilePage() {
         onSeasonChange={setSeason}
         act={act}
         onActChange={setAct}
+        seasons={seasons}
+        acts={acts}
       />
 
       <div className="mode-tabs">
@@ -69,7 +103,7 @@ export default function PlayerProfilePage() {
         ))}
       </div>
 
-      <ModeStatCards modeStats={profile.modeStats} />
+      {modeStats ? <ModeStatCards modeStats={modeStats} /> : <LoadingText />}
 
       <div className="mh-grid">
         <div>

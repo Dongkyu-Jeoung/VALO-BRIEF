@@ -5,7 +5,9 @@ Henrik 조회로 존재가 확인된 계정을 캐싱해두면 다음 조회부�
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+
 def find_riot_account(db: Session, riot_name: str, riot_tag: str) -> dict | None:
+    """riot_name#riot_tag로 캐시된 계정 row를 조회. 없으면 None."""
     row = db.execute(
         text(
             """

@@ -32,4 +32,9 @@ export const playerProfileMock = {
     { mode: '경쟁전', map: '로터스', date: '08.22', time: '5:15 PM', kills: 11, deaths: 16, assists: 7, kda: 1.13, roundScore: '7-13', result: 'lose', hs: 17, adr: 128, acs: 178, agent: '레이나', season: 'S2026', act: 'Act 1' },
     { mode: '데스매치', map: '어센트', date: '07.30', time: '4:05 PM', kills: 24, deaths: 18, assists: 0, kda: 1.33, roundScore: '-', result: 'win', hs: 29, adr: null, acs: null, agent: '제트', season: 'S2025', act: 'Act 3' },
   ],
+  // 백엔드와 동일하게 Riot 공식 Episode 표기 - api/players.js가 화면 표시용 연도로 변환한다
+  actOptions: [
+    { season: 'Episode 11', acts: ['Act 2', 'Act 1'] },
+    { season: 'Episode 10', acts: ['Act 3'] },
+  ],
 };
