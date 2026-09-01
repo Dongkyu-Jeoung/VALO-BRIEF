@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { login } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
@@ -7,7 +7,12 @@ import '@/styles/pages/login.css';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { applySession } = useAuth();
+
+  // 이전 페이지 정보 추출 (없으면 기본값 '/')
+  const from = location.state?.from?.pathname || '/';
+
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -53,7 +58,8 @@ export default function LoginPage() {
         localStorage.removeItem('savedUserId');
       }
 
-      navigate('/my-team');
+      // 이전 페이지(or 메인페이지)로 리다이렉트 (replace 옵션으로 로그인 기록 교체)
+      navigate(from, { replace: true });
     } catch (err) {
       setPasswordError('로그인에 실패했습니다. 아이디/비밀번호를 확인해주세요.');
     }

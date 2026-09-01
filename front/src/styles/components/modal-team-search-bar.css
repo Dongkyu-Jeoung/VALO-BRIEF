@@ -1,0 +1,82 @@
+/* ==========================================================================
+   ModalTeamSearchBar Component Module
+   (QuickAnalysisModal 전용 팀 재조회 검색창 — popup.css의 팝업 톤에 맞춘 컴팩트 버전)
+   ========================================================================== */
+
+.modal-search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 26px;
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+
+.modal-search-bar .modal-search-input {
+  flex: 1;
+  height: 34px;
+  background: var(--bg-panel-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: none;
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  padding: 0 var(--sp-3);
+  transition: border-color var(--transition-fast);
+}
+
+.modal-search-bar .modal-search-input:focus {
+  border-color: var(--accent);
+}
+
+.modal-search-bar .modal-search-input::placeholder {
+  color: var(--text-3);
+}
+
+.modal-search-bar .modal-search-btn {
+  height: 34px;
+  padding: 0 var(--sp-4);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.modal-search-bar .modal-search-btn:hover {
+  background: var(--accent-hover);
+}
+
+.modal-search-bar .modal-search-btn:active {
+  transform: scale(0.98);
+}
+
+.modal-search-bar .modal-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-search-bar .modal-search-error-toast {
+  position: absolute;
+  bottom: 100%;
+  left: 26px;
+  margin-bottom: 6px;
+  background-color: rgba(20, 10, 12, 0.95);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 70, 85, 0.4);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 10;
+}

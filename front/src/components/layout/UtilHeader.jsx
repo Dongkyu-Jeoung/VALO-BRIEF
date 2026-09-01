@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { FaArrowRightFromBracket } from 'react-icons/fa6';
 import Logo from './Logo';
-import EmptyImageBox from '../common/EmptyImageBox';
+import HeaderSearchBar from '../search/HeaderSearchBar';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
 
@@ -20,8 +21,8 @@ export default function UtilHeader() {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isHome = location.pathname === '/';
 
   return (
     <header className="util-header">
@@ -40,34 +41,7 @@ export default function UtilHeader() {
       </nav>
 
       <div className="header-right">
-        {isAuthenticated ? (
-          <div className="profile-menu">
-            <button
-              type="button"
-              className="profile-avatar-btn"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-label="프로필 메뉴"
-            >
-              <EmptyImageBox className="profile-avatar-img" label="" />
-            </button>
-            {menuOpen ? (
-              <div className="profile-dropdown">
-                <button
-                  type="button"
-                  onClick={() => {
-                    logout();
-                    setMenuOpen(false);
-                    navigate('/');
-                  }}
-                >
-                  로그아웃
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <Link to="/login" className="btn-pill">MY</Link>
-        )}
+        {!isHome && <HeaderSearchBar />}
 
         <button
           type="button"
@@ -99,6 +73,23 @@ export default function UtilHeader() {
                 </Link>
               ))}
             </div>
+
+            {isAuthenticated ? (
+              <div className="sidebar-footer">
+                <button
+                  type="button"
+                  className="sidebar-logout-btn"
+                  onClick={() => {
+                    logout();
+                    setSidebarOpen(false);
+                    navigate('/');
+                  }}
+                >
+                  로그아웃
+                  <FaArrowRightFromBracket />
+                </button>
+              </div>
+            ) : null}
           </nav>
         </>
       ) : null}

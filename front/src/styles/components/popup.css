@@ -84,6 +84,12 @@
   padding: 24px 26px;
   overflow-y: auto;
   flex: 1;
+  transition: opacity 0.15s ease;
+}
+
+.popup-body.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .popup-body::-webkit-scrollbar {
@@ -95,18 +101,21 @@
   border-radius: 3px;
 }
 
+/* [수정] 박스 간 상단/하단 여백 확대 (22px -> 28px) */
 .p-box {
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
 
 .p-box:last-child {
   margin-bottom: 0;
 }
 
+/* [수정] 1, 2, 3 번호 라인 타이틀 폰트 크기 확대 (13px -> 15px) 및 두께 강화 */
 .p-box-title {
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text-1);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -114,6 +123,7 @@
 
 .p-box-title .num {
   color: var(--accent);
+  font-weight: 800;
 }
 
 .wl-strip {
@@ -122,24 +132,32 @@
   margin-bottom: 12px;
 }
 
+/* W/L 칩 */
 .wl-chip {
   flex: 1;
-  height: 30px;
-  border-radius: 4px;
+  height: 44px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 900;
   color: #fff;
+  transition: all 0.2s ease;
 }
 
+/* 승리(W) 칩 */
 .wl-chip.w {
-  background: var(--success);
+  background: color-mix(in srgb, var(--success, #10b981) 25%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success, #10b981) 50%, transparent);
+  color: var(--success, #34d399);
 }
 
+/* 패배(L) 칩 */
 .wl-chip.l {
-  background: var(--lose);
+  background: color-mix(in srgb, var(--lose, #ff4655) 25%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lose, #ff4655) 50%, transparent);
+  color: var(--lose, #ff4655);
 }
 
 .tier-row {
@@ -204,11 +222,62 @@
   color: var(--text-2);
 }
 
-.p-stats-row .rate-lose {
-  color: var(--lose);
+/* ============ p-stats-row (상대 팀 전적 하단 지표) ============ */
+.p-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 8px 0;
 }
 
-/* [수정] 볼록함(Shadow/Border/Highlight) 제거 후 완전 평평한 리포트 상세보기 버튼 */
+.p-stats-row .stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  position: relative;
+}
+
+/* 아이템 사이 세로 구분선 */
+.p-stats-row .stat-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 15%;
+  height: 70%;
+  width: 1px;
+  background: var(--border-soft, rgba(255, 255, 255, 0.15));
+}
+
+/* 윗줄 라벨 (13px) */
+.p-stats-row .stat-label {
+  font-size: 13px;
+  color: var(--text-3, #888888);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+/* 아랫줄 수치 (18px) */
+.p-stats-row .stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  color: var(--text-1, #ffffff);
+  line-height: 1.2;
+}
+
+/* 초록색 하이라이트 */
+.p-stats-row .win-text,
+.p-stats-row .rate-win {
+  color: var(--success, #34d399) !important;
+}
+
+/* 상세보기 하단 버튼 */
 .popup-cta {
   display: flex;
   align-items: center;
