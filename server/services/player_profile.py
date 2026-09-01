@@ -1,11 +1,14 @@
 """
-Henrik API 원본 응답(계정/MMR/매치리스트)을 프론트 PlayerProfilePage가
-기대하는 형태(front/src/mocks/player.mock.js 참고)로 가공.
+Henrik API 원본 응답(계정/mmr/매치 이력)을 프론트 PlayerProfilePage가 기대하는 형태로 가공.
 
-매치 파싱은 Henrik v4/matches 스키마를 기준으로 하되, 필드 존재를 보장할 수 없으므로
-전부 방어적으로 .get()하고 매치 1건 파싱 실패는 전체 응답을 깨뜨리지 않도록 스킵한다.
+매치 데이터는 Henrik v1/stored-matches를 쓴다 (v4/matches보다 매치당 용량이 훨씬 작고
+더 긴 과거 이력을 한 번에 준다). stored-matches는 조회 대상 플레이어 관점으로 이미 좁혀진
+응답(meta+stats 1세트)이라 v4처럼 참가자 목록에서 나를 찾는 과정이 필요 없다.
+필드 존재를 보장할 수 없으므로 전부 방어적으로 .get()하고 매치 1건 파싱 실패는
+전체 응답을 깨뜨리지 않도록 스킵한다.
 """
 
+import re
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -38,13 +41,34 @@ TIER_LABELS = {
     "radiant": "레디언트",
 }
 
-# Henrik 매치 응답에는 시즌/Act 라벨이 없어, 프론트 기본 필터값(SEASONS[0]/ACTS[0])으로 채운다.
-# 실제 시즌 매핑이 필요해지면 이 두 상수만 교체하면 된다.
-SEASON_PLACEHOLDER = "S2026"
-ACT_PLACEHOLDER = "Act 1"
+# Henrik 매치의 season.short(예: "e11a5")는 Riot 공식 Episode/Act 번호 그대로다(임의 계산 아님).
+# 프론트 표시용으로 "Episode 11"/"Act 5"로 풀어 쓰고, mode-stats 조회 시엔 반대로 이 라벨을
+# 다시 short 코드로 되돌려 mmr 히스토리(by_season)와 매칭한다.
+_SEASON_SHORT_RE = re.compile(r"^e(\d+)a(\d+)$", re.IGNORECASE)
 
-# 영문 티어 명칭의 한국어 변환
+
+def _parse_season_short(short: str | None) -> tuple[str, str]:
+    """"e11a5" -> ("Episode 11", "Act 5"). 형식이 아니면 ("-", "-")."""
+    m = _SEASON_SHORT_RE.match((short or "").strip())
+    if not m:
+        return "-", "-"
+    episode, act = m.groups()
+    return f"Episode {episode}", f"Act {act}"
+
+
+def _season_act_to_short(season: str | None, act: str | None) -> str | None:
+    """("Episode 11", "Act 5") -> "e11a5" (_parse_season_short의 역변환). 매칭 실패 시 None."""
+    if not season or not act:
+        return None
+    sm = re.match(r"Episode\s+(\d+)", season, re.IGNORECASE)
+    am = re.match(r"Act\s+(\d+)", act, re.IGNORECASE)
+    if not sm or not am:
+        return None
+    return f"e{sm.group(1)}a{am.group(1)}"
+
+
 def _translate_rank(tier_patched: str | None) -> str | None:
+    """영문 티어 명칭("Platinum 2")을 한국어("플래티넘 2")로 변환."""
     if not tier_patched:
         return None
     parts = tier_patched.split()
@@ -52,8 +76,9 @@ def _translate_rank(tier_patched: str | None) -> str | None:
     rest = " ".join(parts[1:])
     return f"{base_ko} {rest}".strip()
 
-# DB 참조 요원 데이터 조회 및 캐싱
+
 def _load_ref_agents(db: Session) -> dict:
+    """DB의 요원 참조 테이블을 uuid/영문명 양쪽으로 조회 가능한 딕셔너리로 로드."""
     rows = db.execute(text("SELECT uuid, display_name, name_ko, role_type FROM ref_agents")).mappings().all()
     by_uuid, by_name = {}, {}
     for r in rows:
@@ -62,131 +87,83 @@ def _load_ref_agents(db: Session) -> dict:
         by_name[r["display_name"].lower()] = entry
     return {"by_uuid": by_uuid, "by_name": by_name}
 
-# DB 참조 맵 데이터 조회
+
 def _load_ref_maps(db: Session) -> dict:
+    """DB의 맵 참조 테이블을 영문명 기준 한글명 딕셔너리로 로드."""
     rows = db.execute(text("SELECT display_name, name_ko FROM ref_maps")).mappings().all()
     return {r["display_name"].lower(): (r["name_ko"] or r["display_name"]) for r in rows}
 
-# 매치 데이터 내 플레이어 리스트 방어적 추출
-def _match_players(match: dict) -> list:
-    players = match.get("players")
-    if players is None:
-        return []
-    if isinstance(players, dict):
-        return players.get("all_players") or []
-    return players
 
-# 전체 플레이어 중 검색 대상 유저 추출
-def _find_me(players: list, puuid: str, riot_name: str, riot_tag: str) -> dict | None:
-    for p in players:
-        if p.get("puuid") == puuid:
-            return p
-    name_l, tag_l = riot_name.lower(), riot_tag.lower()
-    for p in players:
-        if str(p.get("name", "")).lower() == name_l and str(p.get("tag", "")).lower() == tag_l:
-            return p
-    return None
-
-# 소속 팀의 승/패 라운드 수 산출
-def _team_rounds(match: dict, team_id) -> tuple[int, int] | None:
-    teams = match.get("teams")
-    if isinstance(teams, list):
-        mine = next((t for t in teams if t.get("team_id") == team_id), None)
-        if mine is None:
-            return None
-        rounds = mine.get("rounds") or {}
-        won, lost = rounds.get("won"), rounds.get("lost")
-        return (won, lost) if won is not None and lost is not None else None
-    if isinstance(teams, dict) and team_id:
-        mine = teams.get(str(team_id).lower())
-        if not isinstance(mine, dict):
-            return None
-        won, lost = mine.get("rounds_won"), mine.get("rounds_lost")
-        return (won, lost) if won is not None and lost is not None else None
-    return None
-
-# 매치 최종 승패 및 스코어 문자열 판정
-def _match_result(match: dict, team_id, rounds: tuple[int, int] | None) -> tuple[str, str]:
-    teams = match.get("teams")
-    won = None
-    if isinstance(teams, list):
-        mine = next((t for t in teams if t.get("team_id") == team_id), None)
-        if mine is not None and "won" in mine:
-            won = bool(mine["won"])
-    elif isinstance(teams, dict) and team_id:
-        mine = teams.get(str(team_id).lower())
-        if isinstance(mine, dict) and "has_won" in mine:
-            won = bool(mine["has_won"])
-
-    if rounds:
-        my_rounds, opp_rounds = rounds
-        round_score = f"{my_rounds}-{opp_rounds}"
-        if won is None:
-            won = my_rounds > opp_rounds
-    else:
-        round_score = "-"
-        won = bool(won)
-
-    return ("win" if won else "lose"), round_score
-
-# 한국시간대에 날짜 및 시간 포맷팅
-def _format_datetime(value) -> tuple[str, str]:
-    dt = None
+def _parse_datetime(value) -> datetime | None:
+    """매치 시각(epoch ms/초 또는 ISO 문자열)을 로컬 시간대 datetime으로 파싱."""
     if isinstance(value, (int, float)):
         ts = value / 1000 if value > 1e12 else value
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone()
-    elif isinstance(value, str):
+        return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone()
+    if isinstance(value, str):
         try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone()
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone()
         except ValueError:
-            dt = None
+            return None
+    return None
+
+
+def _format_datetime(dt: datetime | None) -> tuple[str, str]:
+    """datetime을 화면 표시용 (날짜, 시간) 문자열 쌍으로 포맷."""
     if dt is None:
         return "-", "-"
     return dt.strftime("%m.%d"), dt.strftime("%I:%M %p").lstrip("0")
 
-# 단건 매치 데이터 파싱 및 정규화
-# 매치 1건의 원본 데이터에서 K/D/A, ACS, ADR, HS%, 맵/요원/모드 정보를 추출해 
-# 프론트엔드가 요구하는 표준 Match Record 객체로 재구성
-def _parse_match(match: dict, puuid: str, riot_name: str, riot_tag: str, agents: dict, maps: dict):
-    players = _match_players(match)
-    me = _find_me(players, puuid, riot_name, riot_tag)
-    if me is None:
-        return None
 
-    metadata = match.get("metadata") or {}
-    stats = me.get("stats") or {}
-    damage = stats.get("damage") or {}
+def _parse_match(match: dict, agents: dict, maps: dict):
+    """stored-matches 1건을 표준 Match Record로 변환.
+    반환: (record, role_type, mode_key). 조회 대상 플레이어 관점 응답이라 참가자 목록에서
+    나를 찾을 필요 없이 meta/stats/teams를 바로 읽는다."""
+    meta = match.get("meta") or {}
+    stats = match.get("stats") or {}
+    teams = match.get("teams") or {}
 
-    agent_info = me.get("agent") or me.get("character") or {}
+    agent_info = stats.get("character") or {}
     agent_uuid = str(agent_info.get("id") or "").lower()
     agent_name_en = agent_info.get("name") or ""
     agent_meta = agents["by_uuid"].get(agent_uuid) or agents["by_name"].get(agent_name_en.lower())
     agent_ko = (agent_meta or {}).get("name_ko") or agent_name_en or "-"
     role_type = (agent_meta or {}).get("role_type")
 
-    map_name_en = (metadata.get("map") or {}).get("name") or ""
+    map_name_en = (meta.get("map") or {}).get("name") or ""
     map_ko = maps.get(map_name_en.lower(), map_name_en or "-")
 
-    queue = metadata.get("queue") or {}
-    mode_key = (queue.get("id") or "").lower()
-    mode_ko = MODE_LABELS.get(mode_key, queue.get("name") or mode_key or "-")
+    mode_key = str(meta.get("mode") or "").lower().replace(" ", "")
+    mode_ko = MODE_LABELS.get(mode_key, meta.get("mode") or "-")
 
-    date_str, time_str = _format_datetime(metadata.get("started_at"))
+    season, act = _parse_season_short((meta.get("season") or {}).get("short"))
+
+    started_at = _parse_datetime(meta.get("started_at"))
+    date_str, time_str = _format_datetime(started_at)
 
     kills = stats.get("kills") or 0
     deaths = stats.get("deaths") or 0
     assists = stats.get("assists") or 0
     kda = round((kills + assists) / deaths, 2) if deaths else float(kills + assists)
 
-    team_id = me.get("team_id") or me.get("team")
-    rounds = _team_rounds(match, team_id)
-    result, round_score = _match_result(match, team_id, rounds)
-    rounds_played = (rounds[0] + rounds[1]) if rounds else None
+    my_side = str(stats.get("team") or "").lower()
+    opp_side = "red" if my_side == "blue" else "blue"
+    my_rounds = teams.get(my_side)
+    opp_rounds = teams.get(opp_side)
+    if my_rounds is not None and opp_rounds is not None:
+        rounds_played = my_rounds + opp_rounds
+        round_score = f"{my_rounds}-{opp_rounds}"
+        result = "win" if my_rounds > opp_rounds else "lose"
+    else:
+        rounds_played = None
+        round_score = "-"
+        result = "lose"
 
     acs = round(stats.get("score", 0) / rounds_played) if rounds_played else None
-    adr = round(damage.get("dealt", 0) / rounds_played) if rounds_played else None
-    shots = (stats.get("headshots") or 0) + (stats.get("bodyshots") or 0) + (stats.get("legshots") or 0)
-    hs_pct = round((stats.get("headshots") or 0) / shots * 100) if shots else 0
+    damage = stats.get("damage") or {}
+    adr = round(damage.get("made", 0) / rounds_played) if rounds_played else None
+    shots = stats.get("shots") or {}
+    total_shots = (shots.get("head") or 0) + (shots.get("body") or 0) + (shots.get("leg") or 0)
+    hs_pct = round((shots.get("head") or 0) / total_shots * 100) if total_shots else 0
 
     record = {
         "mode": mode_ko,
@@ -203,19 +180,19 @@ def _parse_match(match: dict, puuid: str, riot_name: str, riot_tag: str, agents:
         "adr": adr,
         "acs": acs,
         "agent": agent_ko,
-        "season": SEASON_PLACEHOLDER,
-        "act": ACT_PLACEHOLDER,
+        "season": season,
+        "act": act,
     }
     return record, role_type, mode_key
 
-# 매치별 K/D 값 리스트 계산
-# 파싱된 레코드 목록을 순회하며 매치별 Kill / Death 비율 리스트를 생성
+
 def _kd_values(records: list) -> list:
+    """레코드별 K/D 값 리스트 (데스가 0이면 킬 수 그대로)."""
     return [r["kills"] / r["deaths"] if r["deaths"] else float(r["kills"]) for r in records]
 
-# 최근 매치 요약 통계 집계
-# 최근 20경기 기록을 토대로 종합 승률, 승/패 판수, 평균 K/D, 평균 ADR을 집계한 딕셔너리를 생성
+
 def _summarize(records: list) -> dict:
+    """최근 매치 요약(승률/승패/평균 K-D/ADR) 집계. "최근 20게임 요약" 카드용."""
     if not records:
         return {"winRate": 0, "wins": 0, "losses": 0, "avgKd": 0, "avgAdr": 0}
     wins = sum(1 for r in records if r["result"] == "win")
@@ -229,11 +206,12 @@ def _summarize(records: list) -> dict:
         "avgAdr": round(sum(adr_values) / len(adr_values)) if adr_values else 0,
     }
 
-# 게임 모드별 세부 스탯 산출
-# 경쟁전, 일반전 등 특정 큐 타입별 평균 킬, HS%, ADR, ACS 등을 집계
-# 경쟁전일 경우 티어 라벨을 함께 주입하며, 팀 개념이 없는 데스매치는 승률과 K/D 집계에서 제외
+
 def _mode_stat(mode_key: str, rank_label: str | None, records: list) -> dict:
-    stat = {"winRate": None, "hs": 0, "kd": None, "avgKills": 0, "adr": None, "acs": None}
+    """단일 모드(경쟁전/일반/신속플레이/데스매치)의 세부 스탯 카드 데이터 계산.
+    필드 기본값은 전부 None - "그 구간에 매치 데이터가 없음"과 "실제로 0"을 구분하기 위함
+    (rank/winRate는 mmr_history로 채워지는데 매치 상세가 없을 수 있어서)."""
+    stat = {"winRate": None, "hs": None, "kd": None, "avgKills": None, "adr": None, "acs": None}
     if mode_key == "competitive":
         stat["rank"] = rank_label
 
@@ -250,16 +228,16 @@ def _mode_stat(mode_key: str, rank_label: str | None, records: list) -> dict:
     stat["adr"] = round(sum(adr_values) / len(adr_values)) if adr_values else None
     stat["acs"] = round(sum(acs_values) / len(acs_values)) if acs_values else None
 
-    # 데스매치는 팀 승패 개념이 없어 승률/K-D는 표시하지 않는다 (mock 데이터와 동일 규칙)
+    # 데스매치는 팀 승패 개념이 없어 승률/K-D는 표시하지 않는다
     if mode_key != "deathmatch":
         stat["winRate"] = round(wins / len(records) * 100)
         stat["kd"] = round(sum(kd_values) / len(kd_values), 2) if kd_values else None
 
     return stat
 
-# 역할군(타격대/척후대 등)별 승률 및 비중 집계
-# 유저가 플레이한 요원의 역할군별 승/패 수와 승률을 계산하여 프론트엔드 차트용 데이터 배열로 정렬하여 반환
+
 def _role_distribution(role_results: list) -> list:
+    """역할군(타격대/척후대/감시자/전략가)별 승/패, 승률 집계."""
     buckets: dict[str, dict] = {}
     for role_type, result in role_results:
         role_ko = ROLE_LABELS.get(role_type)
@@ -278,10 +256,9 @@ def _role_distribution(role_results: list) -> list:
         ordered.append(bucket)
     return ordered
 
-# 모스트 요원 TOP N 추출
-# 가장 플레이 판수가 많은 요원 순으로 정렬하여 
-# 상위 N개 요원의 평균 K/D, ACS, 승률, 승/패 기록을 집계해 반환
+
 def _top_agents(agent_buckets: dict, limit: int = 3) -> list:
+    """플레이 판수 기준 모스트 요원 상위 N개의 K/D·ACS·승률 집계."""
     scored = []
     for agent_ko, records in agent_buckets.items():
         if not records or agent_ko == "-":
@@ -303,36 +280,20 @@ def _top_agents(agent_buckets: dict, limit: int = 3) -> list:
         a.pop("_games", None)
     return scored[:limit]
 
-# 전체 프로필 데이터 생성 총괄 (Main)
-# 참조 데이터 로드 -> 현재 티어 파싱 -> 전체 매치 파싱(에러 발생 시 개별 continue 스킵) 
-# -> 모드/역할/요원별 데이터 집계 순으로 프로세스를 수행
-# -> 프론트엔드 PlayerProfilePage에 전달할 최종 JSON 딕셔너리를 생성
-def build_player_profile(
-    db: Session,
-    *,
-    riot_name: str,
-    riot_tag: str,
-    puuid: str,
-    account: dict | None,
-    mmr: dict | None,
-    matches_raw: list,
-) -> dict:
-    agents = _load_ref_agents(db)
-    maps = _load_ref_maps(db)
 
-    current = (mmr or {}).get("current") or {}
-    rank_label = _translate_rank((current.get("tier") or {}).get("name"))
-    current_rr = current.get("rr")
-    competitive_rank = f"{rank_label} {current_rr}".strip() if rank_label and current_rr is not None else rank_label
-
+def _collect(matches_raw: list, agents: dict, maps: dict):
+    """매치 원본 리스트를 한 번 순회해 (레코드, 역할결과, 모드버킷, 요원버킷, Act색인)으로 반환.
+    build_player_profile 전용 - Henrik이 최신순으로 내려주므로 Act 등장 순서를 그대로
+    보존하면 자연히 최신순 정렬이 된다."""
     records: list = []
     role_results: list = []
     mode_buckets: dict[str, list] = {"competitive": [], "unrated": [], "swiftplay": [], "deathmatch": []}
     agent_buckets: dict[str, list] = {}
+    act_index: dict[str, list] = {}
 
     for match in matches_raw or []:
         try:
-            parsed = _parse_match(match, puuid, riot_name, riot_tag, agents, maps)
+            parsed = _parse_match(match, agents, maps)
         except Exception:
             continue
         if parsed is None:
@@ -345,6 +306,95 @@ def build_player_profile(
             mode_buckets[mode_key].append(record)
         agent_buckets.setdefault(record["agent"], []).append(record)
 
+        season, act = record["season"], record["act"]
+        if season != "-" and act != "-":
+            acts = act_index.setdefault(season, [])
+            if act not in acts:
+                acts.append(act)
+
+    return records, role_results, mode_buckets, agent_buckets, act_index
+
+
+def _compute_mode_stats(
+    matches_raw: list,
+    agents: dict,
+    maps: dict,
+    *,
+    mmr: dict | None,
+    mmr_history: dict | None,
+    season: str | None,
+    act: str | None,
+) -> dict:
+    """모드별(경쟁전/일반/신속플레이/데스매치) 스탯 계산. build_player_profile과
+    build_mode_stats가 공용으로 쓴다. season/act를 주면 그 구간 경기만 집계한다.
+    경쟁전 카드의 rank/승률은 가능하면 mmr_history(by_season - Riot이 계산해둔 그 Act의
+    최종 티어/전체 판수)로 덮어써서, 매치 상세가 그 Act에 다 안 잡혀 있어도 정확하게 만든다."""
+    current = (mmr or {}).get("current") or {}
+    rank_label = _translate_rank((current.get("tier") or {}).get("name"))
+    current_rr = current.get("rr")
+    competitive_rank = f"{rank_label} {current_rr}".strip() if rank_label and current_rr is not None else rank_label
+
+    mode_buckets: dict[str, list] = {"competitive": [], "unrated": [], "swiftplay": [], "deathmatch": []}
+    for match in matches_raw or []:
+        try:
+            parsed = _parse_match(match, agents, maps)
+        except Exception:
+            continue
+        if parsed is None:
+            continue
+        record, _role_type, mode_key = parsed
+        if season and record["season"] != season:
+            continue
+        if act and record["act"] != act:
+            continue
+        if mode_key in mode_buckets:
+            mode_buckets[mode_key].append(record)
+
+    result = {
+        key: _mode_stat(key, competitive_rank if key == "competitive" else None, items)
+        for key, items in mode_buckets.items()
+    }
+
+    act_short = _season_act_to_short(season, act)
+    season_stat = ((mmr_history or {}).get("by_season") or {}).get(act_short) if act_short else None
+    if season_stat and "error" not in season_stat:
+        comp = result["competitive"]
+        comp["rank"] = _translate_rank(season_stat.get("final_rank_patched")) or comp["rank"]
+        games = season_stat.get("number_of_games") or 0
+        if games:
+            comp["winRate"] = round((season_stat.get("wins") or 0) / games * 100)
+
+    return result
+
+
+def build_player_profile(
+    db: Session,
+    *,
+    riot_name: str,
+    riot_tag: str,
+    account: dict | None,
+    mmr: dict | None,
+    mmr_history: dict | None,
+    matches_raw: list,
+) -> dict:
+    """PlayerProfilePage가 필요로 하는 전체 프로필 JSON을 조립하는 메인 함수.
+    modeStats는 가장 최신 Act(actOptions[0]) 기준으로 미리 계산해서 내려준다 - 프론트가
+    첫 렌더에서 /mode-stats를 다시 부르지 않아도 되게 하기 위함."""
+    agents = _load_ref_agents(db)
+    maps = _load_ref_maps(db)
+
+    records, role_results, _mode_buckets_unused, agent_buckets, act_index = _collect(matches_raw, agents, maps)
+
+    # ProfileHeader의 시즌/Act 선택박스 옵션 (실제 데이터가 있는 조합만, 최신순)
+    act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
+
+    default_season = act_options[0]["season"] if act_options else None
+    default_act = act_options[0]["acts"][0] if act_options else None
+    mode_stats = _compute_mode_stats(
+        matches_raw, agents, maps, mmr=mmr, mmr_history=mmr_history, season=default_season, act=default_act
+    )
+
+    # 매치 기록(matchHistory)은 Act 필터와 무관하게 항상 최근 20게임만
     recent = records[:20]
 
     return {
@@ -353,12 +403,28 @@ def build_player_profile(
         "level": (account or {}).get("account_level"),
         "title": (account or {}).get("title") or "",
         "lastUpdated": "방금 전",
-        "modeStats": {
-            key: _mode_stat(key, competitive_rank if key == "competitive" else None, items)
-            for key, items in mode_buckets.items()
-        },
+        "modeStats": mode_stats,
         "recentSummary": _summarize(recent),
         "roleDistribution": _role_distribution(role_results),
         "topAgents": _top_agents(agent_buckets),
-        "matchHistory": records,
+        "matchHistory": recent,
+        "actOptions": act_options,
     }
+
+
+def build_mode_stats(
+    db: Session,
+    *,
+    matches_raw: list,
+    mmr: dict | None = None,
+    mmr_history: dict | None = None,
+    season: str | None = None,
+    act: str | None = None,
+) -> dict:
+    """ProfileHeader에서 사용자가 다른 Act를 선택했을 때만 호출되는 /mode-stats 응답 조립.
+    기본 선택 Act의 modeStats는 build_player_profile이 이미 내려주므로 여기서 다시 계산하지 않는다."""
+    agents = _load_ref_agents(db)
+    maps = _load_ref_maps(db)
+    return _compute_mode_stats(
+        matches_raw, agents, maps, mmr=mmr, mmr_history=mmr_history, season=season, act=act
+    )

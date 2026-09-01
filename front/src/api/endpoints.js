@@ -17,6 +17,8 @@ export const ENDPOINTS = {
 
   // 개인 검색 (Frame 04)
   playerProfile: (riotId, tag) => `/api/players/${encodeURIComponent(riotId)}/${encodeURIComponent(tag)}`,
+  playerModeStats: (riotId, tag, season, act) =>
+    `/api/players/${encodeURIComponent(riotId)}/${encodeURIComponent(tag)}/mode-stats?season=${encodeURIComponent(season)}&act=${encodeURIComponent(act)}`,
 
   // 상대팀 전적 검색 (Frame 06) + 3초 상대분석 팝업 (Frame 05)
   teamProfile: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}`,

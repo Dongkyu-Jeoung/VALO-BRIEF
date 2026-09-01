@@ -19,9 +19,9 @@ export default function ModeStatCards({ modeStats }) {
           </div>
           <div className="stat-rows">
             <div>승률<b>{s.winRate ?? '—'}{s.winRate !== null ? '%' : ''}</b></div>
-            <div>헤드샷 %<b>{s.hs}%</b></div>
+            <div>헤드샷 %<b>{s.hs ?? '—'}{s.hs !== null ? '%' : ''}</b></div>
             <div>K/D<b>{s.kd ?? '—'}</b></div>
-            <div>평균 킬<b>{s.avgKills}</b></div>
+            <div>평균 킬<b>{s.avgKills ?? '—'}</b></div>
             <div>평균 딜량<b>{s.adr ?? '—'}</b></div>
             <div>평균 점수<b>{s.acs ?? '—'}</b></div>
           </div>
