@@ -33,42 +33,53 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--sp-6);
-  padding-bottom: var(--sp-2);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .filter-tabs {
   display: flex;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 4px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  gap: 16px; /* 탭 사이 여백 증가 */
+  background: transparent;
+  padding: 0;
+  border: none;
 }
 
 .filter-tab {
-  padding: 8px 20px;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
+  position: relative;
+  width: 90px; /* 버튼 가로 사이즈 일정하게 고정 (필요시 조절 가능) */
+  text-align: center; /* 고정 너비 내 텍스트 중앙 정렬 */
+  padding: 6px 0 10px 0;
+  font-size: 14.5px; /* 글씨 크기 줄임 (기존 15px -> 13px) */
+  color: var(--text-2, #888888);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: none;
+  border-radius: 0;
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.03em;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .filter-tab:hover {
-  color: var(--text-1);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-1, #ffffff);
+  background: transparent;
 }
 
 .filter-tab.on {
   color: #ffffff;
-  background: var(--accent, #ff4655);
-  border-color: var(--accent, #ff4655);
+  background: transparent;
+  border-color: transparent;
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(255, 70, 85, 0.3);
+  box-shadow: none;
+}
+
+.filter-tab.on::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--accent, #ff4655);
 }
