@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import AnalysisSection from '../../components/analysis/AnalysisSection';
-import { MAPS } from '../../constants/maps';
+import { gameData } from '../../constants/gameData';
 
-/** Frame 12 — 승부예측의 AnalysisTab과 완전히 동일한 컴포넌트를 재사용합니다. */
 export default function TeamAnalysisTab({ analysis }) {
-  const [selectedMap, setSelectedMap] = useState(MAPS[0]);
+  const [selectedMap, setSelectedMap] = useState(gameData.maps[0].name);
   const mapInfo = { ...analysis.mapInfoByMap[selectedMap], selectedMap };
 
   return (

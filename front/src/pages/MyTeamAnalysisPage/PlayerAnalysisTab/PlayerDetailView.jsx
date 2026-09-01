@@ -4,9 +4,9 @@ import EmptyImageBox from '../../../components/common/EmptyImageBox';
 import DuelCompareBar from '../../../components/common/DuelCompareBar';
 import DropdownSelect from '../../../components/common/DropdownSelect';
 import LineChart from '../../../components/common/LineChart';
-import { MAPS } from '../../../constants/maps';
+import { gameData } from '../../../constants/gameData';
 
-const MAP_OPTIONS = ['전체 맵', ...MAPS];
+const MAP_OPTIONS = ['전체 맵', ...gameData.maps.map((m) => m.name)];
 
 /** Frame 11 — 선수 상세 (라운드 정보 / 에임 정보 / 교전 정보) */
 export default function PlayerDetailView({ player, onBack }) {

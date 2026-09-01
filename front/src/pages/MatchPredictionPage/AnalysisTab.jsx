@@ -1,19 +1,39 @@
 import { useState } from 'react';
 import AnalysisSection from '../../components/analysis/AnalysisSection';
-import { MAPS } from '../../constants/maps';
+import { gameData } from '../../constants/gameData';
 
 export default function AnalysisTab({ analysis }) {
-  const [selectedMap, setSelectedMap] = useState(MAPS[0]);
+  const [selectedMap, setSelectedMap] = useState(gameData.maps[0].name);
 
-  // 실제 연동 시에는 fetchPrediction(teamName, teamTag, { map: selectedMap })처럼
-  // 맵을 쿼리 파라미터로 넘겨 서버가 이미 필터링된 단일 맵 데이터를 내려주면 됩니다.
-  // 지금은 맵별 mock 데이터(mapInfoByMap)에서 클라이언트가 직접 조회합니다.
-  const mapInfo = { ...analysis.mapInfoByMap[selectedMap], selectedMap };
+  const currentMapObj = gameData.maps.find(m => m.name === selectedMap) || gameData.maps[0];
+
+  const mapKey = Object.keys(analysis?.mapInfoByMap || {}).find(
+    key => key.toLowerCase() === currentMapObj.id.toLowerCase()
+  );
+
+  const currentMapData = analysis?.mapInfoByMap?.[mapKey] || {
+    mapWinRate: 0,
+    atkWinRate: 0,
+    defWinRate: 0,
+    preferredSites: { A: 0, B: 0, center: 0 },
+    avgSpikePlantTime: 0,
+    matchSample: 0,
+    combos: [],
+    comboAce: [],
+    comboWeakness: []
+  };
+
+  const mapInfo = { 
+    ...currentMapData, 
+    selectedMap: currentMapObj.id 
+  };
 
   return (
     <AnalysisSection
       analysis={{ ...analysis, mapInfo }}
-      onMapChange={setSelectedMap}
+      onMapChange={(mapName) => {
+        setSelectedMap(mapName);
+      }}
       ourLabel="우리팀"
       theirLabel="상대팀"
     />

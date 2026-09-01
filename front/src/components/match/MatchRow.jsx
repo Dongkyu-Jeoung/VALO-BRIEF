@@ -5,7 +5,13 @@ export default function MatchRow({ match }) {
   return (
     <div className={`match-row ${isWin ? '' : 'lose'}`}>
       <div className="match-meta">
-        <b>{match.mode}</b>{match.map}<br />{match.date} · {match.time}
+        <EmptyImageBox className="match-map-icon" folder="maps" assetKey={match.map} label="" />
+        <div>
+          <b>{match.mode}</b>
+          <span>{match.map}</span>
+          <br />
+          {match.date} · {match.time}
+        </div>
       </div>
       <div className="match-mid">
         <EmptyImageBox className="match-agent" folder="agents" assetKey={match.agent} label="" />

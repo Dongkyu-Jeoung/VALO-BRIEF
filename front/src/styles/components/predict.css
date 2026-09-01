@@ -4,17 +4,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-8);
-  padding: var(--sp-8) var(--sp-10);
+  gap: var(--sp-4, 16px);
+  padding: var(--sp-6, 24px) var(--sp-8, 32px);
   border-radius: var(--radius-lg);
   background: linear-gradient(90deg, rgba(76,126,255,0.08), rgba(20,22,29,0.4) 45%, rgba(20,22,29,0.4) 55%, rgba(255,70,85,0.08));
   border: 1px solid var(--border);
+  margin-top: var(--sp-6, 24px); /* [추가] 상단 헤더와의 여백 추가 (필요시 32px로 조정) */
   margin-bottom: var(--sp-6);
+  width: 100%;
 }
 
+/* 양쪽 팀 영역 */
 .pv-team {
   text-align: center;
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .pv-team .avatar-frame {
@@ -23,6 +27,10 @@
 
 .pv-team .tname {
   font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 팀 라벨 (우리팀, 상대팀) */
@@ -34,13 +42,15 @@
   margin-bottom: 6px;
 }
 
+/* 중앙 영역 (막대 확장을 위한 영역 조절) */
 .pv-center {
   text-align: center;
-  flex: 1;
-  max-width: 540px;
+  flex: 2.2 1 0;
+  max-width: 680px;
+  min-width: 280px;
 }
 
-/* 예상 승률 라벨 (크기 확대 적용) */
+/* 예상 승률 라벨 */
 .pv-center .pv-label {
   font-size: 14px;
   font-weight: 600;
@@ -53,26 +63,28 @@
 .pv-vs-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  gap: 20px;
   margin: 8px 0 12px;
+  width: 100%;
 }
 
-/* 텍스트 영역 고정 너비 지정 */
+/* 텍스트 영역 정렬 (팀 이미지와 막대 사이 중간 위치) */
 .pv-percent-wrapper {
-  width: 110px;
+  flex: 1;
   display: flex;
   align-items: center;
+  min-width: 70px;
 }
 
 .pv-percent-wrapper.left {
-  justify-content: flex-start;
-  padding-left: 8px;
+  justify-content: center;
+  padding-right: 0;
 }
 
 .pv-percent-wrapper.right {
-  justify-content: flex-end;
-  padding-right: 8px;
+  justify-content: center;
+  padding-left: 0;
 }
 
 .pv-percent {
@@ -90,13 +102,15 @@
 
 /* 낮은 승률 폰트 커스텀 */
 .pv-percent.is-low {
-  font-size: 22px;
+  font-size: 26px;
   opacity: 0.55;
 }
 
-/* 중앙 승률 바 고정 */
+/* 중앙 승률 바 (최대 길이 약 360px로 적절히 확장) */
 .pv-vs-bar {
-  width: 220px;
+  flex: 2;
+  max-width: 360px;
+  min-width: 120px;
   height: 10px;
   border-radius: 5px;
   overflow: hidden;

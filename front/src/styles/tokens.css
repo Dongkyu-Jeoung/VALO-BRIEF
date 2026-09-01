@@ -10,8 +10,8 @@
   --border-soft: #1D2029;
   --border-strong: #383E4D;
   --text-1: #F3F4F6;
-  --text-2: #9199A8;
-  --text-3: #565D6B;
+  --text-2: #B0B0B0;
+  --text-3: #939BB0; /* 어두워서 안 보이던 서브 텍스트 가독성 개선 */
 
   --accent: #FF4655;
   --accent-hover: #FF5D6B;
@@ -26,9 +26,9 @@
   --success: #2FB170;
 
   /* ===== 폰트 ===== */
-  --font-display: 'Rajdhani', sans-serif;
-  --font-body: 'Noto Sans KR', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Rajdhani', 'Pretendard', sans-serif;
+  --font-body: 'Pretendard', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Pretendard', monospace; /* 한글 미지원 및 폰트 이탈 현상 수정 */
 
   /* ===== 타이포 스케일 ===== */
   --fs-xs: 12px;        
