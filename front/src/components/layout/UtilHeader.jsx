@@ -20,7 +20,7 @@ const NAV_ITEMS = [
 export default function UtilHeader() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isHome = location.pathname === '/';
 
