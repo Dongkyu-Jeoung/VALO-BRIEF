@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Logo from './Logo';
-import EmptyImageBox from '../common/EmptyImageBox';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
 
@@ -19,9 +18,11 @@ const NAV_ITEMS = [
 export default function UtilHeader() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const userInitial = user?.nickname ? user.nickname.charAt(0) : (user?.username ? user.username.charAt(0) : 'U');
 
   return (
     <header className="util-header">
@@ -48,7 +49,7 @@ export default function UtilHeader() {
               onClick={() => setMenuOpen((o) => !o)}
               aria-label="프로필 메뉴"
             >
-              <EmptyImageBox className="profile-avatar-img" label="" />
+              <span className="profile-avatar-text">{userInitial}</span>
             </button>
             {menuOpen ? (
               <div className="profile-dropdown">
