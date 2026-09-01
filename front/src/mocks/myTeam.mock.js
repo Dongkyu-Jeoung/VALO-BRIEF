@@ -15,15 +15,15 @@ export const myTeamStatsMock = {
     { rank: 5, name: 'Vex', acs: 188, hs: 17, position: '타격대', kd: 0.95 },
   ],
   mapWinrates: [
-    { map: '어센트', win: 13, lose: 8, winRate: 70 },
-    { map: '바인드', win: 12, lose: 10, winRate: 55 },
-    { map: '헤이븐', win: 10, lose: 11, winRate: 42 },
+    { map: 'ascent', win: 13, lose: 8, winRate: 70 },
+    { map: 'bind', win: 12, lose: 10, winRate: 55 },
+    { map: 'haven', win: 10, lose: 11, winRate: 42 },
   ],
   matchHistory: [
-    { map: '어센트', result: 'win', date: '08.24', time: '9:48 AM', roundScore: '13-7', kda: 2.4, adr: 172, acs: 248, firstBlood: 9, mvp: { agent: 'Jett', player: 'Zeta', kda: 3.1, hs: 31, acs: 302 }, season: 'S2026', act: 'Act 2' },
-    { map: '바인드', result: 'lose', date: '08.23', time: '8:10 PM', roundScore: '9-13', kda: 1.5, adr: 134, acs: 190, firstBlood: 4, mvp: { agent: 'Reyna', player: 'Rho', kda: 1.9, hs: 24, acs: 224 }, season: 'S2026', act: 'Act 2' },
-    { map: '헤이븐', result: 'win', date: '08.20', time: '7:15 PM', roundScore: '13-9', kda: 2.0, adr: 155, acs: 219, firstBlood: 6, mvp: { agent: 'Omen', player: 'Kai', kda: 2.3, hs: 20, acs: 236 }, season: 'S2026', act: 'Act 1' },
-    { map: '스플릿', result: 'lose', date: '07.28', time: '6:40 PM', roundScore: '10-13', kda: 1.4, adr: 129, acs: 176, firstBlood: 3, mvp: { agent: 'Sova', player: 'Milo', kda: 1.7, hs: 19, acs: 198 }, season: 'S2025', act: 'Act 3' },
+    { map: 'ascent', result: 'win', date: '08.24', time: '9:48 AM', roundScore: '13-7', kda: 2.4, adr: 172, acs: 248, firstBlood: 9, mvp: { agent: 'Jett', player: 'Zeta', kda: 3.1, hs: 31, acs: 302 }, season: 'S2026', act: 'Act 2' },
+    { map: 'bind', result: 'lose', date: '08.23', time: '8:10 PM', roundScore: '9-13', kda: 1.5, adr: 134, acs: 190, firstBlood: 4, mvp: { agent: 'Reyna', player: 'Rho', kda: 1.9, hs: 24, acs: 224 }, season: 'S2026', act: 'Act 2' },
+    { map: 'haven', result: 'win', date: '08.20', time: '7:15 PM', roundScore: '13-9', kda: 2.0, adr: 155, acs: 219, firstBlood: 6, mvp: { agent: 'Omen', player: 'Kai', kda: 2.3, hs: 20, acs: 236 }, season: 'S2026', act: 'Act 1' },
+    { map: 'split', result: 'lose', date: '07.28', time: '6:40 PM', roundScore: '10-13', kda: 1.4, adr: 129, acs: 176, firstBlood: 3, mvp: { agent: 'Sova', player: 'Milo', kda: 1.7, hs: 19, acs: 198 }, season: 'S2025', act: 'Act 3' },
   ],
 };
 
@@ -38,34 +38,33 @@ export const myTeamPlayersMock = [
 export const myTeamPlayerDetailMock = {
   zeta: {
     id: 'zeta', name: 'Zeta', tag: 'PHX',
-    // 맵별로 나눠 관리 ('전체 맵'은 전체 평균). 실제 연동 시 맵 쿼리로 서버가 내려주면 됩니다.
     roundInfoByMap: {
       '전체 맵': {
         atkKd: 1.5, atkAcs: 255, defKd: 1.3, defAcs: 228,
         fbPct: 21, fdPct: 9,
         pistolKd: 1.8, pistolAcs: 241, ecoKd: 1.1, ecoAcs: 195,
       },
-      '어센트': {
+      'ascent': {
         atkKd: 1.6, atkAcs: 261, defKd: 1.4, defAcs: 233,
         fbPct: 23, fdPct: 8,
         pistolKd: 1.9, pistolAcs: 248, ecoKd: 1.2, ecoAcs: 201,
       },
-      '바인드': {
+      'bind': {
         atkKd: 1.3, atkAcs: 239, defKd: 1.2, defAcs: 214,
         fbPct: 18, fdPct: 11,
         pistolKd: 1.6, pistolAcs: 222, ecoKd: 1.0, ecoAcs: 180,
       },
-      '헤이븐': {
+      'haven': {
         atkKd: 1.4, atkAcs: 248, defKd: 1.3, defAcs: 221,
         fbPct: 20, fdPct: 10,
         pistolKd: 1.7, pistolAcs: 235, ecoKd: 1.1, ecoAcs: 190,
       },
-      '스플릿': {
+      'split': {
         atkKd: 1.7, atkAcs: 270, defKd: 1.5, defAcs: 242,
         fbPct: 25, fdPct: 7,
         pistolKd: 2.0, pistolAcs: 256, ecoKd: 1.3, ecoAcs: 210,
       },
-      '로터스': {
+      'lotus': {
         atkKd: 1.2, atkAcs: 231, defKd: 1.1, defAcs: 206,
         fbPct: 16, fdPct: 13,
         pistolKd: 1.5, pistolAcs: 215, ecoKd: 0.9, ecoAcs: 172,
@@ -108,9 +107,8 @@ export const myTeamAnalysisMock = {
     atkWinRate: 58, defWinRate: 63, pistolWinRate: 65, ecoWinRate: 38,
     fbWinPct: 71, fdLosePct: 62,
   },
-  // 맵별로 키를 나눠 관리합니다 (prediction.mock.js의 mapInfoByMap과 동일한 구조).
   mapInfoByMap: {
-    '어센트': {
+    'ascent': {
       mapWinRate: 70, atkWinRate: 56, defWinRate: 68,
       preferredSites: { A: 52, B: 30, center: 18 },
       avgSpikePlantTime: 29,
@@ -128,7 +126,7 @@ export const myTeamAnalysisMock = {
         { name: 'Milo', fd: 29, acs: 205 },
       ],
     },
-    '바인드': {
+    'bind': {
       mapWinRate: 55, atkWinRate: 49, defWinRate: 60,
       preferredSites: { A: 40, B: 41, center: 19 },
       avgSpikePlantTime: 33,
@@ -146,7 +144,7 @@ export const myTeamAnalysisMock = {
         { name: 'Vex', fd: 27, acs: 180 },
       ],
     },
-    '헤이븐': {
+    'haven': {
       mapWinRate: 42, atkWinRate: 38, defWinRate: 46,
       preferredSites: { A: 28, B: 30, center: 42 },
       avgSpikePlantTime: 36,
@@ -164,7 +162,7 @@ export const myTeamAnalysisMock = {
         { name: 'Milo', fd: 26, acs: 190 },
       ],
     },
-    '스플릿': {
+    'split': {
       mapWinRate: 63, atkWinRate: 55, defWinRate: 58,
       preferredSites: { A: 50, B: 28, center: 22 },
       avgSpikePlantTime: 31,
@@ -182,7 +180,7 @@ export const myTeamAnalysisMock = {
         { name: 'Milo', fd: 25, acs: 196 },
       ],
     },
-    '로터스': {
+    'lotus': {
       mapWinRate: 40, atkWinRate: 35, defWinRate: 44,
       preferredSites: { A: 26, B: 34, center: 40 },
       avgSpikePlantTime: 35,
