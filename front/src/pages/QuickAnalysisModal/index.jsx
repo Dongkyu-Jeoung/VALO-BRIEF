@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchQuickAnalysis } from '../../api/teams';
 import EmptyImageBox from '../../components/common/EmptyImageBox';
 import MiniRankTable from '../../components/common/MiniRankTable';
+import ModalTeamSearchBar from '../../components/search/ModalTeamSearchBar';
 import { ratingKey } from '@/utils/ratingKey';
 import { ROUTES } from '../../constants/routes';
 
@@ -11,13 +12,25 @@ import { ROUTES } from '../../constants/routes';
  * 사용법: <QuickAnalysisModal teamTag="ASC" onClose={...} />
  */
 export default function QuickAnalysisModal({ teamTag, onClose }) {
+  const [activeTeamTag, setActiveTeamTag] = useState(teamTag);
   const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setActiveTeamTag(teamTag);
+  }, [teamTag]);
 
   useEffect(() => {
     let active = true;
-    fetchQuickAnalysis(teamTag).then((res) => { if (active) setData(res); });
+    setLoading(true);
+    fetchQuickAnalysis(activeTeamTag).then((res) => {
+      if (active) {
+        setData(res);
+        setLoading(false);
+      }
+    });
     return () => { active = false; };
-  }, [teamTag]);
+  }, [activeTeamTag]);
 
   if (!data) return null;
 
@@ -29,7 +42,6 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
             <div className="bolt" />
             <div className="popup-title display">3초 상대 분석 리포트</div>
           </div>
-          {/* 닫기 (✕) 버튼 추가 */}
           <button
             type="button"
             className="popup-close-btn"
@@ -39,7 +51,10 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
             ✕
           </button>
         </div>
-        <div className="popup-body">
+
+        <ModalTeamSearchBar onTeamFound={setActiveTeamTag} />
+
+        <div className={`popup-body ${loading ? 'is-loading' : ''}`.trim()}>
           <div className="p-box">
             <div className="p-box-title"><span className="num">1.</span>상대팀 전적 (최근 5게임)</div>
             <div className="wl-strip">
@@ -47,11 +62,25 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
                 <div className={`wl-chip ${r === 'win' ? 'w' : 'l'}`} key={i}>{r === 'win' ? 'W' : 'L'}</div>
               ))}
             </div>
+
+            {/* 상대 팀 전적 하단 지표 */}
             <div className="p-stats-row">
-              <span>승패<b>{data.wins}승 {data.losses}패</b></span>
-              <span>승률<b className="rate-lose">{data.winRate}%</b></span>
-              <span>평균 라운드 승<b>{data.avgRoundWin}</b></span>
-              <span>평균 라운드 패<b>{data.avgRoundLose}</b></span>
+              <div className="stat-item">
+                <div className="stat-label">승패</div>
+                <div className="stat-value"><span className="win-text">{data.wins}승</span> {data.losses}패</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-label">승률</div>
+                <div className="stat-value win-text">{data.winRate}%</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-label">평균 라운드 승</div>
+                <div className="stat-value">{data.avgRoundWin}</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-label">평균 라운드 패</div>
+                <div className="stat-value">{data.avgRoundLose}</div>
+              </div>
             </div>
           </div>
 
@@ -76,12 +105,12 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
           </div>
 
           <div className="p-box">
-            <div className="p-box-title">상대 팀 개인 순위 (최근 5게임 기준)</div>
+            {/* [수정] 3. 번호 추가 */}
+            <div className="p-box-title"><span className="num">3.</span>상대 팀 개인 순위 (최근 5게임 기준)</div>
             <MiniRankTable players={data.playerRanking} showAdr />
           </div>
         </div>
         
-        {/* 클릭 시 팝업이 닫히도록 onClick={onClose} 연결 */}
         <Link
           to={ROUTES.team(data.teamName.replace(/\s+/g, '-').toLowerCase(), data.teamTag)}
           className="popup-cta"

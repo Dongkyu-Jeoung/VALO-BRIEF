@@ -338,6 +338,33 @@
   padding-left: var(--sp-4);
 }
 
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.sidebar-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-logout-btn:hover {
+  background: #ff4655;
+  color: #ffffff;
+  border-color: #ff4655;
+}
+
 /* ===== 5. 반응형 처리 ===== */
 @media (max-width: 1024px) {
   .feature-pills {

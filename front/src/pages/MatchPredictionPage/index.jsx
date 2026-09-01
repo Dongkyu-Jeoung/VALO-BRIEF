@@ -14,7 +14,9 @@ const TABS = ['통계', '분석', 'AI 리포트'];
 export default function MatchPredictionPage() {
   const { teamName, teamTag } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : '분석';
+  
+  // [수정] '분석' 대신 TABS[0] 인 '통계'를 디폴트 탭으로 변경
+  const activeTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : '통계';
 
   const [prediction, setPrediction] = useState(null);
   const [opponentTeam, setOpponentTeam] = useState(null);
