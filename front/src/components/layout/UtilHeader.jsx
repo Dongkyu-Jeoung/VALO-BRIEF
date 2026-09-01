@@ -24,6 +24,8 @@ export default function UtilHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isHome = location.pathname === '/';
 
+  const userInitial = user?.nickname ? user.nickname.charAt(0) : (user?.username ? user.username.charAt(0) : 'U');
+
   return (
     <header className="util-header">
       <Link to="/"><Logo size="sm" /></Link>
