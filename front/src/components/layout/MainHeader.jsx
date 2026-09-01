@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
 import { ROUTES } from '../../constants/routes';
+import { useAuth } from '../../context/AuthContext';
 
 const DEMO_TEAM_NAME = 'team-ascend';
 const DEMO_TEAM_TAG = 'ASC';
@@ -15,21 +16,22 @@ const MENU_LINKS = [
 
 export default function MainHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState({ nickname: 'VALO' });
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  
+  const { user, isAuthenticated, logout } = useAuth();
 
   const avatarText = user?.nickname ? user.nickname.charAt(0).toUpperCase() : '?';
 
   const handleLogout = () => {
-    setUser(null);
+    logout();
     setDropdownOpen(false);
   };
 
   return (
-    <header className="site-header">
+    <header className={`site-header ${!isAuthenticated ? 'logged-out' : ''}`}>
       <Link to="/"><Logo /></Link>
 
-      {user && (
+      {isAuthenticated && (
         <nav className="nav-menu">
           {MENU_LINKS.map((item) => (
             <Link key={item.label} to={item.to}>
@@ -40,12 +42,12 @@ export default function MainHeader() {
       )}
 
       <div className="header-right">
-        {user ? (
+        {isAuthenticated ? (
           <div className="profile-menu">
             <button 
               type="button" 
               className="profile-avatar-btn" 
-              title={user.nickname}
+              title={user?.nickname}
               onClick={() => setDropdownOpen((prev) => !prev)}
             >
               <span className="profile-avatar-img">{avatarText}</span>

@@ -4,7 +4,6 @@ import UtilHeader from '../components/layout/UtilHeader';
 import Footer from '../components/layout/Footer';
 import { useAuth } from '../context/AuthContext';
 
-/** 메인페이지(Frame 01) 레이아웃 — 로그인 상태에 따라 헤더만 다르게 표시 */
 export default function MainLayout() {
   const { isAuthenticated } = useAuth();
   return (
