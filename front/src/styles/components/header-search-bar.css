@@ -1,0 +1,89 @@
+/* ==========================================================================
+   HeaderSearchBar Component Module
+   (UtilHeader 우측, 햄버거 메뉴 아이콘 바로 왼쪽에 들어가는 검색창)
+   ========================================================================== */
+
+.header-search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 340px; /* 너비 확장 (280px -> 340px) */
+  height: 38px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 4px 0 14px;
+  margin-right: 16px; /* 햄버거 메뉴와의 여백 확장 */
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.header-search-bar:focus-within {
+  border-color: var(--accent);
+}
+
+.header-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.header-search-input::placeholder {
+  color: var(--text-3);
+}
+
+.header-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 16px; /* 상하 패딩 0 지정으로 flex 정렬 간섭 제거 */
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  line-height: 30px; /* 높이와 동일하게 맞춰 세로 중앙 고정 */
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.header-search-btn:hover {
+  background: var(--accent-hover);
+}
+
+.header-search-btn:active {
+  transform: scale(0.98);
+}
+
+.header-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.header-search-error-toast {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  background-color: rgba(20, 10, 12, 0.95);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 70, 85, 0.4);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  z-index: 10;
+}

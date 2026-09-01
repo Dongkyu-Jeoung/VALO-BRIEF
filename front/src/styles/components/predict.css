@@ -9,6 +9,7 @@
   border-radius: var(--radius-lg);
   background: linear-gradient(90deg, rgba(76,126,255,0.08), rgba(20,22,29,0.4) 45%, rgba(20,22,29,0.4) 55%, rgba(255,70,85,0.08));
   border: 1px solid var(--border);
+  margin-top: var(--sp-6, 24px); /* [추가] 상단 헤더와의 여백 추가 (필요시 32px로 조정) */
   margin-bottom: var(--sp-6);
   width: 100%;
 }
