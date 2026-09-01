@@ -1,8 +1,8 @@
-export default function ComboBlock({ title = '선호 요원 조합', combos, ace, weakness }) {
+export default function ComboBlock({ title = '선호 요원 조합', combos = [], ace = [], weakness = [] }) {
   return (
     <div className="combo-block">
       <div className="combo-block-title">{title}</div>
-      {combos.map((c) => (
+      {combos?.map((c) => (
         <div className="combo-row" key={c.label}>
           <span className="combo-label">{c.label}</span>
           <div className="combo-agents">
@@ -17,7 +17,7 @@ export default function ComboBlock({ title = '선호 요원 조합', combos, ace
       <div className="combo-detail-cols">
         <div>
           <div className="combo-detail-title text-win">BEST</div>
-          {ace.map((p) => (
+          {ace?.map((p) => (
             <div className="combo-detail-row" key={p.name}>
               <span>{p.name}</span>
               <b>ACS {p.acs}</b>
@@ -26,7 +26,7 @@ export default function ComboBlock({ title = '선호 요원 조합', combos, ace
         </div>
         <div>
           <div className="combo-detail-title text-lose">WORST</div>
-          {weakness.map((p) => (
+          {weakness?.map((p) => (
             <div className="combo-detail-row" key={p.name}>
               <span>{p.name}</span>
               <b>FD {p.fd}% · ACS {p.acs}</b>

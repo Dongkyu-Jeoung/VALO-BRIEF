@@ -1,7 +1,7 @@
 import EmptyImageBox from '../common/EmptyImageBox';
 import DropdownSelect from '../common/DropdownSelect';
 import ComboBlock from './ComboBlock';
-import { MAPS } from '../../constants/maps';
+import { gameData } from '../../constants/gameData';
 
 export default function MapInfoBlock({ data, onMapChange }) {
   const items = [
@@ -10,8 +10,8 @@ export default function MapInfoBlock({ data, onMapChange }) {
     { label: '수비 승률', value: `${data.defWinRate}%` },
     {
       label: '선호 사이트',
-      value: `A ${data.preferredSites.A}% · B ${data.preferredSites.B}%`,
-      sub: `센터 ${data.preferredSites.center}%`,
+      value: `A ${data.preferredSites?.A ?? 0}% · B ${data.preferredSites?.B ?? 0}%`,
+      sub: `센터 ${data.preferredSites?.center ?? 0}%`,
       smallValue: true,
     },
     { 
@@ -30,7 +30,7 @@ export default function MapInfoBlock({ data, onMapChange }) {
     <div className="analysis-row">
       <div className="analysis-row-head">
         <h5>② 맵 정보</h5>
-        <DropdownSelect icon="🗺" label={data.selectedMap} options={MAPS} value={data.selectedMap} onChange={onMapChange} />
+        <DropdownSelect icon="🗺" label={data.selectedMap} options={gameData.maps.map(m => m.name)} value={data.selectedMap} onChange={onMapChange} />
       </div>
       <div className="map-analysis-body">
         <EmptyImageBox
