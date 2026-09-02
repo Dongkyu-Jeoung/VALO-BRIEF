@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { SEASONS, ACTS } from '../constants/seasons';
 
 /**
@@ -15,13 +15,16 @@ export function useSeasonActFilter(actOptions) {
   const [season, setSeasonState] = useState(seasons[0]);
   const [act, setAct] = useState(actsFor(seasons[0])[0]);
 
-  // actOptions가 비동기로(프로필 로드 후) 도착하면 그 시점의 최신 시즌/Act로 다시 맞춘다
-  useEffect(() => {
-    if (!hasDynamic) return;
+  // actOptions가 비동기로(프로필 로드 후) 도착하면 그 시점의 최신 시즌/Act로 다시 맞춘다.
+  // useEffect로 처리하면 실제 반영이 한 렌더 늦어져, 그 사이 화면(PlayerProfilePage)의
+  // 다른 effect가 옛 기본값(season/act)을 들고 불필요한 API를 한 번 더 찌르게 된다.
+  // 렌더링 도중 바로 setState해서 같은 렌더에서 최신값이 반영되도록 한다.
+  const [prevActOptions, setPrevActOptions] = useState(actOptions);
+  if (hasDynamic && actOptions !== prevActOptions) {
+    setPrevActOptions(actOptions);
     setSeasonState(seasons[0]);
     setAct(actsFor(seasons[0])[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actOptions]);
+  }
 
   function setSeason(newSeason) {
     setSeasonState(newSeason);

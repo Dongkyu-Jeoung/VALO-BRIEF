@@ -19,6 +19,7 @@ export default function ProfileHeader({
   tag,
   level,
   title,
+  avatarUrl,
   division,
   lastUpdated,
   onRefresh,
@@ -35,6 +36,7 @@ export default function ProfileHeader({
   return (
     <div className="profile-card">
       <EmptyImageBox
+        src={type === 'player' ? avatarUrl : undefined}
         folder={type === 'team' ? 'teams' : undefined}
         assetKey={type === 'team' ? (avatarKey ?? tag) : undefined}
         label={type === 'player' ? 'AGENT' : `TEAM\nIMAGE`}

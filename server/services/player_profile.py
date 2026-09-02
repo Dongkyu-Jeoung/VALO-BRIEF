@@ -320,7 +320,6 @@ def _compute_mode_stats(
     agents: dict,
     maps: dict,
     *,
-    mmr: dict | None,
     mmr_history: dict | None,
     season: str | None,
     act: str | None,
@@ -329,9 +328,9 @@ def _compute_mode_stats(
     build_mode_stats가 공용으로 쓴다. season/act를 주면 그 구간 경기만 집계한다.
     경쟁전 카드의 rank/승률은 가능하면 mmr_history(by_season - Riot이 계산해둔 그 Act의
     최종 티어/전체 판수)로 덮어써서, 매치 상세가 그 Act에 다 안 잡혀 있어도 정확하게 만든다."""
-    current = (mmr or {}).get("current") or {}
-    rank_label = _translate_rank((current.get("tier") or {}).get("name"))
-    current_rr = current.get("rr")
+    current_data = (mmr_history or {}).get("current_data") or {}
+    rank_label = _translate_rank(current_data.get("currenttierpatched"))
+    current_rr = current_data.get("ranking_in_tier")
     competitive_rank = f"{rank_label} {current_rr}".strip() if rank_label and current_rr is not None else rank_label
 
     mode_buckets: dict[str, list] = {"competitive": [], "unrated": [], "swiftplay": [], "deathmatch": []}
@@ -373,7 +372,6 @@ def build_player_profile(
     riot_name: str,
     riot_tag: str,
     account: dict | None,
-    mmr: dict | None,
     mmr_history: dict | None,
     matches_raw: list,
 ) -> dict:
@@ -391,7 +389,7 @@ def build_player_profile(
     default_season = act_options[0]["season"] if act_options else None
     default_act = act_options[0]["acts"][0] if act_options else None
     mode_stats = _compute_mode_stats(
-        matches_raw, agents, maps, mmr=mmr, mmr_history=mmr_history, season=default_season, act=default_act
+        matches_raw, agents, maps, mmr_history=mmr_history, season=default_season, act=default_act
     )
 
     # 매치 기록(matchHistory)은 Act 필터와 무관하게 항상 최근 20게임만
@@ -402,6 +400,7 @@ def build_player_profile(
         "tag": (account or {}).get("tag") or riot_tag,
         "level": (account or {}).get("account_level"),
         "title": (account or {}).get("title") or "",
+        "avatarUrl": (account or {}).get("avatarUrl"),
         "lastUpdated": "방금 전",
         "modeStats": mode_stats,
         "recentSummary": _summarize(recent),
@@ -416,7 +415,6 @@ def build_mode_stats(
     db: Session,
     *,
     matches_raw: list,
-    mmr: dict | None = None,
     mmr_history: dict | None = None,
     season: str | None = None,
     act: str | None = None,
@@ -426,5 +424,5 @@ def build_mode_stats(
     agents = _load_ref_agents(db)
     maps = _load_ref_maps(db)
     return _compute_mode_stats(
-        matches_raw, agents, maps, mmr=mmr, mmr_history=mmr_history, season=season, act=act
+        matches_raw, agents, maps, mmr_history=mmr_history, season=season, act=act
     )

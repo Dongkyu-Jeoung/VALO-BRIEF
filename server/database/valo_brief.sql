@@ -116,11 +116,11 @@ INSERT INTO ref_agents (uuid, display_name, name_ko, role_type) VALUES
 ('e370fa57-4757-3604-3648-499e1f642d3f','Gekko','게코','Initiator'),
 ('dade69b4-4f5a-8528-247b-219e5a1facd6','Fade','페이드','Initiator'),
 ('5f8d3a7f-467b-97f3-062c-13acf203c006','Breach','브리치','Initiator'),
-('cc8b64c8-4b25-4ff9-6e7f-37b4da43d235','Deadlock','데드록','Sentinel'),
+('cc8b64c8-4b25-4ff9-6e7f-37b4da43d235','Deadlock','데드락','Sentinel'),
 ('b444168c-4e35-8076-db47-ef9bf368f384','Tejo','테호','Initiator'),
 ('f94c3b30-42be-e959-889c-5aa313dba261','Raze','레이즈','Duelist'),
 ('22697a3d-45bf-8dd7-4fec-84a9e28c69d7','Chamber','체임버','Sentinel'),
-('601dbbe7-43ce-be57-2a40-4abd24953621','KAY/O','케이/오','Initiator'),
+('601dbbe7-43ce-be57-2a40-4abd24953621','KAYO','케이오','Initiator'),
 ('6f2a04ca-43e0-be17-7f36-b3908627744d','Skye','스카이','Initiator'),
 ('117ed9e3-49f3-6512-3ccf-0cada7e3823b','Cypher','사이퍼','Sentinel'),
 ('320b2a48-4d9b-a075-30f1-1f93a9b638fa','Sova','소바','Initiator'),
@@ -179,6 +179,32 @@ INSERT INTO ref_weapons (uuid, display_name, name_ko, category, base_cost, verif
 ('a03b24d3-4319-996d-0f8c-94bbfba1dfc7','Operator','오퍼레이터','Sniper',4700,'datasci');
 
 -- ---------------------------------------------------------------------
+-- 2-1. REF_PLAYER_CARDS / REF_PLAYER_TITLES  (프로필 아바타/칭호 참조 테이블)
+--
+-- ref_agents/ref_maps/ref_weapons와 달리 개수가 많아(카드 982개, 칭호 415개, 계속 늘어남)
+-- 전체를 미리 시드하지 않는다. Henrik account API가 puuid마다 card/title uuid를 주면,
+-- 처음 보는 uuid만 valorant-api.com(GET /v1/playercards|playertitles/{uuid}?language=ko-KR)
+-- 에서 그때그때 조회해 이 테이블에 캐싱해두는 cache-aside 방식이다
+-- (services/cosmetics.py 참고, riot_accounts 캐싱과 같은 패턴).
+-- ---------------------------------------------------------------------
+CREATE TABLE ref_player_cards (
+    uuid            VARCHAR(64)     NOT NULL COMMENT 'valorant-api.com playercard uuid = Henrik account.card',
+    name_ko         VARCHAR(100)    NULL COMMENT 'valorant-api.com displayName (language=ko-KR)',
+    display_icon    VARCHAR(255)    NULL COMMENT '프로필 아바타용 소형 아이콘 URL',
+    synced_at       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='플레이어 카드(아바타) 참조 테이블 - 최초 조회 시 캐싱';
+
+CREATE TABLE ref_player_titles (
+    uuid            VARCHAR(64)     NOT NULL COMMENT 'valorant-api.com playertitle uuid = Henrik account.title',
+    title_ko        VARCHAR(100)    NULL COMMENT 'valorant-api.com titleText (language=ko-KR)',
+    synced_at       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='플레이어 칭호 참조 테이블(텍스트만, 이미지 없음) - 최초 조회 시 캐싱';
+
+-- ---------------------------------------------------------------------
 -- 3. TEAMS  (팀 단위 계정 - 회원가입/로그인/팀 프로필 겸용)
 -- ---------------------------------------------------------------------
 CREATE TABLE teams (
@@ -217,7 +243,8 @@ CREATE TABLE riot_accounts (
     region              VARCHAR(10)     NOT NULL,
     platform            VARCHAR(10)     NOT NULL DEFAULT 'pc',
     account_level       INT             NULL COMMENT 'Henrik account API account_level',
-    title               VARCHAR(64)     NULL COMMENT 'Henrik account API title (칭호 uuid)',
+    title               VARCHAR(100)    NULL COMMENT '칭호 한글 텍스트 (ref_player_titles로 변환된 값, uuid 아님)',
+    avatar_url           VARCHAR(255)    NULL COMMENT '프로필 카드 아바타 이미지 URL (ref_player_cards로 변환된 값)',
     current_rank        VARCHAR(30)     NULL COMMENT 'Henrik mmr API current.tier.name',
     current_rr          INT             NULL COMMENT 'Henrik mmr API current.rr',
     verification_status ENUM('none','pending','verified','failed')
