@@ -1,5 +1,5 @@
 import EmptyImageBox from '../../components/common/EmptyImageBox';
-import { ratingKey } from '@/utils/ratingKey';
+import { tierKey } from '../../utils/gameDataKey';
 
 const MODE_LABELS = { competitive: '경쟁전', unrated: '일반', swiftplay: '신속 플레이', deathmatch: '데스매치' };
 
@@ -12,7 +12,7 @@ export default function ModeStatCards({ modeStats }) {
             {MODE_LABELS[key]}
             {key === 'competitive' ? (
               <span className="rank-chip">
-                <EmptyImageBox folder="rating" assetKey={ratingKey(s.rank)} label={`RANK\nICON`} className="rank-icon-img" />
+                <EmptyImageBox folder="tiers" assetKey={tierKey(s.rank)} label={`RANK\nICON`} className="rank-icon-img" />
                 {s.rank}
               </span>
             ) : null}

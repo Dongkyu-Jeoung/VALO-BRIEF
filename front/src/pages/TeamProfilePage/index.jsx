@@ -24,7 +24,7 @@ export default function TeamProfilePage() {
     return () => { active = false; };
   }, [teamName, teamTag]);
 
-  if (!team) return <LoadingText />;
+  if (!team) return <LoadingText full />;
 
   return (
     <div className="page-container">

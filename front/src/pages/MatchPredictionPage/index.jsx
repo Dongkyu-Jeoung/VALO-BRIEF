@@ -28,7 +28,7 @@ export default function MatchPredictionPage() {
     return () => { active = false; };
   }, [teamName, teamTag]);
 
-  if (!prediction) return <LoadingText />;
+  if (!prediction) return <LoadingText full />;
 
   return (
     <div className="page-container">

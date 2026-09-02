@@ -56,6 +56,15 @@ async def aclose_client() -> None:
         _client = None
 
 
+async def warm_up() -> None:
+    """FastAPI startup 훅에서 호출 - 첫 실사용자 요청 전에 TCP+TLS 핸드셰이크를 미리
+    끝내둔다. 안 하면 재시작 직후 첫 검색이 이 핸드셰이크 비용을 그대로 떠안는다."""
+    try:
+        await _get_client().get("/valorant/v1/status/kr")
+    except httpx.HTTPError:
+        pass
+
+
 async def _get(path: str, params: dict | None = None) -> dict | list | None:
     """GET 요청 공통 진입점. 성공(200)이면 응답의 data, 실패/404 등은 None.
     성공 응답은 TTL 캐싱하고, 캐시가 없는 상태에서 겹치는 요청은 in-flight로 공유한다."""
@@ -100,21 +109,19 @@ async def get_premier_team(team_name: str, team_tag: str) -> dict | None:
     return await _get(f"/valorant/v1/premier/{team_name}/{team_tag}")
 
 
-async def get_mmr(region: str, platform: str, riot_name: str, riot_tag: str) -> dict | None:
-    """현재 랭크/RR 조회."""
-    return await _get(f"/valorant/v3/mmr/{region}/{platform}/{riot_name}/{riot_tag}")
-
-
 async def get_mmr_history(region: str, riot_name: str, riot_tag: str) -> dict | None:
     """Act별 최종/최고 티어 이력 조회. by_season 딕셔너리가 "e11a5" 같은 Riot 공식
-    Episode/Act 키로 최종 티어와 승패 판수를 준다 - Act별 랭크는 매치 목록이 아니라 이 값을 쓴다."""
+    Episode/Act 키로 최종 티어와 승패 판수를 준다 - Act별 랭크는 매치 목록이 아니라 이 값을 쓴다.
+    current_data 필드에 현재 랭크/RR도 함께 들어있어(v3/mmr과 동일 값) 별도 호출 없이 겸용한다."""
     return await _get(f"/valorant/v2/mmr/{region}/{riot_name}/{riot_tag}")
 
 
 async def get_stored_matches(region: str, riot_name: str, riot_tag: str, mode: str | None = None) -> list | None:
     """Henrik이 미리 캐싱해둔 매치 이력 조회 (라운드/킬/좌표 상세 없는 경량 요약, 조회 대상
-    플레이어 관점이라 참가자 목록 검색 불필요). mode 없이 부르면 전체 모드가 섞여 최근순으로
-    잘리는데, 이 과정에서 플레이 빈도가 낮은 모드(대개 경쟁전)가 결과에서 빠질 수 있어
-    호출부에서 무필터 + mode="competitive" 두 번을 합쳐 쓴다."""
+    플레이어 관점이라 참가자 목록 검색 불필요). mode 없이 부르면 저장된 전체 이력을 truncate
+    없이 다 준다(total == returned로 실측 확인) 
+    - mode="competitive" 등 필터는 그 전체 집합의
+    부분집합이라 별도로 합칠 필요 없음(실측: 서로 다른 두 계정 모두 competitive 결과가
+    무필터 결과의 완전한 부분집합이었음)."""
     params = {"mode": mode} if mode else None
     return await _get(f"/valorant/v1/stored-matches/{region}/{riot_name}/{riot_tag}", params=params)

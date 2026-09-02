@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchPlayerProfile, fetchPlayerModeStats } from '../../api/players';
 import ProfileHeader from '../../components/profile/ProfileHeader';
@@ -52,24 +52,17 @@ export default function PlayerProfilePage() {
     return () => { active = false; };
   }, [riotId, tag, season, act, profile]);
 
-  const filteredHistory = useListFilter(
-    profile?.matchHistory,
-    (m) => mode === '전체' || m.mode === mode
-  );
+  const matchModeFilter = useCallback((m) => mode === '전체' || m.mode === mode, [mode]);
+  const filteredHistory = useListFilter(profile?.matchHistory, matchModeFilter);
 
-  if (!profile) return <LoadingText />;
+  if (!profile) return <LoadingText full />;
 
+  // modeStats 갱신은 위 season/act/profile을 지켜보는 useEffect가 이미 처리하므로
+  // (기본 Act면 profile.modeStats 재사용, 아니면 fetchPlayerModeStats) 여기서는
+  // profile만 새로 받아오면 된다 - 두 곳에서 같은 API를 중복 호출하지 않도록 한다.
   function handleRefresh() {
     trigger();
-    fetchPlayerProfile(riotId, tag).then((data) => {
-      setProfile(data);
-      const defaultOption = data.actOptions?.[0];
-      if (defaultOption && season === defaultOption.season && act === defaultOption.acts[0]) {
-        setModeStats(data.modeStats);
-      } else {
-        fetchPlayerModeStats(riotId, tag, season, act).then(setModeStats);
-      }
-    });
+    fetchPlayerProfile(riotId, tag).then(setProfile);
   }
 
   return (
@@ -80,6 +73,7 @@ export default function PlayerProfilePage() {
         tag={profile.tag}
         level={profile.level}
         title={profile.title}
+        avatarUrl={profile.avatarUrl}
         lastUpdated={profile.lastUpdated}
         onRefresh={handleRefresh}
         refreshDisabled={!isReady}

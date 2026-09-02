@@ -30,7 +30,7 @@ DATABASE_URL = (
 # Engine 생성
 engine = create_engine(
     DATABASE_URL,
-    echo = True,            # SQL 실행 로그 출력
+    echo = False,
     pool_pre_ping = True    # DB 연결 자동 체크
 )
 

@@ -3,6 +3,7 @@ export const playerProfileMock = {
   tag: '0208',
   level: 187,
   title: '불사조의 총아',
+  avatarUrl: 'https://media.valorant-api.com/playercards/746af199-4127-119d-2fc2-1baa3ac144f0/displayicon.png',
   lastUpdated: '3분 전',
   modeStats: {
     competitive: {
@@ -20,17 +21,17 @@ export const playerProfileMock = {
     { role: '전략가', wins: 1, losses: 0, winRate: 100 },
   ],
   topAgents: [
-    { agent: 'jett', kd: 1.4, acs: 245, winRate: 61, wins: 9, losses: 4 },
-    { agent: 'reyna', kd: 1.3, acs: 230, winRate: 55, wins: 4, losses: 3 },
-    { agent: 'omen', kd: 1.1, acs: 198, winRate: 50, wins: 2, losses: 2 },
+    { agent: '제트', kd: 1.4, acs: 245, winRate: 61, wins: 9, losses: 4 },
+    { agent: '레이나', kd: 1.3, acs: 230, winRate: 55, wins: 4, losses: 3 },
+    { agent: '오멘', kd: 1.1, acs: 198, winRate: 50, wins: 2, losses: 2 },
   ],
   matchHistory: [
-    { mode: '경쟁전', map: 'split', date: '08.24', time: '9:48 AM', kills: 18, deaths: 9, assists: 4, kda: 2.16, roundScore: '13-7', result: 'win', hs: 27, adr: 178, acs: 256, agent: 'jett', season: 'S2026', act: 'Act 2' },
-    { mode: '경쟁전', map: 'ascent', date: '08.23', time: '8:10 PM', kills: 14, deaths: 15, assists: 6, kda: 1.33, roundScore: '9-13', result: 'lose', hs: 19, adr: 142, acs: 201, agent: 'jett', season: 'S2026', act: 'Act 2' },
-    { mode: '일반', map: 'bind', date: '08.23', time: '6:02 PM', kills: 22, deaths: 10, assists: 3, kda: 2.5, roundScore: '13-9', result: 'win', hs: 31, adr: 195, acs: 278, agent: 'reyna', season: 'S2026', act: 'Act 2' },
-    { mode: '경쟁전', map: 'haven', date: '08.22', time: '7:40 PM', kills: 16, deaths: 11, assists: 5, kda: 1.9, roundScore: '13-10', result: 'win', hs: 22, adr: 160, acs: 231, agent: 'omen', season: 'S2026', act: 'Act 1' },
-    { mode: '경쟁전', map: 'lotus', date: '08.22', time: '5:15 PM', kills: 11, deaths: 16, assists: 7, kda: 1.13, roundScore: '7-13', result: 'lose', hs: 17, adr: 128, acs: 178, agent: 'reyna', season: 'S2026', act: 'Act 1' },
-    { mode: '데스매치', map: 'ascent', date: '07.30', time: '4:05 PM', kills: 24, deaths: 18, assists: 0, kda: 1.33, roundScore: '-', result: 'win', hs: 29, adr: null, acs: null, agent: 'jett', season: 'S2025', act: 'Act 3' },
+    { mode: '경쟁전', map: '스플릿', date: '08.24', time: '9:48 AM', kills: 18, deaths: 9, assists: 4, kda: 2.16, roundScore: '13-7', result: 'win', hs: 27, adr: 178, acs: 256, agent: '제트', season: 'S2026', act: 'Act 2' },
+    { mode: '경쟁전', map: '어센트', date: '08.23', time: '8:10 PM', kills: 14, deaths: 15, assists: 6, kda: 1.33, roundScore: '9-13', result: 'lose', hs: 19, adr: 142, acs: 201, agent: '제트', season: 'S2026', act: 'Act 2' },
+    { mode: '일반', map: '바인드', date: '08.23', time: '6:02 PM', kills: 22, deaths: 10, assists: 3, kda: 2.5, roundScore: '13-9', result: 'win', hs: 31, adr: 195, acs: 278, agent: '레이나', season: 'S2026', act: 'Act 2' },
+    { mode: '경쟁전', map: '헤이븐', date: '08.22', time: '7:40 PM', kills: 16, deaths: 11, assists: 5, kda: 1.9, roundScore: '13-10', result: 'win', hs: 22, adr: 160, acs: 231, agent: '오멘', season: 'S2026', act: 'Act 1' },
+    { mode: '경쟁전', map: '로터스', date: '08.22', time: '5:15 PM', kills: 11, deaths: 16, assists: 7, kda: 1.13, roundScore: '7-13', result: 'lose', hs: 17, adr: 128, acs: 178, agent: '레이나', season: 'S2026', act: 'Act 1' },
+    { mode: '데스매치', map: '어센트', date: '07.30', time: '4:05 PM', kills: 24, deaths: 18, assists: 0, kda: 1.33, roundScore: '-', result: 'win', hs: 29, adr: null, acs: null, agent: '제트', season: 'S2025', act: 'Act 3' },
   ],
   // 백엔드와 동일하게 Riot 공식 Episode 표기 - api/players.js가 화면 표시용 연도로 변환한다
   actOptions: [

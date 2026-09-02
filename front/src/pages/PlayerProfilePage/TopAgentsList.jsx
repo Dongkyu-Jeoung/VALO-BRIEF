@@ -1,4 +1,5 @@
 import EmptyImageBox from '../../components/common/EmptyImageBox';
+import { agentKey } from '../../utils/gameDataKey';
 
 export default function TopAgentsList({ agents }) {
   return (
@@ -6,7 +7,7 @@ export default function TopAgentsList({ agents }) {
       <h5>즐겨쓰는 요원 TOP 3 <span className="tag">최근 20게임</span></h5>
       {agents.map((a) => (
         <div className="agent-row" key={a.agent}>
-          <EmptyImageBox className="agent-thumb" folder="agents" assetKey={a.agent} label="" />
+          <EmptyImageBox className="agent-thumb" folder="agents" assetKey={agentKey(a.agent)} label="" />
           <div className="agent-info">
             <div className="agent-name">{a.agent}</div>
             <div className="agent-stat-header">K/D | ACS | 승률</div>

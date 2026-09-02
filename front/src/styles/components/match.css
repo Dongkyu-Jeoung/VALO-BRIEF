@@ -36,7 +36,7 @@ display:flex;
 
 .match-row {
 display:grid;
-   grid-template-columns:100px 1fr auto 30px;
+   grid-template-columns:124px 1fr auto 30px;
    align-items:center;
    gap:14px;
    background:var(--bg-panel);
@@ -133,6 +133,13 @@ text-align:center;
    color:var(--text-2);
    font-size:12px;
    margin-top:8px;
+   cursor:pointer;
+   transition:all 0.2s ease;
+}
+
+.show-more:hover {
+border-color:var(--border-strong);
+   color:var(--text-1);
 }
 
 .team-match-row {
@@ -283,4 +290,8 @@ margin-left:auto;
 
 .match-meta div {
    margin-left: 20px;
+}
+
+.match-datetime {
+  white-space: nowrap;
 }

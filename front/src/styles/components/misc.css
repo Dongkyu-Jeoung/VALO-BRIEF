@@ -67,6 +67,37 @@
   color: var(--lose, #ff4655);
 }
 
+.loading-state {
+  width: 100%;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3, 12px);
+}
+
+/* 페이지 전체가 아직 로드되지 않은 상태(다른 콘텐츠 없이 이 스피너만 표시)일 때
+   화면 정중앙에 가깝게 보이도록 더 큰 세로 영역을 확보한다. */
+.loading-state-full {
+  min-height: 60vh;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: loading-spin 0.7s linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .loading-text {
   color: var(--text-2);
   font-family: 'Pretendard', sans-serif;
