@@ -1,12 +1,24 @@
-/* 우리팀 분석 - 개인분석 탭 유저 리스트 */
+/* 우리팀 분석 - 개인분석 탭 유저 리스트 (요청하신 완벽한 여백과 정렬 반영) */
 
 .player-list-head {
   display: grid;
-  grid-template-columns: 2.4fr 1fr 1.6fr 0.8fr 0.8fr 0.8fr 0.8fr 24px;
-  gap: 12px;
-  padding: 0 20px 10px;
-  font-size: 11px;
+  grid-template-columns: 2.5fr 1fr 1.5fr 0.8fr 0.8fr 0.8fr 0.8fr 24px;
+  gap: 16px;
+  padding: 0 24px 12px 24px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-3);
+  align-items: center;
+}
+
+/* '선수' 헤더 타이틀을 데이터 이름 위치와 완벽하게 동기화 */
+.player-list-head span:nth-child(1) {
+  padding-left: 36px;
+}
+
+.player-list-head span:nth-child(2),
+.player-list-head span:nth-child(3) {
+  text-align: center;
 }
 
 .player-list-sort-head {
@@ -20,16 +32,17 @@
 }
 
 .player-row {
-  display:grid;
-   grid-template-columns:2.4fr 1fr 1.6fr 0.8fr 0.8fr 0.8fr 0.8fr 24px;
-   gap:12px;
-   align-items:center;
-   background:var(--bg-panel);
-   border:1px solid var(--border);
-   border-radius:6px;
-   padding:14px 20px;
-   margin-bottom:10px;
-   cursor: pointer;
+  display: grid;
+  grid-template-columns: 2.5fr 1fr 1.5fr 0.8fr 0.8fr 0.8fr 0.8fr 24px;
+  gap: 16px;
+  align-items: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 24px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .player-row:hover {
@@ -45,69 +58,73 @@
   color: var(--accent);
 }
 
+/* 선수 이름 영역: 왼쪽 여백을 크게 주어 오른쪽으로 시원하게 당김 */
 .player-id-cell {
-  display:flex;
-   align-items:center;
-   gap:12px;
-}
-
-.player-avatar {
-  width:40px;
-   height:40px;
-   border-radius:6px;
-   background:var(--bg-panel-3);
-   flex-shrink:0;
+  display: flex;
+  align-items: center;
+  padding-left: 36px;
 }
 
 .player-id-cell .pid {
-  font-size:14px;
-   font-weight:700;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
 }
 
 .player-id-cell .ptag {
-  font-size:11px;
-   color:var(--text-3);
+  font-size: 12px;
+  color: var(--text-3);
+  margin-left: 6px;
 }
 
-.player-role-badge {
-  font-size:11px;
-   padding:4px 10px;
-   border-radius:4px;
-   background:var(--bg-panel-2);
-   border:1px solid var(--border-soft);
-   color:var(--text-2);
-   text-align:center;
-   width:fit-content;
+/* 티어 아이콘 영역: 중앙 정렬 */
+.player-tier-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+.player-tier-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* 모스트 요원 영역: 중앙 정렬 */
 .player-agent-cell {
-  display:flex;
-   align-items:center;
-   gap:8px;
-   font-size:12px;
-   color:var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .player-agent-thumb {
-  width:28px;
-   height:28px;
-   border-radius:5px;
-   background:var(--bg-panel-3);
-   flex-shrink:0;
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  background: var(--bg-panel-3);
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .player-stat-val {
-  font-family:'JetBrains Mono',monospace;
-   font-weight:700;
-   font-size:14px;
-   color:var(--text-1);
-   text-align:center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-1);
+  text-align: center;
 }
 
 .player-row-arrow {
-  color:var(--text-3);
-   text-align:center;
-   font-size:12px;
+  color: var(--text-3);
+  text-align: center;
+  font-size: 12px;
+}
+
+.user-select {
+  padding: 0 4px 12px 4px;
+  font-size: 13px;
+  color: var(--text-2);
 }
 
 .user-select .player-name {
