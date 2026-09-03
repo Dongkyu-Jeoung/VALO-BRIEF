@@ -1,30 +1,37 @@
-/* 우리팀 분석 - 개인 상세: 히트존/무기/클러치/교전거리 */
+/* 우리팀 분석 - 개인 상세: 히트존/무기/클러치/교전거리 (Pro Designer Refined) */
 
 .hitzone-list {
-  margin-top: 14px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .hitzone-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border-soft);
-  font-size: 12.5px;
+  padding: 4px 0;
+  font-size: 13px;
   color: var(--text-2);
 }
 
 .hitzone-row b {
   color: var(--text-1);
   font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  min-width: 42px;
+  text-align: right;
 }
 
+/* 프로그레스 바 영역 고도화: 점선 제거 및 모던한 트랙 디자인 */
 .hitzone-bar {
   flex: 1;
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  margin: 0 14px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  margin: 0 16px;
   position: relative;
   overflow: hidden;
 }
@@ -34,32 +41,45 @@
   left: 0;
   top: 0;
   bottom: 0;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent), #ff4655);
+  border-radius: 3px;
+  transition: width 0.4s ease;
 }
 
+/* 무기 스탯 리스트 카드형 스타일링 */
 .weapon-row {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border-soft);
+  gap: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+
+.weapon-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border);
 }
 
 .weapon-row:last-child {
-  border: none;
+  margin-bottom: 0;
 }
 
+/* 점선 박스를 없애고 깔끔한 면과 미니멀한 테두리로 변경 */
 .weapon-icon {
-  width: 90px;
-  height: 36px;
-  border-radius: 4px;
-  background: var(--bg-panel-2);
-  border: 1px dashed var(--border);
+  width: 88px;
+  height: 38px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-soft);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
+  padding: 4px 8px;
   overflow: hidden;
 }
 
@@ -68,18 +88,20 @@
   height: 100%;
   object-fit: contain;
   display: block;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
 }
 
 .weapon-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  width: 90px;
+  color: var(--text-1);
+  width: 84px;
   flex-shrink: 0;
 }
 
 .weapon-stats {
   display: flex;
-  gap: 26px;
+  gap: 28px;
   margin-left: auto;
 }
 
@@ -87,6 +109,7 @@
   font-size: 11px;
   color: var(--text-3);
   text-align: center;
+  letter-spacing: -0.2px;
 }
 
 .weapon-stats b {
@@ -94,40 +117,51 @@
   color: var(--text-1);
   font-family: 'JetBrains Mono', monospace;
   font-size: 15px;
+  font-weight: 700;
+  margin-top: 2px;
 }
 
+/* 클러치 칩 인터페이스 고급화 */
 .clutch-row {
   display: flex;
-  gap: 14px;
+  gap: 12px;
 }
 
 .clutch-chip {
   flex: 1;
-  background: var(--bg-panel-2);
+  background: rgba(255, 255, 255, 0.015);
   border: 1px solid var(--border-soft);
-  border-radius: 5px;
-  padding: 14px;
+  border-radius: 8px;
+  padding: 16px 12px;
   text-align: center;
+  transition: border-color 0.2s ease;
+}
+
+.clutch-chip:hover {
+  border-color: var(--border);
 }
 
 .clutch-chip .lbl {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-3);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .clutch-chip .val {
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
-  font-size: 17px;
+  font-size: 18px;
+  color: var(--accent);
 }
 
+/* 차트 및 시각 요소 박스 정리 (점선 제거) */
 .distance-chart-box {
   height: 160px;
   width: 100%;
-  background: var(--bg-panel-2);
-  border: 1px dashed var(--border);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -138,24 +172,28 @@
 
 .line-chart-wrap {
   width: 100%;
-  background: var(--bg-panel-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 8px 4px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 14px 12px 6px;
 }
 
 .line-chart-grid {
   stroke: var(--border-soft);
   stroke-width: 1;
+  stroke-dasharray: 3 3; /* 점선 그리드로 모던한 느낌 부여 */
 }
 
 .line-chart-line {
   stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 .line-chart-dot {
   fill: var(--accent);
+  stroke: var(--bg-panel);
+  stroke-width: 2;
 }
 
 .line-chart-label {
@@ -166,18 +204,20 @@
 .aim-dual {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 30px;
+  gap: 24px;
   align-items: start;
 }
 
 .aim-col-title {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-2);
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  letter-spacing: -0.3px;
 }
 
 .hitbox-img.full {
   width: 100%;
   height: 190px;
+  object-fit: contain;
 }
