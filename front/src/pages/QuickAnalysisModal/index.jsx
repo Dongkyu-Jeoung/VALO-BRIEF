@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchQuickAnalysis } from '../../api/teams';
 import EmptyImageBox from '../../components/common/EmptyImageBox';
+import LoadingText from '../../components/common/LoadingText';
 import MiniRankTable from '../../components/common/MiniRankTable';
 import ModalTeamSearchBar from '../../components/search/ModalTeamSearchBar';
 import { ratingKey } from '@/utils/ratingKey';
@@ -32,7 +33,30 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
     return () => { active = false; };
   }, [activeTeamTag]);
 
-  if (!data) return null;
+  //로딩 상태 화면 추가
+  if (!data) {
+    return (
+      <div className="popup-overlay" onClick={onClose}>
+        <div className="popup-card" onClick={(e) => e.stopPropagation()}>
+          <div className="popup-head">
+            <div className="popup-title-wrap">
+              <div className="bolt" />
+              <div className="popup-title display">3초 상대 분석 리포트</div>
+            </div>
+            <button
+              type="button"
+              className="popup-close-btn"
+              onClick={onClose}
+              aria-label="팝업 닫기"
+            >
+              ✕
+            </button>
+          </div>
+          <LoadingText />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="popup-overlay" onClick={onClose}>
@@ -110,7 +134,7 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
             <MiniRankTable players={data.playerRanking} showAdr />
           </div>
         </div>
-        
+
         <Link
           to={ROUTES.team(data.teamName.replace(/\s+/g, '-').toLowerCase(), data.teamTag)}
           className="popup-cta"

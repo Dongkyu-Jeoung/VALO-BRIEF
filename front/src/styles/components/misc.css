@@ -77,10 +77,20 @@
   gap: var(--sp-3, 12px);
 }
 
-/* 페이지 전체가 아직 로드되지 않은 상태(다른 콘텐츠 없이 이 스피너만 표시)일 때
-   화면 정중앙에 가깝게 보이도록 더 큰 세로 영역을 확보한다. */
+/* 페이지 전체가 아직 로드되지 않은 상태(다른 콘텐츠 없이 이 스피너만 표시)일 때 씀 -
+   SearchBox/HeaderSearchBar의 검색 대기 중, 그리고 프로필 페이지 자체의 데이터 로딩 중
+   모두 이 하나로 통일해서 쓴다. 기존엔 min-height: 60vh짜리 인라인 박스라 그 아래로
+   Footer(메인화면 하단부와 동일한 컴포넌트)가 그대로 보였음 - 헤더 아래(.site-header/
+   .util-header 높이 80px, header.css) 영역 전체를 덮는 고정 오버레이로 바꿔서 로딩 중엔
+   헤더만 남고 그 아래 이전 화면은 전혀 보이지 않게 함(z-index는 헤더의 100보다 위). */
 .loading-state-full {
-  min-height: 60vh;
+  position: fixed;
+  top: 80px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 500;
+  background: var(--bg-void, #0a0b0f);
 }
 
 .loading-spinner {

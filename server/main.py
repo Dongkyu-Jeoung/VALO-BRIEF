@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.search import router as search_router
 from routers.players import router as players_router
+from routers.teams import router as teams_router
 from routers.auth import router as auth_router
 from services import henrik_api, valorant_api
 
@@ -38,5 +39,7 @@ app.include_router(search_router)
 # 개인 검색 (Frame 04) - 선수 프로필
 app.include_router(players_router)
 
+# 팀 검색 - 팀 프로필 상세 페이지
+app.include_router(teams_router)
 # 회원가입 / 로그인
 app.include_router(auth_router)

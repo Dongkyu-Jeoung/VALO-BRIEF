@@ -77,9 +77,16 @@ width:42px;
    flex-shrink:0;
 }
 
+/* 킬/데스/어시스트 자릿수가 매치마다 달라서(예: "14 / 8 / 5" vs "6 / 12 / 3") 폭이
+   들쭉날쭉해지고, 그 뒤에 오는 round-score의 시작 위치까지 매치마다 밀렸다 당겨졌다
+   했음 - 너비를 고정해서 round-score 위치가 항상 같은 자리에 오도록 함(정렬 유지, 왼쪽
+   정렬 자체는 그대로 둠). */
 .kda-block {
 font-family:'JetBrains Mono',monospace;
    font-size:14px;
+   width:100px;
+   flex-shrink:0;
+   white-space:nowrap;
 }
 
 .kda-block .ratio {

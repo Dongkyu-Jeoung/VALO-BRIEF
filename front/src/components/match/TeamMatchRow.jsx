@@ -1,11 +1,12 @@
 import EmptyImageBox from '../common/EmptyImageBox';
+import { agentKey, mapKey } from '../../utils/gameDataKey';
 
 export default function TeamMatchRow({ match }) {
   const isWin = match.result === 'win';
   return (
     <div className={`team-match-row ${isWin ? '' : 'lose'}`}>
       <div className="tm-line1">
-        <EmptyImageBox className="tm-map-thumb" folder="maps" assetKey={match.map} label="" />
+        <EmptyImageBox className="tm-map-thumb" folder="maps" assetKey={mapKey(match.map)} label="" />
         <b>{match.map}</b> · {isWin ? 'Win' : 'Lose'} · {match.date} · {match.time} · 라운드{' '}
         <b className={isWin ? 'text-win' : 'text-lose'}>{match.roundScore}</b>
       </div>
@@ -17,7 +18,7 @@ export default function TeamMatchRow({ match }) {
       </div>
       <div className="tm-mvp">
         <span className="mvp-tag">MVP</span>
-        <EmptyImageBox className="mvp-agent-thumb" folder="agents" assetKey={match.mvp.agent} label="" />
+        <EmptyImageBox className="mvp-agent-thumb" folder="agents" assetKey={agentKey(match.mvp.agent)} label="" />
         <span className="mvp-agent-name">{match.mvp.agent}</span>
         <span className="mvp-player">{match.mvp.player}</span>
         <span className="mvp-rest">
