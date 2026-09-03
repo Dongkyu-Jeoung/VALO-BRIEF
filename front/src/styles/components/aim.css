@@ -1,10 +1,10 @@
-/* 우리팀 분석 - 개인 상세: 히트존/무기/클러치/교전거리 (Pro Designer Refined) */
+/* 우리팀 분석 - 개인 상세: 히트존/무기/클러치/교전거리 */
 
 .hitzone-list {
-  margin-top: 16px;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .hitzone-row {
@@ -24,7 +24,6 @@
   text-align: right;
 }
 
-/* 프로그레스 바 영역 고도화: 점선 제거 및 모던한 트랙 디자인 */
 .hitzone-bar {
   flex: 1;
   height: 8px;
@@ -46,7 +45,6 @@
   transition: width 0.4s ease;
 }
 
-/* 무기 스탯 리스트 카드형 스타일링 */
 .weapon-row {
   display: flex;
   align-items: center;
@@ -55,7 +53,7 @@
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid var(--border-soft);
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   transition: all 0.2s ease;
 }
 
@@ -68,7 +66,6 @@
   margin-bottom: 0;
 }
 
-/* 점선 박스를 없애고 깔끔한 면과 미니멀한 테두리로 변경 */
 .weapon-icon {
   width: 88px;
   height: 38px;
@@ -99,10 +96,12 @@
   flex-shrink: 0;
 }
 
+/* K/D, ADR 수치 영역 안쪽 당김 유지 */
 .weapon-stats {
   display: flex;
-  gap: 28px;
+  gap: 24px;
   margin-left: auto;
+  padding-right: 8px; 
 }
 
 .weapon-stats div {
@@ -121,10 +120,9 @@
   margin-top: 2px;
 }
 
-/* 클러치 칩 인터페이스 고급화 */
 .clutch-row {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .clutch-chip {
@@ -155,7 +153,6 @@
   color: var(--accent);
 }
 
-/* 차트 및 시각 요소 박스 정리 (점선 제거) */
 .distance-chart-box {
   height: 160px;
   width: 100%;
@@ -181,7 +178,7 @@
 .line-chart-grid {
   stroke: var(--border-soft);
   stroke-width: 1;
-  stroke-dasharray: 3 3; /* 점선 그리드로 모던한 느낌 부여 */
+  stroke-dasharray: 3 3;
 }
 
 .line-chart-line {
@@ -216,8 +213,12 @@
   letter-spacing: -0.3px;
 }
 
+.aim-dual > div:last-child {
+  margin-top: 120px; 
+}
+
 .hitbox-img.full {
   width: 100%;
-  height: 190px;
+  height: 265px;
   object-fit: contain;
 }
