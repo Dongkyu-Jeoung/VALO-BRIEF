@@ -121,18 +121,18 @@ background:var(--bg-panel-2);
   background: var(--accent-soft);
 }
 
-/* ===== 맵 이미지 박스 (통합 및 수정) ===== */
+/* ===== 맵 이미지 박스  ===== */
 .map-analysis-body {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: 210px 1fr; 
   gap: 26px;
   align-items: center;
   margin-bottom: 22px;
 }
 
 .map-image-box {
-  width: 180px; 
-  height: 138px; 
+  width: 210px; 
+  height: 145px; 
   background: var(--bg-panel-2);
   border: 1px dashed var(--border);
   border-radius: 6px;
