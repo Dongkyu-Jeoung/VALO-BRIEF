@@ -1,0 +1,16 @@
+{
+    "blue_win_probability": 90.3,
+    "predicted_winner": "BLUE",
+    "blue_summary": {
+        "acs": 214.9,
+        "kd": 1.31,
+        "kast": 67.8,
+        "winrate": 36.0
+    },
+    "red_summary": {
+        "acs": 217.6,
+        "kd": 1.17,
+        "kast": 80.7,
+        "winrate": 53.0
+    }
+}
