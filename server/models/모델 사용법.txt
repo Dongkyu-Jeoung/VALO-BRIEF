@@ -1,0 +1,7 @@
+# 저장된 모델 불러오기
+import joblib
+model = joblib.load("../model/xgboost_valorant.pkl")
+
+# 새로운 경기(Feature) 사용
+prob = model.predict_proba(new_match_df)[:, 1]
+print(f"Blue 승리 확률 : {prob[0]*100:.1f}%")
