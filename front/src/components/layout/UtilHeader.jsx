@@ -28,7 +28,7 @@ export default function UtilHeader() {
 
   return (
     <header className="util-header">
-      <Link to="/"><Logo size="sm" /></Link>
+      <Link to="/"><Logo /></Link>
 
       <nav className="nav-menu">
         {NAV_ITEMS.map((item) => (
