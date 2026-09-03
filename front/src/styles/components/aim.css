@@ -5,128 +5,135 @@
 }
 
 .hitzone-row {
-  display:flex;
-   justify-content:space-between;
-   align-items:center;
-   padding:9px 0;
-   border-bottom:1px solid var(--border-soft);
-   font-size:12.5px;
-   color:var(--text-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12.5px;
+  color: var(--text-2);
 }
 
 .hitzone-row b {
-  color:var(--text-1);
-   font-family:'JetBrains Mono',monospace;
+  color: var(--text-1);
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .hitzone-bar {
-  flex:1;
-   height:6px;
-   background:var(--border);
-   border-radius:3px;
-   margin:0 14px;
-   position:relative;
-   overflow:hidden;
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin: 0 14px;
+  position: relative;
+  overflow: hidden;
 }
 
 .hitzone-bar span {
-  position:absolute;
-   left:0;
-   top:0;
-   bottom:0;
-   background:var(--accent);
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
 }
 
 .weapon-row {
-  display:flex;
-   align-items:center;
-   gap:14px;
-   padding:10px 0;
-   border-bottom:1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .weapon-row:last-child {
-  border:none;
+  border: none;
 }
 
 .weapon-icon {
-  width:52px;
-   height:32px;
-   border-radius:4px;
-   background:var(--bg-panel-2);
-   border:1px dashed var(--border);
-   flex-shrink:0;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   font-size:8px;
-   color:var(--text-3);
+  width: 90px;
+  height: 36px;
+  border-radius: 4px;
+  background: var(--bg-panel-2);
+  border: 1px dashed var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  overflow: hidden;
+}
+
+.weapon-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .weapon-name {
-  font-size:13px;
-   font-weight:700;
-   width:90px;
-   flex-shrink:0;
+  font-size: 13px;
+  font-weight: 700;
+  width: 90px;
+  flex-shrink: 0;
 }
 
 .weapon-stats {
-  display:flex;
-   gap:26px;
-   margin-left:auto;
+  display: flex;
+  gap: 26px;
+  margin-left: auto;
 }
 
 .weapon-stats div {
-  font-size:11px;
-   color:var(--text-3);
-   text-align:center;
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
 }
 
 .weapon-stats b {
-  display:block;
-   color:var(--text-1);
-   font-family:'JetBrains Mono',monospace;
-   font-size:15px;
+  display: block;
+  color: var(--text-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
 }
 
 .clutch-row {
-  display:flex;
-   gap:14px;
+  display: flex;
+  gap: 14px;
 }
 
 .clutch-chip {
-  flex:1;
-   background:var(--bg-panel-2);
-   border:1px solid var(--border-soft);
-   border-radius:5px;
-   padding:14px;
-   text-align:center;
+  flex: 1;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: 14px;
+  text-align: center;
 }
 
 .clutch-chip .lbl {
-  font-size:10.5px;
-   color:var(--text-3);
-   margin-bottom:6px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-bottom: 6px;
 }
 
 .clutch-chip .val {
-  font-family:'JetBrains Mono',monospace;
-   font-weight:700;
-   font-size:17px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 17px;
 }
 
 .distance-chart-box {
-  height:160px;
-   width: 100%;
-   background:var(--bg-panel-2);
-   border:1px dashed var(--border);
-   border-radius:6px;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   color:var(--text-3);
-   font-size:12px;
-   text-align:center;
+  height: 160px;
+  width: 100%;
+  background: var(--bg-panel-2);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
 }
 
 .line-chart-wrap {
@@ -157,17 +164,17 @@
 }
 
 .aim-dual {
-  display:grid;
-   grid-template-columns:1fr 1fr;
-   gap:30px;
-   align-items:start;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  align-items: start;
 }
 
 .aim-col-title {
-  font-size:12px;
-   color:var(--text-2);
-   font-weight:700;
-   margin-bottom:12px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 700;
+  margin-bottom: 12px;
 }
 
 .hitbox-img.full {
