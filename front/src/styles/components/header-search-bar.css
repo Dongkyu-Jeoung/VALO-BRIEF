@@ -36,6 +36,10 @@
   font-weight: 500;
 }
 
+.header-search-input:focus-visible {
+  outline: none;
+}
+
 .header-search-input::placeholder {
   color: var(--text-3);
 }
