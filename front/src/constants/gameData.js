@@ -96,11 +96,12 @@ export const gameData = {
       { id: 'unrated', name: '언랭크', image: '../assets/images/tiers/unrated.png' }
     ],
     team: [
-      { id: 'advanced', name: '중상급', image: '../assets/images/team-tiers/advanced.png' },
-      { id: 'contender', name: '최상급', image: '../assets/images/team-tiers/contender.png' },
-      { id: 'elite', name: '상급', image: '../assets/images/team-tiers/elite.png' },
+      { id: 'open', name: '초급', image: '../assets/images/team-tiers/open.png' },
       { id: 'intermediate', name: '중급', image: '../assets/images/team-tiers/intermediate.png' },
-      { id: 'open', name: '초급', image: '../assets/images/team-tiers/open.png' }
+      { id: 'advanced', name: '중상급', image: '../assets/images/team-tiers/advanced.png' },
+      { id: 'elite', name: '상급', image: '../assets/images/team-tiers/elite.png' },
+      { id: 'contender', name: '최상급', image: '../assets/images/team-tiers/contender.png' },
+      { id: 'invite', name: '인바이트', image: '../assets/images/team-tiers/invite.png' }
     ]
   }
 };

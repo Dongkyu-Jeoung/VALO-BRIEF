@@ -105,8 +105,24 @@ async def get_account(riot_name: str, riot_tag: str) -> dict | None:
 
 
 async def get_premier_team(team_name: str, team_tag: str) -> dict | None:
-    """팀명#태그로 프리미어 팀 조회."""
+    """팀명#태그로 프리미어 팀 조회 (stats.wins/matches/losses, placement.division,
+    customization.image 등 - 매치 상세 없이도 나오는 팀 요약 정보)."""
     return await _get(f"/valorant/v1/premier/{team_name}/{team_tag}")
+
+
+async def get_premier_team_history(team_name: str, team_tag: str) -> dict | None:
+    """팀 최근 매치 "포인트 변동" 이력만 준다 (league_matches: [{id, points_before,
+    points_after, started_at}]) - 맵/스코어/로스터는 없음. 매치별 상세가 필요하면
+    여기서 얻은 match id로 get_match_detail()을 따로 불러야 한다."""
+    return await _get(f"/valorant/v1/premier/{team_name}/{team_tag}/history")
+
+
+async def get_match_detail(match_id: str) -> dict | None:
+    """매치 1건 전체 상세 (v2/match - region/platform 불필요, id만 있으면 됨).
+    teams.red/blue.roster.{name,tag,members}로 어느 팀이 우리 팀인지 구분,
+    players.all_players로 로스터 개인 스탯, kills로 라운드별 킬 이벤트(퍼스트블러드 계산용)를 준다.
+    매치 1건이 ~1.3MB로 무거워서 여러 건을 부를 땐 반드시 asyncio.gather로 동시에 불러야 한다."""
+    return await _get(f"/valorant/v2/match/{match_id}")
 
 
 async def get_mmr_history(region: str, riot_name: str, riot_tag: str) -> dict | None:

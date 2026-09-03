@@ -1,27 +1,71 @@
 /* 미니 랭킹 테이블 (MiniRankTable.jsx) */
 
+.mini-table-wrap {
+  width: 100%;
+}
+
+/* table-layout: fixed로 순위/ACS/HS%/포지션/K-D/ADR처럼 항상 짧은 값이 오는 열의 너비를
+   고정해두고, "선수"(이름) 열 하나만 남는 공간을 다 쓰게 한다. 좁은 박스에서 값이
+   줄바꿈되던 문제(스크롤 대신)를 열 너비 자체를 확정해서 해결 - 스크롤/줄바꿈 둘 다 없이
+   내용이 넘치면 말줄임표(...)로만 처리된다. */
 .mini-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-/* 테이블 헤더 (컬럼 제목 라인) */
+.mini-table th:nth-child(1),
+.mini-table td:nth-child(1) {
+  width: 30px;
+}
+
+.mini-table th:nth-child(3),
+.mini-table td:nth-child(3) {
+  width: 46px;
+}
+
+.mini-table th:nth-child(4),
+.mini-table td:nth-child(4) {
+  width: 42px;
+}
+
+.mini-table th:nth-child(5),
+.mini-table td:nth-child(5) {
+  width: 64px;
+}
+
+.mini-table th:nth-child(6),
+.mini-table td:nth-child(6) {
+  width: 44px;
+}
+
+.mini-table th:nth-child(7),
+.mini-table td:nth-child(7) {
+  width: 44px;
+}
+
+/* 테이블 헤더(순위/선수/ACS/HS%/포지션/K-D) - 열 너비는 고정하되, 말줄임표(...)는
+   넣지 않는다(헤더 라벨은 항상 짧아 잘릴 일이 없고, "..."가 붙는 게 오히려 어색해 보임). */
 .mini-table th {
   color: var(--text-2, #a0a0a0); /* 완전 흰색 대신 톤다운된 연회색 적용 */
   font-weight: 600; /* 눈이 아프지 않은 적절한 굵기 */
   text-align: left;
-  padding: 8px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--border-soft);
   font-family: 'Rajdhani', 'Pretendard', sans-serif;
   font-size: 12px;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .mini-table td {
-  padding: 8px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mini-table td.name {

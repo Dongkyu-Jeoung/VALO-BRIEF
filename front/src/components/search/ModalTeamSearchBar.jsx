@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { checkTeamExists } from '../../api/search';
+import { useExistenceSearch } from '../../hooks/useExistenceSearch';
 import '../../styles/components/modal-team-search-bar.css';
-
-const isValidFormat = (input) => /^.+#.+$/.test(input.trim());
 
 /**
  * QuickAnalysisModal 전용 팀 검색창.
@@ -10,43 +8,13 @@ const isValidFormat = (input) => /^.+#.+$/.test(input.trim());
  */
 export default function ModalTeamSearchBar({ onTeamFound }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [showErrorToast, setShowErrorToast] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const triggerErrorToast = (msg) => {
-    setErrorMessage(msg);
-    setShowErrorToast(true);
-    setTimeout(() => setShowErrorToast(false), 3000);
-  };
+  const { checkExists, loading, errorMessage, showErrorToast } = useExistenceSearch();
 
   const handleSearch = async () => {
-    const trimmed = searchTerm.trim();
-
-    if (!trimmed) {
-      triggerErrorToast('검색어를 입력해 주세요.');
-      return;
-    }
-    if (!isValidFormat(trimmed)) {
-      triggerErrorToast('올바른 형식으로 입력해 주세요. ( ex. 팀명#태그 )');
-      return;
-    }
-
-    const [namePart, tagPart] = trimmed.split('#');
-    setLoading(true);
-    try {
-      const res = await checkTeamExists(namePart, tagPart);
-      if (!res.exists) {
-        triggerErrorToast('존재하지 않는 팀입니다.');
-        return;
-      }
-      setSearchTerm('');
-      onTeamFound(tagPart);
-    } catch {
-      triggerErrorToast('검색 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
+    const found = await checkExists(searchTerm, 'team');
+    if (!found) return;
+    setSearchTerm('');
+    onTeamFound(found.tagPart);
   };
 
   const handleKeyDown = (e) => {

@@ -77,21 +77,36 @@ def _translate_rank(tier_patched: str | None) -> str | None:
     return f"{base_ko} {rest}".strip()
 
 
+# ref_agents/ref_maps는 정적 참조 테이블이라(런타임에 안 바뀜) 요청마다 새로 조회할 필요가
+# 없다. 개인 프로필/모드별 스탯/팀 프로필 요청마다 매번 DB를 다시 왕복하던 걸 프로세스
+# 생존 기간 동안 한 번만 로드해 재사용하도록 캐싱한다.
+_ref_agents_cache: dict | None = None
+_ref_maps_cache: dict | None = None
+
+
 def _load_ref_agents(db: Session) -> dict:
-    """DB의 요원 참조 테이블을 uuid/영문명 양쪽으로 조회 가능한 딕셔너리로 로드."""
+    """DB의 요원 참조 테이블을 uuid/영문명 양쪽으로 조회 가능한 딕셔너리로 로드(캐시됨)."""
+    global _ref_agents_cache
+    if _ref_agents_cache is not None:
+        return _ref_agents_cache
     rows = db.execute(text("SELECT uuid, display_name, name_ko, role_type FROM ref_agents")).mappings().all()
     by_uuid, by_name = {}, {}
     for r in rows:
         entry = {"name_ko": r["name_ko"] or r["display_name"], "role_type": r["role_type"]}
         by_uuid[r["uuid"].lower()] = entry
         by_name[r["display_name"].lower()] = entry
-    return {"by_uuid": by_uuid, "by_name": by_name}
+    _ref_agents_cache = {"by_uuid": by_uuid, "by_name": by_name}
+    return _ref_agents_cache
 
 
 def _load_ref_maps(db: Session) -> dict:
-    """DB의 맵 참조 테이블을 영문명 기준 한글명 딕셔너리로 로드."""
+    """DB의 맵 참조 테이블을 영문명 기준 한글명 딕셔너리로 로드(캐시됨)."""
+    global _ref_maps_cache
+    if _ref_maps_cache is not None:
+        return _ref_maps_cache
     rows = db.execute(text("SELECT display_name, name_ko FROM ref_maps")).mappings().all()
-    return {r["display_name"].lower(): (r["name_ko"] or r["display_name"]) for r in rows}
+    _ref_maps_cache = {r["display_name"].lower(): (r["name_ko"] or r["display_name"]) for r in rows}
+    return _ref_maps_cache
 
 
 def _parse_datetime(value) -> datetime | None:

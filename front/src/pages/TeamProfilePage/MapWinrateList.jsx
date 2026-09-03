@@ -1,4 +1,5 @@
 import EmptyImageBox from '../../components/common/EmptyImageBox';
+import { mapKey } from '../../utils/gameDataKey';
 
 export default function MapWinrateList({ maps, title = '주요 맵 승률' }) {
   return (
@@ -7,7 +8,7 @@ export default function MapWinrateList({ maps, title = '주요 맵 승률' }) {
       {maps.map((m) => (
         <div className="map-row" key={m.map}>
           <span className="map-name-cell">
-            <EmptyImageBox className="map-thumb" folder="maps" assetKey={m.map} label="" />
+            <EmptyImageBox className="map-thumb" folder="maps" assetKey={mapKey(m.map)} label="" />
             {m.map}
           </span>
           <b>{m.win} / {m.lose}</b>

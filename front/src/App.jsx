@@ -25,11 +25,10 @@ export default function App() {
       </Route>
 
       <Route element={<AppLayout />}>
+        {/* 개인/팀 프로필은 검색만 하면 누구나 볼 수 있어야 해서 로그인 보호 대상이 아님.
+            (로그인 필요한 건 내 팀 관련 기능뿐 - 승부예측/내 팀 분석) */}
         <Route path="/players/:riotId/:tag" element={<PlayerProfilePage />} />
-        <Route
-          path="/teams/:teamName/:teamTag"
-          element={<ProtectedRoute><TeamProfilePage /></ProtectedRoute>}
-        />
+        <Route path="/teams/:teamName/:teamTag" element={<TeamProfilePage />} />
         <Route
           path="/predict/:teamName/:teamTag"
           element={<ProtectedRoute><MatchPredictionPage /></ProtectedRoute>}

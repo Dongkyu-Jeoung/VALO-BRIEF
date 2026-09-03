@@ -14,16 +14,17 @@ export const myTeamStatsMock = {
     { rank: 4, name: 'Milo', acs: 205, hs: 19, position: '전략가', kd: 1.02 },
     { rank: 5, name: 'Vex', acs: 188, hs: 17, position: '타격대', kd: 0.95 },
   ],
+  // map/mvp.agent는 team.mock.js와 동일하게 한글명(mapKey()/agentKey() 기준)으로 준다.
   mapWinrates: [
-    { map: 'ascent', win: 13, lose: 8, winRate: 70 },
-    { map: 'bind', win: 12, lose: 10, winRate: 55 },
-    { map: 'haven', win: 10, lose: 11, winRate: 42 },
+    { map: '어센트', win: 13, lose: 8, winRate: 70 },
+    { map: '바인드', win: 12, lose: 10, winRate: 55 },
+    { map: '헤이븐', win: 10, lose: 11, winRate: 42 },
   ],
   matchHistory: [
-    { map: 'ascent', result: 'win', date: '08.24', time: '9:48 AM', roundScore: '13-7', kda: 2.4, adr: 172, acs: 248, firstBlood: 9, mvp: { agent: 'Jett', player: 'Zeta', kda: 3.1, hs: 31, acs: 302 }, season: 'S2026', act: 'Act 2' },
-    { map: 'bind', result: 'lose', date: '08.23', time: '8:10 PM', roundScore: '9-13', kda: 1.5, adr: 134, acs: 190, firstBlood: 4, mvp: { agent: 'Reyna', player: 'Rho', kda: 1.9, hs: 24, acs: 224 }, season: 'S2026', act: 'Act 2' },
-    { map: 'haven', result: 'win', date: '08.20', time: '7:15 PM', roundScore: '13-9', kda: 2.0, adr: 155, acs: 219, firstBlood: 6, mvp: { agent: 'Omen', player: 'Kai', kda: 2.3, hs: 20, acs: 236 }, season: 'S2026', act: 'Act 1' },
-    { map: 'split', result: 'lose', date: '07.28', time: '6:40 PM', roundScore: '10-13', kda: 1.4, adr: 129, acs: 176, firstBlood: 3, mvp: { agent: 'Sova', player: 'Milo', kda: 1.7, hs: 19, acs: 198 }, season: 'S2025', act: 'Act 3' },
+    { map: '어센트', result: 'win', date: '08.24', time: '9:48 AM', roundScore: '13-7', roundsWon: 13, roundsLost: 7, kda: 2.4, adr: 172, acs: 248, firstBlood: 9, mvp: { agent: '제트', player: 'Zeta', kda: 3.1, hs: 31, acs: 302 }, season: 'S2026', act: 'Act 2' },
+    { map: '바인드', result: 'lose', date: '08.23', time: '8:10 PM', roundScore: '9-13', roundsWon: 9, roundsLost: 13, kda: 1.5, adr: 134, acs: 190, firstBlood: 4, mvp: { agent: '레이나', player: 'Rho', kda: 1.9, hs: 24, acs: 224 }, season: 'S2026', act: 'Act 2' },
+    { map: '헤이븐', result: 'win', date: '08.20', time: '7:15 PM', roundScore: '13-9', roundsWon: 13, roundsLost: 9, kda: 2.0, adr: 155, acs: 219, firstBlood: 6, mvp: { agent: '오멘', player: 'Kai', kda: 2.3, hs: 20, acs: 236 }, season: 'S2026', act: 'Act 1' },
+    { map: '스플릿', result: 'lose', date: '07.28', time: '6:40 PM', roundScore: '10-13', roundsWon: 10, roundsLost: 13, kda: 1.4, adr: 129, acs: 176, firstBlood: 3, mvp: { agent: '소바', player: 'Milo', kda: 1.7, hs: 19, acs: 198 }, season: 'S2025', act: 'Act 3' },
   ],
 };
 

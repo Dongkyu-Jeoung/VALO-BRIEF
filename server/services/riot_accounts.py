@@ -2,8 +2,20 @@
 riot_accounts 테이블 캐시 조회/저장. search.py, players.py 공용.
 Henrik 조회로 존재가 확인된 계정을 캐싱해두면 다음 조회부터는 DB로 바로 응답할 수 있다.
 """
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+# updated_at을 DB의 DEFAULT/ON UPDATE CURRENT_TIMESTAMP에 맡기면 RDS 서버 타임존(보통 UTC)
+# 기준으로 저장돼 한국 시간보다 9시간 느리게 찍힌다. DB 서버 타임존 설정을 건드리는 대신,
+# 애플리케이션에서 KST로 직접 계산해 매번 명시적으로 넣어준다(DATETIME 컬럼이라 타임존 정보
+# 없이 벽시계 값만 저장되므로, KST로 계산한 값을 그대로 넣으면 DB 설정과 무관하게 항상 맞음).
+_KST = timezone(timedelta(hours=9))
+
+
+def _now_kst() -> datetime:
+    return datetime.now(_KST).replace(tzinfo=None)
 
 
 def find_riot_account(db: Session, riot_name: str, riot_tag: str) -> dict | None:
@@ -46,9 +58,9 @@ def upsert_riot_account(
         text(
             """
             INSERT INTO riot_accounts
-                (puuid, riot_name, riot_tag, region, platform, account_level, title, avatar_url, current_rank, current_rr)
+                (puuid, riot_name, riot_tag, region, platform, account_level, title, avatar_url, current_rank, current_rr, updated_at)
             VALUES
-                (:puuid, :riot_name, :riot_tag, :region, 'pc', :account_level, :title, :avatar_url, :current_rank, :current_rr)
+                (:puuid, :riot_name, :riot_tag, :region, 'pc', :account_level, :title, :avatar_url, :current_rank, :current_rr, :updated_at)
             ON DUPLICATE KEY UPDATE
                 riot_name = VALUES(riot_name),
                 riot_tag = VALUES(riot_tag),
@@ -57,7 +69,8 @@ def upsert_riot_account(
                 title = COALESCE(VALUES(title), title),
                 avatar_url = COALESCE(VALUES(avatar_url), avatar_url),
                 current_rank = COALESCE(VALUES(current_rank), current_rank),
-                current_rr = COALESCE(VALUES(current_rr), current_rr)
+                current_rr = COALESCE(VALUES(current_rr), current_rr),
+                updated_at = VALUES(updated_at)
             """
         ),
         {
@@ -70,6 +83,7 @@ def upsert_riot_account(
             "avatar_url": avatar_url,
             "current_rank": current_rank,
             "current_rr": current_rr,
+            "updated_at": _now_kst(),
         },
     )
     db.commit()

@@ -1,11 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { checkPlayerExists, checkTeamExists } from '../../api/search';
+import { useExistenceSearch } from '../../hooks/useExistenceSearch';
 import { ROUTES } from '../../constants/routes';
 import '../../styles/components/searchbox.css';
-
-// 이름#태그 형식 검사 (개인/팀 공통)
-const isValidFormat = (input) => /^.+#.+$/.test(input.trim());
 
 /**
  * 홈페이지 히어로 검색창과 헤더 통합 검색창에서 공통으로 쓰는 검색 컴포넌트.
@@ -15,53 +12,16 @@ export default function SearchBox({ variant = 'hero' }) {
   const navigate = useNavigate();
   const [searchType, setSearchType] = useState('player'); // 'player' | 'team'
   const [searchTerm, setSearchTerm] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [showErrorToast, setShowErrorToast] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const triggerErrorToast = (msg) => {
-    setErrorMessage(msg);
-    setShowErrorToast(true);
-    setTimeout(() => setShowErrorToast(false), 3000);
-  };
+  const { checkExists, loading, errorMessage, showErrorToast } = useExistenceSearch();
 
   const handleSearch = async () => {
-    const trimmed = searchTerm.trim();
-
-    if (!trimmed) {
-      triggerErrorToast('검색어를 입력해 주세요.');
-      return;
-    }
-    if (!isValidFormat(trimmed)) {
-      triggerErrorToast(
-        `올바른 형식으로 입력해 주세요. ( ex. ${searchType === 'player' ? '뇽따까리#0208' : '팀명#태그'} )`
-      );
-      return;
-    }
-
-    const [namePart, tagPart] = trimmed.split('#');
-    setLoading(true);
-    try {
-      if (searchType === 'player') {
-        const res = await checkPlayerExists(namePart, tagPart);
-        if (!res.exists) {
-          triggerErrorToast('존재하지 않는 닉네임입니다.');
-          return;
-        }
-        navigate(ROUTES.player(namePart, tagPart));
-      } else {
-        const res = await checkTeamExists(namePart, tagPart);
-        if (!res.exists) {
-          triggerErrorToast('존재하지 않는 팀입니다.');
-          return;
-        }
-        navigate(ROUTES.team(namePart, tagPart));
-      }
-    } catch {
-      triggerErrorToast('검색 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
+    const found = await checkExists(searchTerm, searchType);
+    if (!found) return;
+    navigate(
+      searchType === 'player'
+        ? ROUTES.player(found.namePart, found.tagPart)
+        : ROUTES.team(found.namePart, found.tagPart)
+    );
   };
 
   const handleKeyDown = (e) => {
