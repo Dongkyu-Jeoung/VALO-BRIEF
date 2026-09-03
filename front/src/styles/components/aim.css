@@ -1,154 +1,196 @@
 /* 우리팀 분석 - 개인 상세: 히트존/무기/클러치/교전거리 */
 
 .hitzone-list {
-  margin-top: 14px;
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .hitzone-row {
-  display:flex;
-   justify-content:space-between;
-   align-items:center;
-   padding:9px 0;
-   border-bottom:1px solid var(--border-soft);
-   font-size:12.5px;
-   color:var(--text-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-2);
 }
 
 .hitzone-row b {
-  color:var(--text-1);
-   font-family:'JetBrains Mono',monospace;
+  color: var(--text-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  min-width: 42px;
+  text-align: right;
 }
 
 .hitzone-bar {
-  flex:1;
-   height:6px;
-   background:var(--border);
-   border-radius:3px;
-   margin:0 14px;
-   position:relative;
-   overflow:hidden;
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  margin: 0 16px;
+  position: relative;
+  overflow: hidden;
 }
 
 .hitzone-bar span {
-  position:absolute;
-   left:0;
-   top:0;
-   bottom:0;
-   background:var(--accent);
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, var(--accent), #ff4655);
+  border-radius: 3px;
+  transition: width 0.4s ease;
 }
 
 .weapon-row {
-  display:flex;
-   align-items:center;
-   gap:14px;
-   padding:10px 0;
-   border-bottom:1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.weapon-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border);
 }
 
 .weapon-row:last-child {
-  border:none;
+  margin-bottom: 0;
 }
 
 .weapon-icon {
-  width:52px;
-   height:32px;
-   border-radius:4px;
-   background:var(--bg-panel-2);
-   border:1px dashed var(--border);
-   flex-shrink:0;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   font-size:8px;
-   color:var(--text-3);
+  width: 88px;
+  height: 38px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-soft);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  overflow: hidden;
+}
+
+.weapon-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
 }
 
 .weapon-name {
-  font-size:13px;
-   font-weight:700;
-   width:90px;
-   flex-shrink:0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+  width: 84px;
+  flex-shrink: 0;
 }
 
+/* K/D, ADR 수치 영역 안쪽 당김 유지 */
 .weapon-stats {
-  display:flex;
-   gap:26px;
-   margin-left:auto;
+  display: flex;
+  gap: 24px;
+  margin-left: auto;
+  padding-right: 8px; 
 }
 
 .weapon-stats div {
-  font-size:11px;
-   color:var(--text-3);
-   text-align:center;
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  letter-spacing: -0.2px;
 }
 
 .weapon-stats b {
-  display:block;
-   color:var(--text-1);
-   font-family:'JetBrains Mono',monospace;
-   font-size:15px;
+  display: block;
+  color: var(--text-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  margin-top: 2px;
 }
 
 .clutch-row {
-  display:flex;
-   gap:14px;
+  display: flex;
+  gap: 14px;
 }
 
 .clutch-chip {
-  flex:1;
-   background:var(--bg-panel-2);
-   border:1px solid var(--border-soft);
-   border-radius:5px;
-   padding:14px;
-   text-align:center;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  transition: border-color 0.2s ease;
+}
+
+.clutch-chip:hover {
+  border-color: var(--border);
 }
 
 .clutch-chip .lbl {
-  font-size:10.5px;
-   color:var(--text-3);
-   margin-bottom:6px;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .clutch-chip .val {
-  font-family:'JetBrains Mono',monospace;
-   font-weight:700;
-   font-size:17px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--accent);
 }
 
 .distance-chart-box {
-  height:160px;
-   width: 100%;
-   background:var(--bg-panel-2);
-   border:1px dashed var(--border);
-   border-radius:6px;
-   display:flex;
-   align-items:center;
-   justify-content:center;
-   color:var(--text-3);
-   font-size:12px;
-   text-align:center;
+  height: 160px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
 }
 
 .line-chart-wrap {
   width: 100%;
-  background: var(--bg-panel-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 8px 4px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 14px 12px 6px;
 }
 
 .line-chart-grid {
   stroke: var(--border-soft);
   stroke-width: 1;
+  stroke-dasharray: 3 3;
 }
 
 .line-chart-line {
   stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 .line-chart-dot {
   fill: var(--accent);
+  stroke: var(--bg-panel);
+  stroke-width: 2;
 }
 
 .line-chart-label {
@@ -157,20 +199,26 @@
 }
 
 .aim-dual {
-  display:grid;
-   grid-template-columns:1fr 1fr;
-   gap:30px;
-   align-items:start;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
 }
 
 .aim-col-title {
-  font-size:12px;
-   color:var(--text-2);
-   font-weight:700;
-   margin-bottom:12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-weight: 700;
+  margin-bottom: 14px;
+  letter-spacing: -0.3px;
+}
+
+.aim-dual > div:last-child {
+  margin-top: 120px; 
 }
 
 .hitbox-img.full {
   width: 100%;
-  height: 190px;
+  height: 265px;
+  object-fit: contain;
 }
