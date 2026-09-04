@@ -2,12 +2,11 @@ import json
 from pathlib import Path
 from datetime import datetime
 # 위 3개는 json 파일 저장할 때 쓰는 패키지
-from model_loader import get_model
-from rolling import build_player_feature
-from team_feature import build_team_feature
+from ml.model_loader import get_model
+from ml.rolling import build_player_feature
+from ml.team_feature import build_team_feature
 
 model = get_model()
-
 
 def predict_blue_win(blue_team, red_team, save_json=False):
 

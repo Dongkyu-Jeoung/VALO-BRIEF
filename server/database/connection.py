@@ -1,7 +1,6 @@
 from pathlib import Path
 from collections.abc import Generator
 import os
-
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -9,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # .env 경로 가져오기
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# fast-shoppy-server/.env 읽기
+# .env 읽기
 load_dotenv(BASE_DIR / ".env")
 
 DB_USER=os.getenv("DB_USER")
