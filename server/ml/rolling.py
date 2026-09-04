@@ -1,4 +1,4 @@
-from valorant_git import (
+from ml.valorant_git import (
     get_puuid_by_riot_id,
     get_matches_v4,
     get_match_detail_v4,

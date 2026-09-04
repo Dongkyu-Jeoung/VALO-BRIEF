@@ -1,5 +1,5 @@
 import pandas as pd
-from model_loader import get_feature_columns
+from ml.model_loader import get_feature_columns
 
 # Duelist Agent
 DUELISTS = {
