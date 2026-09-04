@@ -25,12 +25,15 @@ export default function AnalysisTab({ analysis }) {
 
   const mapInfo = { 
     ...currentMapData, 
-    selectedMap: currentMapObj.id 
+    selectedMap: currentMapObj.id,
+    mapImage: currentMapObj.image 
   };
 
   return (
     <AnalysisSection
       analysis={{ ...analysis, mapInfo }}
+      currentMapStats={mapInfo} 
+      selectedMapId={currentMapObj.name} 
       onMapChange={(mapName) => {
         setSelectedMap(mapName);
       }}

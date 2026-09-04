@@ -39,8 +39,7 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
           options={gameData.maps.map(m => m.name)} 
           value={currentMapMeta?.name} 
           onChange={(mapName) => {
-            const found = gameData.maps.find(m => m.name === mapName);
-            if (found) onMapChange(found.id);
+            if (mapName) onMapChange(mapName);
           }} 
         />
       </div>
