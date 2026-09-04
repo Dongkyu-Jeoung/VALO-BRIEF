@@ -6,13 +6,46 @@ import DropdownSelect from '../../../components/common/DropdownSelect';
 import LineChart from '../../../components/common/LineChart';
 import { gameData } from '../../../constants/gameData';
 
+// assets 경로에서 히트박스 이미지 import
+import headImg from '@/assets/images/aim/head.png';
+import bodyImg from '@/assets/images/aim/body.png';
+import legImg from '@/assets/images/aim/leg.png';
+
 const MAP_OPTIONS = ['전체 맵', ...gameData.maps.map((m) => m.name)];
+
+/** 가장 높은 타격 비율의 부위를 찾아 해당 이미지 객체를 반환하는 헬퍼 함수 */
+const getHighestHitzoneImage = (hitzones) => {
+  if (!hitzones || hitzones.length === 0) return bodyImg;
+
+  // pct 수치가 가장 높은 영역 찾기
+  const maxZone = hitzones.reduce((prev, current) => {
+    return (prev.pct > current.pct) ? prev : current;
+  });
+
+  // 부위명 매핑
+  switch (maxZone.zone) {
+    case '헤드':
+    case 'Head':
+      return headImg;
+    case '바디':
+    case 'Body':
+      return bodyImg;
+    case '레그':
+    case 'Leg':
+      return legImg;
+    default:
+      return bodyImg;
+  }
+};
 
 /** Frame 11 — 선수 상세 (라운드 정보 / 에임 정보 / 교전 정보) */
 export default function PlayerDetailView({ player, onBack }) {
   const { aim, engagement } = player;
   const [selectedMap, setSelectedMap] = useState('전체 맵');
   const roundInfo = player.roundInfoByMap[selectedMap];
+
+  // 타격 비율 중 가장 높은 부위에 맞는 이미지 모듈 산출
+  const activeHitboxImg = getHighestHitzoneImage(aim.hitzones);
 
   return (
     <>
@@ -57,34 +90,40 @@ export default function PlayerDetailView({ player, onBack }) {
         <div className="aim-dual">
           <div>
             <div className="aim-col-title">타격 비율</div>
-            <EmptyImageBox
-              className="hitbox-img full"
-              folder="hitbox"
-              assetKey="default"
-              label={`히트박스 이미지\n영역 (부위별 타격률 오버레이)`}
-            />
-            <div className="hitzone-list">
-              {aim.hitzones.map((h) => (
-                <div className="hitzone-row" key={h.zone}>
-                  {h.zone}
-                  <div className="hitzone-bar"><span style={{ width: `${h.pct}%` }} /></div>
-                  <b>{h.pct}%</b>
-                </div>
-              ))}
+            <div className="hitbox-container">
+              <div className="hitbox-img-wrap">
+                <EmptyImageBox
+                  className="hitbox-img full"
+                  src={activeHitboxImg}
+                  alt="주요 타격부위 히트박스"
+                  label={`히트박스 이미지\n영역 (부위별 타격률 오버레이)`}
+                />
+              </div>
+              <div className="hitzone-list">
+                {aim.hitzones.map((h) => (
+                  <div className="hitzone-row" key={h.zone}>
+                    {h.zone}
+                    <div className="hitzone-bar"><span style={{ width: `${h.pct}%` }} /></div>
+                    <b>{h.pct}%</b>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div>
             <div className="aim-col-title">사용 무기별 스탯</div>
-            {aim.weapons.map((w) => (
-              <div className="weapon-row" key={w.name}>
-                <EmptyImageBox className="weapon-icon" folder="weapons" assetKey={w.name} label={`${w.name}\nICON`} />
-                <div className="weapon-name">{w.name}</div>
-                <div className="weapon-stats">
-                  <div>K/D<b>{w.kd}</b></div>
-                  <div>ADR<b>{w.adr}</b></div>
+            <div className="weapon-list-wrap">
+              {aim.weapons.map((w) => (
+                <div className="weapon-row" key={w.name}>
+                  <EmptyImageBox className="weapon-icon" folder="weapons" assetKey={w.name} label={`${w.name}\nICON`} />
+                  <div className="weapon-name">{w.name}</div>
+                  <div className="weapon-stats">
+                    <div>K/D<b>{w.kd}</b></div>
+                    <div>ADR<b>{w.adr}</b></div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
         <div className="subsection-title">클러치</div>

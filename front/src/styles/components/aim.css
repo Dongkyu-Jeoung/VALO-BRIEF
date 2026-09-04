@@ -1,18 +1,69 @@
 /* 우리팀 분석 - 개인 상세: 히트존/무기/클러치/교전거리 */
 
-.hitzone-list {
-  margin-top: 24px;
+/* 1. 에임 관련 정보 2컬럼 레이아웃 */
+.aim-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.aim-dual > div {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+}
+
+.aim-col-title {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 700;
+  margin-bottom: 16px;
+  letter-spacing: -0.3px;
+}
+
+/* 2. 타격 비율 (사람 이미지 세로 수직 정렬) */
+.hitbox-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex: 1;
+  width: 100%;
+}
+
+.hitbox-img-wrap {
+  width: 160px;
+  height: 220px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hitbox-img.full {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+.hitzone-list {
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .hitzone-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-2);
 }
 
@@ -20,7 +71,7 @@
   color: var(--text-1);
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
-  min-width: 42px;
+  min-width: 36px;
   text-align: right;
 }
 
@@ -30,7 +81,7 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-soft);
   border-radius: 4px;
-  margin: 0 16px;
+  margin: 0 10px;
   position: relative;
   overflow: hidden;
 }
@@ -45,12 +96,20 @@
   transition: width 0.4s ease;
 }
 
+/* 3. 사용 무기별 스탯 (제목 상단 고정, 카드 그룹 세로 중앙 정렬) */
+.weapon-list-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .weapon-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.015);
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border-soft);
   border-radius: 8px;
   margin-bottom: 10px;
@@ -96,12 +155,11 @@
   flex-shrink: 0;
 }
 
-/* K/D, ADR 수치 영역 안쪽 당김 유지 */
+/* K/D, ADR 스탯 위치 (중간 위치에 간격 고정) */
 .weapon-stats {
   display: flex;
-  gap: 24px;
-  margin-left: auto;
-  padding-right: 8px; 
+  gap: 28px;
+  margin-left: 120px;
 }
 
 .weapon-stats div {
@@ -120,6 +178,7 @@
   margin-top: 2px;
 }
 
+/* 4. 클러치 영역 */
 .clutch-row {
   display: flex;
   gap: 14px;
@@ -153,6 +212,7 @@
   color: var(--accent);
 }
 
+/* 5. 교전 거리 차트 영역 */
 .distance-chart-box {
   height: 160px;
   width: 100%;
@@ -196,29 +256,4 @@
 .line-chart-label {
   fill: var(--text-3);
   font-size: 10.5px;
-}
-
-.aim-dual {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  align-items: start;
-}
-
-.aim-col-title {
-  font-size: 12.5px;
-  color: var(--text-2);
-  font-weight: 700;
-  margin-bottom: 14px;
-  letter-spacing: -0.3px;
-}
-
-.aim-dual > div:last-child {
-  margin-top: 120px; 
-}
-
-.hitbox-img.full {
-  width: 100%;
-  height: 265px;
-  object-fit: contain;
 }
