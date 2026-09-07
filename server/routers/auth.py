@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from services import auth as auth_service
+from services import henrik_api
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -32,19 +33,30 @@ class RiotVerifyRequest(BaseModel):
 
 
 @router.post("/signup")
-def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     if not payload.agree:
         raise HTTPException(status_code=400, detail="개인정보 수집·이용에 동의해야 합니다.")
+
+    # team_id는 더 이상 내부에서 생성하지 않고 Henrik 프리미어 팀의 실제 id를 그대로
+    # 쓴다 - team_name/team_tag가 실제 존재하는 프리미어 팀이어야만 가입이 된다
+    # (팀 대표 개인 계정 대신 team_name/team_tag 기준으로 인증하기로 한 결정).
+    team_info = await henrik_api.get_premier_team(payload.teamName, payload.teamTag)
+    if team_info is None:
+        raise HTTPException(status_code=404, detail="존재하지 않는 프리미어 팀입니다. 팀 이름/태그를 확인해 주세요.")
+
+    team_image = (team_info.get("customization") or {}).get("image")
 
     try:
         auth_service.create_team(
             db,
+            team_id=team_info["id"],
             email=payload.email,
             login_id=payload.id,
             password=payload.password,
             privacy_agreed=payload.agree,
             team_name=payload.teamName,
             team_tag=payload.teamTag,
+            team_image=team_image,
         )
     except auth_service.DuplicateTeamError:
         raise HTTPException(status_code=409, detail="이미 사용 중인 이메일, 아이디 또는 팀 정보입니다.")
@@ -53,10 +65,11 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/riot-verify")
-def riot_verify(payload: RiotVerifyRequest):
-    # TODO: 실제 Riot 계정 연동/인증 붙기 전까지의 임시 스텁 - 항상 성공 처리해서
-    # 회원가입 플로우가 막히지 않게 한다 (QA용으로 teamTag='FAIL'만 실패 재현).
-    return {"verified": payload.teamTag.upper() != "FAIL"}
+async def riot_verify(payload: RiotVerifyRequest):
+    """team_name/team_tag가 실제 Henrik 프리미어 팀인지 확인 (개인 Riot 계정 인증 아님 -
+    팀 대표를 지정하기 어려워서 팀 이름/태그 기준으로만 인증하기로 함)."""
+    team_info = await henrik_api.get_premier_team(payload.teamName, payload.teamTag)
+    return {"verified": team_info is not None}
 
 
 @router.get("/id-available")

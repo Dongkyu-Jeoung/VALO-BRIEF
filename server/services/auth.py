@@ -46,22 +46,29 @@ def find_team_by_login_id(db: Session, login_id: str) -> Team | None:
 def create_team(
     db: Session,
     *,
+    team_id: str,
     email: str,
     login_id: str,
     password: str,
     privacy_agreed: bool,
     team_name: str,
     team_tag: str,
+    team_image: str | None = None,
 ) -> Team:
-    """프론트에서 받은 정보만 채워서 insert하고, 나머지 컬럼(premier_team_id/tier_id/
-    season/conference/division/ranking_points)은 DB 기본값(NULL 또는 0)을 그대로 둔다."""
+    """team_id/team_image는 더 이상 여기서 생성하지 않는다 - team_id는 더 이상
+    AUTO_INCREMENT가 아니라 Henrik 프리미어 팀 API(get_premier_team)가 돌려주는 실제
+    premier team id를 그대로 쓰고, team_image도 같은 응답의 customization.image다.
+    호출부(routers/auth.py)가 Henrik 조회를 먼저 마치고 그 결과를 넘겨준다 - 즉 이
+    team_name/team_tag가 실제 존재하는 프리미어 팀이어야만 가입이 된다."""
     team = Team(
+        team_id=team_id,
         email=email,
         login_id=login_id,
         password_hash=hash_password(password),
         privacy_agreed=privacy_agreed,
         team_name=team_name,
         team_tag=team_tag,
+        team_image=team_image,
     )
     db.add(team)
     try:
