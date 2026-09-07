@@ -5,10 +5,14 @@ import ComboBlock from './ComboBlock';
 import { gameData } from '../../constants/gameData';
 import { mapKey } from '../../utils/gameDataKey';
 
-export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange }) {
+export default function MapInfoBlock({ data, selectedMapId, mapMeta, maps, onMapChange }) {
 
-  const currentMapMeta = mapMeta || gameData.maps.find(m => m.id === selectedMapId) || gameData.maps[0];
+  // 상위에서 넘어온 maps(경기 기록이 있는 맵들)와 gameData.maps를 교집합하여 0경기 맵만 스크롤바에서 제외
+  const availableMaps = maps && maps.length > 0 
+    ? gameData.maps.filter(m => maps.some(validMap => validMap.id === m.id || validMap.name === m.name))
+    : gameData.maps;
 
+  const currentMapMeta = mapMeta || availableMaps.find(m => m.id === selectedMapId) || availableMaps[0];
   const computedAssetKey = mapKey(currentMapMeta?.name) || currentMapMeta?.id?.toLowerCase();
 
   const items = [
@@ -40,7 +44,7 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
         <DropdownSelect 
           icon="🗺" 
           label={currentMapMeta?.name} 
-          options={gameData.maps.map(m => m.name)} 
+          options={availableMaps.map(m => m.name)} 
           value={currentMapMeta?.name} 
           onChange={(mapName) => {
             if (typeof onMapChange === 'function') {

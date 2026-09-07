@@ -160,7 +160,7 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
 
 
 def _map_winrates(records: list) -> list:
-    """매치 기록을 맵별로 묶어 승/패/승률 집계."""
+    """매치 기록을 맵별로 묶어 승/패/승률 집계 (0경기 맵 원천 차단)."""
     buckets: dict[str, dict] = {}
     for r in records:
         bucket = buckets.setdefault(r["map"], {"map": r["map"], "win": 0, "lose": 0})
@@ -168,13 +168,14 @@ def _map_winrates(records: list) -> list:
     result = []
     for b in buckets.values():
         games = b["win"] + b["lose"]
-        b["winRate"] = round(b["win"] / games * 100) if games else 0
-        result.append(b)
+        if games > 0:
+            b["winRate"] = round(b["win"] / games * 100) if games else 0
+            result.append(b)
     return result
 
 
 def _map_info_by_map(records: list, agents: dict) -> dict:
-    """맵별 상세 정보 및 선호 요원 조합(BEST/WORST) 계산."""
+    """맵별 상세 정보 및 선호 요원 조합(BEST/WORST) 계산 (0경기 맵 원천 차단)."""
     buckets: dict[str, dict] = {}
     for r in records:
         map_name = r["map"]
@@ -193,6 +194,8 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
     result = {}
     for map_name, b in buckets.items():
         games = b["games"]
+        if games <= 0:
+            continue
         win_rate = round(b["win"] / games * 100) if games else 0
         
         # 요원 조합 통계 처리 (BEST / WORST 산출)

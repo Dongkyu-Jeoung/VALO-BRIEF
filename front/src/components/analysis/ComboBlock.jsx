@@ -19,7 +19,7 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
         const agentList = c.agents || c.agentList || c.members || c.characters || c.agentNames || Object.values(c).find(val => Array.isArray(val)) || [];
 
         return (
-          <div className="combo-row" key={c.label || idx}>
+          <div className="combo-row" key={c.label ? `${c.label}-${idx}` : idx}>
             <span className="combo-label">{c.label}</span>
             <div className="combo-agents">
               {agentList.length > 0 ? agentList.map((agentKey, i) => (
@@ -41,26 +41,24 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
       <div className="combo-detail-cols">
         <div>
           <div className="combo-detail-title text-win">BEST</div>
-          {/* key 중복 및 undefined 방어 처리 */}
           {ace?.map((p, idx) => (
             <div className="combo-detail-row" key={p?.name ? `${p.name}-${idx}` : idx}>
-              <span>{p?.name || '조합'}</span>
+              <span>{p.name}</span>
               <div className="stats-group">
-                <b>ACS {p?.acs ?? 0}</b>
+                <b>ACS {p.acs}</b>
               </div>
             </div>
           ))}
         </div>
         <div>
           <div className="combo-detail-title text-lose">WORST</div>
-          {/* key 중복 및 undefined 방어 처리 */}
           {weakness?.map((p, idx) => (
             <div className="combo-detail-row" key={p?.name ? `${p.name}-${idx}` : idx}>
-              <span>{p?.name || '조합'}</span>
+              <span>{p.name}</span>
               <div className="stats-group">
-                <b>FD {p?.fd ?? 0}%</b>
+                <b>FD {p.fd}%</b>
                 <span>·</span>
-                <b>ACS {p?.acs ?? 0}</b>
+                <b>ACS {p.acs}</b>
               </div>
             </div>
           ))}

@@ -27,9 +27,11 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
     """팀 프로필 전체 조회. 팀 기본 정보(get_premier_team)와 매치 이력(get_premier_team_history)을
     동시에 불러온 뒤, 이력에서 얻은 최근 매치 id들로 매치 상세(get_match_detail)를 다시 동시에
     불러온다 - 상세 없이는 맵/스코어/로스터 스탯을 알 수 없어 이력 조회가 먼저 끝나야 한다."""
+    clean_name = team_name.strip()
+    clean_tag = team_tag.strip()
     team_info, history = await asyncio.gather(
-        henrik_api.get_premier_team(team_name, team_tag),
-        henrik_api.get_premier_team_history(team_name, team_tag),
+        henrik_api.get_premier_team(clean_name, clean_tag),
+        henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -42,8 +44,8 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
 
     return build_team_profile(
         db,
-        team_name=team_name,
-        team_tag=team_tag,
+        team_name=clean_name,
+        team_tag=clean_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
@@ -54,9 +56,11 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
     """QuickAnalysisModal(통합검색 '팀명#태그' 팝업)용 최근 5게임 요약 조회.
     get_team_profile과 동일하게 team_info + history를 동시에 불러온 뒤 최근 매치 상세를
     한 번 더 동시에 불러오지만, 매치 건수는 QUICK_ANALYSIS_MATCH_LIMIT(5)로 더 적게 가져온다."""
+    clean_name = team_name.strip()
+    clean_tag = team_tag.strip()
     team_info, history = await asyncio.gather(
-        henrik_api.get_premier_team(team_name, team_tag),
-        henrik_api.get_premier_team_history(team_name, team_tag),
+        henrik_api.get_premier_team(clean_name, clean_tag),
+        henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -69,8 +73,8 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
 
     return build_quick_analysis(
         db,
-        team_name=team_name,
-        team_tag=team_tag,
+        team_name=clean_name,
+        team_tag=clean_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
@@ -81,11 +85,14 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
     get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다."""
 
-    print(f"===== DEBUG: API Called for team: {team_name}#{team_tag} =====")
+    clean_name = team_name.strip()
+    clean_tag = team_tag.strip()
+
+    print(f"===== DEBUG: API Called for team: {clean_name}#{clean_tag} =====")
 
     team_info, history = await asyncio.gather(
-        henrik_api.get_premier_team(team_name, team_tag),
-        henrik_api.get_premier_team_history(team_name, team_tag),
+        henrik_api.get_premier_team(clean_name, clean_tag),
+        henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
 
     print(f"===== DEBUG: team_info loaded: {bool(team_info)} =====")
@@ -121,8 +128,8 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
 
     profile = build_team_profile(
         db,
-        team_name=team_name,
-        team_tag=team_tag,
+        team_name=clean_name,
+        team_tag=clean_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
@@ -135,8 +142,20 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     print("roundInfo:", profile.get("roundInfo"))
     print("mapInfoByMap:", profile.get("mapInfoByMap"))
 
+    # 0경기(sampleGames <= 0)인 맵을 API 응답 레벨에서 원천적으로 필터링하여 방어
+    raw_map_info = profile.get("mapInfoByMap", {})
+    filtered_map_info = {
+        k: v for k, v in raw_map_info.items() 
+        if (v.get("sampleGames") or v.get("games") or 0) > 0
+    }
+
+    filtered_map_winrates = [
+        m for m in profile.get("mapWinrates", [])
+        if (raw_map_info.get(m.get("map"), {}).get("sampleGames") or 0) > 0
+    ]
+
     return {
         "roundInfo": profile.get("roundInfo", {}),
-        "mapWinrates": profile.get("mapWinrates", []),
-        "mapInfoByMap": profile.get("mapInfoByMap", {}),
+        "mapWinrates": filtered_map_winrates,
+        "mapInfoByMap": filtered_map_info,
     }

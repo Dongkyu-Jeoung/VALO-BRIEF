@@ -3,22 +3,36 @@ import AnalysisSection from '../../components/analysis/AnalysisSection';
 import { gameData } from '../../constants/gameData';
 
 export default function AnalysisTab({ analysis }) {
-  const [selectedMap, setSelectedMap] = useState(gameData.maps[0].name);
+  const mapInfoMap = analysis?.mapInfoByMap || {};
+  const recordedKeys = Object.keys(mapInfoMap);
 
-  const currentMapObj = gameData.maps.find(m => m.name === selectedMap) || gameData.maps[0];
+  // 백엔드에서 0경기 맵이 제거된 mapInfoByMap의 실제 키들만을 기준으로 gameData.maps를 정밀 필터링
+  const finalMapList = gameData.maps.filter(m => {
+    return recordedKeys.some(key => {
+      const cleanKey = key.trim();
+      const cleanName = m.name.trim();
+      const cleanId = m.id.trim();
+      return cleanKey === cleanName || cleanKey === cleanId;
+    });
+  });
 
-  const mapKey = Object.keys(analysis?.mapInfoByMap || {}).find(
-    key => key.toLowerCase() === currentMapObj.id.toLowerCase() || key === currentMapObj.name
-  );
+  const validMapList = finalMapList.length > 0 ? finalMapList : [gameData.maps[0]];
 
-  const rawMapData = analysis?.mapInfoByMap?.[mapKey] || {};
+  const [selectedMap, setSelectedMap] = useState(validMapList[0].name);
+
+  const currentMapObj = validMapList.find(m => m.name === selectedMap) || validMapList[0];
+
+  const mapKey = recordedKeys.find(
+    key => key.trim() === currentMapObj.name.trim() || key.trim() === currentMapObj.id.trim()
+  ) || recordedKeys[0];
+
+  const rawMapData = mapInfoMap[mapKey] || {};
 
   let rawPlantTime = rawMapData.avgSpikePlantTime ?? 0;
   if (typeof rawPlantTime === 'string') {
     rawPlantTime = parseInt(rawPlantTime.replace(/[^0-9]/g, ''), 10) || 0;
   }
 
-  // 기존 맵 데이터 및 요원 조합(combos 등) 유실 방지 복구
   const currentMapData = {
     mapWinRate: rawMapData.mapWinRate ?? 0,
     atkWinRate: rawMapData.attackWinRate ?? 0,
@@ -73,8 +87,12 @@ export default function AnalysisTab({ analysis }) {
       currentMapStats={mapInfo}
       selectedMapId={currentMapObj.id}   
       mapMeta={currentMapObj}           
+      maps={validMapList}      
       onMapChange={(mapName) => {
-        setSelectedMap(mapName);
+        const foundMap = validMapList.find(m => m.name === mapName);
+        if (foundMap) {
+          setSelectedMap(mapName);
+        }
       }}
       ourLabel="우리팀"
       theirLabel="상대팀"
