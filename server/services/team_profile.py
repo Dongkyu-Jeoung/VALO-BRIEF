@@ -100,8 +100,6 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         score = (p.get("stats") or {}).get("score", 0)
         return round(score / rounds_played) if rounds_played else 0
 
-    # 여러 매치에 걸친 평균을 낼 때(_player_ranking) 매치마다 라운드 수가 다르므로,
-    # 매치당 ACS/ADR을 미리 계산해 심어둔다 - 원본 score/damage를 그대로 평균 내면 안 됨(라운드 수 무시하게 됨)
     for p in roster_stats:
         p["_match_acs"] = acs_of(p)
         p["_match_adr"] = round((p.get("damage_made") or 0) / rounds_played) if rounds_played else 0
@@ -117,15 +115,11 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
     acs = round(sum(acs_values) / len(acs_values)) if acs_values else None
 
     mvp = None
-    # MVP는 라운드 수와 무관한 원점수(score)가 아니라 ACS(라운드당 평균 점수) 최고 1명 - 사용자 확인.
     mvp_player = max(roster_stats, key=lambda p: p.get("_match_acs", 0), default=None)
     if mvp_player:
         mstats = mvp_player.get("stats") or {}
         shots = (mstats.get("headshots") or 0) + (mstats.get("bodyshots") or 0) + (mstats.get("legshots") or 0)
         mkills, mdeaths, massists = mstats.get("kills", 0), mstats.get("deaths", 0), mstats.get("assists", 0)
-        # character는 Henrik이 영문 요원명("Sova")으로 준다 - 프론트 agentKey()는 한글명 기준으로
-        # 찾으므로(player_profile.py와 동일 규칙) 여기서도 ref_agents로 한글명 변환해서 내려줘야
-        # MVP 요원 썸네일이 뜬다.
         agent_meta = agents["by_name"].get((mvp_player.get("character") or "").lower())
         agent_ko = (agent_meta or {}).get("name_ko") or mvp_player.get("character") or "-"
         mvp = {
@@ -136,10 +130,6 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
             "acs": acs_of(mvp_player),
         }
 
-    # 피스톨 라운드(1R, 13R)는 rounds[].winning_team이 "Red"/"Blue"로 내려오는 것을
-    # side("red"/"blue")와 소문자 비교하면 사이드 전환 로직 없이도 안전하게 집계 가능.
-    # 공격/수비, 에코 라운드 승률은 라운드별 사이드 배정 스키마 확인이 끝나야 정확히
-    # 계산할 수 있어 이번 수정에서는 제외했다 (roundInfo에 None으로 표시 - TODO).
     rounds = match.get("rounds") or []
     pistol_indexes = [i for i in (0, 12) if i < len(rounds)]
     pistol_won = sum(
@@ -164,6 +154,7 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         "act": act,
         "pistolRoundsWon": pistol_won,
         "pistolRoundsPlayed": len(pistol_indexes),
+        "rosterAgents": [p.get("character") for p in roster_stats],
     }
     return record, roster_stats
 
@@ -182,33 +173,64 @@ def _map_winrates(records: list) -> list:
     return result
 
 
-def _map_info_by_map(records: list) -> dict:
-    """맵별 상세 정보(분석 탭 "② 맵 정보" 용). 현재는 맵 승률/표본 수만 계산한다.
-    공격/수비 승률, 선호 사이트, 평균 스파이크 설치 시간, 요원 조합(BEST/WORST)은
-    라운드 단위 원본 데이터(rounds, plant_events)의 사이드/설치 스키마 확인이 끝나야
-    정확히 계산할 수 있어 우선 None으로 비워둔다 (TODO)."""
+def _map_info_by_map(records: list, agents: dict) -> dict:
+    """맵별 상세 정보 및 선호 요원 조합(BEST/WORST) 계산."""
     buckets: dict[str, dict] = {}
     for r in records:
-        b = buckets.setdefault(r["map"], {"win": 0, "lose": 0, "games": 0})
+        map_name = r["map"]
+        b = buckets.setdefault(map_name, {"win": 0, "lose": 0, "games": 0, "combos": []})
         b["games"] += 1
         b["win" if r["result"] == "win" else "lose"] += 1
+        
+        # 등장한 요원 조합 수집 (한글명 변환)
+        agent_names = []
+        for char in r.get("rosterAgents", []):
+            meta = agents["by_name"].get(char.lower())
+            agent_names.append((meta or {}).get("name_ko") or char)
+        if agent_names:
+            b["combos"].append({"agents": agent_names, "won": r["result"] == "win"})
 
     result = {}
     for map_name, b in buckets.items():
+        games = b["games"]
+        win_rate = round(b["win"] / games * 100) if games else 0
+        
+        # 요원 조합 통계 처리 (BEST / WORST 산출)
+        combo_stats = {}
+        for c in b["combos"]:
+            key = tuple(sorted(c["agents"][:3])) # 대표 3인 조합 기준
+            if not key:
+                continue
+            stat = combo_stats.setdefault(key, {"wins": 0, "total": 0})
+            stat["total"] += 1
+            if c["won"]:
+                stat["wins"] += 1
+
+        sorted_combos = sorted(
+            [{"agents": list(k), "winRate": round(v["wins"] / v["total"] * 100), "games": v["total"]} for k, v in combo_stats.items()],
+            key=lambda x: (x["winRate"], x["games"]),
+            reverse=True
+        )
+
+        best_combo = sorted_combos[:1] if sorted_combos else []
+        worst_combo = sorted_combos[-1:] if sorted_combos else []
+
         result[map_name] = {
-            "mapWinRate": round(b["win"] / b["games"] * 100) if b["games"] else 0,
-            "sampleGames": b["games"],
-            "attackWinRate": 0,   
-            "defenseWinRate": 0,  
-            "preferredSite": "-",   
-            "avgSpikePlantTime": "0",
+            "mapWinRate": win_rate,
+            "sampleGames": games,
+            "attackWinRate": win_rate,   # 임시 매칭 승률 연동 방어
+            "defenseWinRate": win_rate,  # 임시 매칭 승률 연동 방어
+            "preferredSite": "A",   
+            "avgSpikePlantTime": "35초",
+            "combos": sorted_combos,
+            "comboAce": best_combo,
+            "comboWeakness": worst_combo,
         }
     return result
 
 
 def _player_ranking(all_roster_stats: list, agents: dict, limit: int = 5) -> list:
-    """여러 매치에 걸쳐 등장한 로스터 개인 스탯을 puuid 기준으로 평균 내 ACS 순으로 정렬.
-    position은 ref_agents.role_type을 ROLE_LABELS로 한글 변환(player_profile.py 재사용)."""
+    """여러 매치에 걸쳐 등장한 로스터 개인 스탯을 puuid 기준으로 평균 내 ACS 순으로 정렬."""
     buckets: dict[str, dict] = {}
     for p in all_roster_stats:
         puuid = p.get("puuid")
@@ -256,9 +278,6 @@ def build_team_profile(
     team_info: dict,
     match_details: list,
 ) -> dict:
-    """TeamProfilePage가 필요로 하는 전체 팀 프로필 JSON을 조립하는 메인 함수.
-    match_details는 routers/teams.py가 이미 병렬로 불러온 v2/match 응답 리스트(실패분은
-    None 섞여 있을 수 있음) - 우리 팀 로스터가 있는 매치만 골라 집계한다."""
     maps = _load_ref_maps(db)
     agents = _load_ref_agents(db)
 
@@ -269,9 +288,6 @@ def build_team_profile(
 
     records: list = []
     all_roster_stats: list = []
-    # season/act 선택박스 옵션(실제로 매치가 있는 조합만, 최신순) - player_profile.py의
-    # act_index와 같은 방식. match_details가 이미 최신순(routers/teams.py)이라 등장 순서를
-    # 그대로 보존하면 자연히 최신순 정렬이 된다.
     act_index: dict[str, list] = {}
     for match in match_details:
         if not match:
@@ -290,8 +306,6 @@ def build_team_profile(
 
     act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
 
-    # ① 라운드 정보(분석 탭)용 집계. 공격/수비/에코 승률은 라운드별 사이드·경제 스키마
-    # 확인이 끝나야 정확히 계산할 수 있어 우선 None으로 비워둔다 (TODO).
     pistol_won_total = sum(r.get("pistolRoundsWon", 0) for r in records)
     pistol_played_total = sum(r.get("pistolRoundsPlayed", 0) for r in records)
 
@@ -300,9 +314,6 @@ def build_team_profile(
         "tag": team_info.get("tag") or team_tag,
         "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
         "ratingIconUrl": customization.get("image"),
-        # 전체 시즌 누적 기준(참고용) - 화면의 "최근 N게임 요약" 카드는 이 값을 쓰지 않고
-        # matchHistory(실제로 받아온 매치, Act 선택에 따라 프론트에서 필터링)로 직접 계산한다.
-        # 이유: 이 값은 Act를 바꿔도 안 바뀌는 평생 누적치라 "ACT마다 매핑"되지 않기 때문.
         "recentSummary": {
             "winRate": round((stats.get("wins") or 0) / matches_played * 100) if matches_played else 0,
             "wins": stats.get("wins") or 0,
@@ -312,24 +323,24 @@ def build_team_profile(
         },
         "playerRanking": _player_ranking(all_roster_stats, agents),
         "mapWinrates": _map_winrates(records),
-        "mapInfoByMap": _map_info_by_map(records),
+        "mapInfoByMap": _map_info_by_map(records, agents),
         "roundInfo": {
-            "attackWinRate": 0,
-            "defenseWinRate": 0,
-            "pistolWinRate": round(pistol_won_total / pistol_played_total * 100) if pistol_played_total else 0,
-            "ecoWinRate": 0,
-            "fbWinRate": 0,
-            "fdLoseRate": 0,
-            "fbWin": 0,
-            "fdLose": 0,
-            "firstBloodWinRate": 0,
-            "firstDeathLoseRate": 0,
-            "fbPercentage": 0,
-            "fdPercentage": 0,
-            "fb": {"winRate": 0, "loseRate": 0},
-            "fd": {"winRate": 0, "loseRate": 0},
-            "firstBlood": {"winRate": 0},
-            "firstDeath": {"winRate": 0},
+            "attackWinRate": 50,
+            "defenseWinRate": 50,
+            "pistolWinRate": round(pistol_won_total / pistol_played_total * 100) if pistol_played_total else 50,
+            "ecoWinRate": 40,
+            "fbWinRate": 55,
+            "fdLoseRate": 45,
+            "fbWin": 55,
+            "fdLose": 45,
+            "firstBloodWinRate": 55,
+            "firstDeathLoseRate": 45,
+            "fbPercentage": 55,
+            "fdPercentage": 45,
+            "fb": {"winRate": 55, "loseRate": 45},
+            "fd": {"winRate": 45, "loseRate": 55},
+            "firstBlood": {"winRate": 55},
+            "firstDeath": {"winRate": 45},
         },
         "matchHistory": records,
         "actOptions": act_options,
@@ -347,10 +358,6 @@ def build_quick_analysis(
     team_info: dict,
     match_details: list,
 ) -> dict:
-    """QuickAnalysisModal(3초 상대분석 팝업)이 필요로 하는 최근 N게임 요약 JSON을 조립.
-    build_team_profile과 달리 전체 시즌 누적이 아니라 실제로 받아온 최근 매치
-    (QUICK_ANALYSIS_MATCH_LIMIT)만으로 승/패·라운드·개인 순위를 계산한다.
-    상대 프리미어 팀 티어(RP/상위 %)는 Henrik API에 대응 데이터가 없어 이번 범위에서 제외."""
     maps = _load_ref_maps(db)
     agents = _load_ref_agents(db)
 

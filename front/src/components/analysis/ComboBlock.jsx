@@ -41,24 +41,26 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
       <div className="combo-detail-cols">
         <div>
           <div className="combo-detail-title text-win">BEST</div>
-          {ace?.map((p) => (
-            <div className="combo-detail-row" key={p.name}>
-              <span>{p.name}</span>
+          {/* key 중복 및 undefined 방어 처리 */}
+          {ace?.map((p, idx) => (
+            <div className="combo-detail-row" key={p?.name ? `${p.name}-${idx}` : idx}>
+              <span>{p?.name || '조합'}</span>
               <div className="stats-group">
-                <b>ACS {p.acs}</b>
+                <b>ACS {p?.acs ?? 0}</b>
               </div>
             </div>
           ))}
         </div>
         <div>
           <div className="combo-detail-title text-lose">WORST</div>
-          {weakness?.map((p) => (
-            <div className="combo-detail-row" key={p.name}>
-              <span>{p.name}</span>
+          {/* key 중복 및 undefined 방어 처리 */}
+          {weakness?.map((p, idx) => (
+            <div className="combo-detail-row" key={p?.name ? `${p.name}-${idx}` : idx}>
+              <span>{p?.name || '조합'}</span>
               <div className="stats-group">
-                <b>FD {p.fd}%</b>
+                <b>FD {p?.fd ?? 0}%</b>
                 <span>·</span>
-                <b>ACS {p.acs}</b>
+                <b>ACS {p?.acs ?? 0}</b>
               </div>
             </div>
           ))}

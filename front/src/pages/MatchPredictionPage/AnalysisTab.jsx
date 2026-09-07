@@ -18,16 +18,17 @@ export default function AnalysisTab({ analysis }) {
     rawPlantTime = parseInt(rawPlantTime.replace(/[^0-9]/g, ''), 10) || 0;
   }
 
+  // 기존 맵 데이터 및 요원 조합(combos 등) 유실 방지 복구
   const currentMapData = {
     mapWinRate: rawMapData.mapWinRate ?? 0,
     atkWinRate: rawMapData.attackWinRate ?? 0,
     defWinRate: rawMapData.defenseWinRate ?? 0,
-    preferredSites: { A: 0, B: 0, center: 0 },
+    preferredSites: rawMapData.preferredSites || { A: 0, B: 0, center: 0 },
     avgSpikePlantTime: rawPlantTime,
     matchSample: rawMapData.sampleGames ?? 0,
-    combos: [],
-    comboAce: [],
-    comboWeakness: []
+    combos: rawMapData.combos || [],
+    comboAce: rawMapData.comboAce || rawMapData.bestCombo || [],
+    comboWeakness: rawMapData.comboWeakness || rawMapData.worstCombo || []
   };
 
   const mapInfo = { 
@@ -38,7 +39,6 @@ export default function AnalysisTab({ analysis }) {
 
   const roundInfo = analysis?.roundInfo || {};
   
-  // 퍼스트 블러드 및 디피트 관련 모든 키와 구조를 안전하게 0으로 초기화 및 매핑
   const safeRoundInfo = {
     attackWinRate: roundInfo.attackWinRate ?? 0,
     defenseWinRate: roundInfo.defenseWinRate ?? 0,
@@ -58,7 +58,6 @@ export default function AnalysisTab({ analysis }) {
     ...analysis,
     ...safeRoundInfo,
     roundInfo: safeRoundInfo,
-    // 컴포넌트가 최상위 레벨에서 곧바로 참조하는 경우를 위한 방어 속성 주입
     fbWinRate: safeRoundInfo.fbWinRate,
     fdLoseRate: safeRoundInfo.fdLoseRate,
     fbWin: safeRoundInfo.fbWin,
@@ -68,7 +67,6 @@ export default function AnalysisTab({ analysis }) {
     mapInfo
   };
 
-  console.log("===== FRONTEND ANALYSIS DATA =====", safeAnalysis);
   return (
     <AnalysisSection
       analysis={safeAnalysis}
