@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import TeamMatchRow from './TeamMatchRow';
 
-export default function TeamMatchHistoryList({ matches, total = 10, title = '팀 매치 히스토리' }) {
+export default function TeamMatchHistoryList({ matches = [], total = 10, title = '팀 매치 히스토리' }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? matches : matches.slice(0, 5);
+
   return (
     <div>
       <div className="match-list-head">
