@@ -66,10 +66,25 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
-    return build_quick_analysis(
+    analysis = build_quick_analysis(
         db,
         team_name=team_name,
         team_tag=team_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
+
+    # 상대 프리미어 팀 티어(2번 섹션). division 문자열 가공/등급 매핑은 팀 프로필 페이지
+    # (ProfileHeader.jsx: teamTierKey())와 동일하게 프론트에서 처리하므로 여기서는
+    # raw 값만 내려준다 - placement.points가 division/RP 둘 다의 소스(사용자 확인).
+    placement = team_info.get("placement") or {}
+    customization = team_info.get("customization") or {}
+    points = placement.get("points")
+    analysis["tier"] = {
+        "division": points,
+        "rp": points,
+        "iconUrl": customization.get("image"),
+    }
+
+    print(analysis)
+    return analysis

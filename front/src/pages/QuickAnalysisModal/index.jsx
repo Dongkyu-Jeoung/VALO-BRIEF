@@ -5,7 +5,7 @@ import EmptyImageBox from '../../components/common/EmptyImageBox';
 import LoadingText from '../../components/common/LoadingText';
 import MiniRankTable from '../../components/common/MiniRankTable';
 import ModalTeamSearchBar from '../../components/search/ModalTeamSearchBar';
-import { ratingKey } from '@/utils/ratingKey';
+import { teamTierKey } from '@/utils/gameDataKey';
 import { ROUTES } from '../../constants/routes';
 
 /**
@@ -120,17 +120,12 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
             <div className="tier-row">
               <EmptyImageBox
                 className="tier-badge-img"
-                folder="rating"
-                assetKey={ratingKey(data.tier.division)}
+                src={data.tier.iconUrl}
                 label={`TIER\nICON\nIMAGE`}
               />
               <div className="tier-info">
-                <div className="tdiv">{data.tier.division}</div>
+                <div className="tdiv">{teamTierKey(data.tier.division) ?? data.tier.division}</div>
                 <div className="trp">{data.tier.rp.toLocaleString()} RP</div>
-              </div>
-              <div className="barplot-wrap">
-                <div className="barplot-track"><div className="barplot-fill" style={{ width: `${100 - data.tier.topPercent}%` }} /></div>
-                <span className="barplot-label">상위 {data.tier.topPercent}%</span>
               </div>
             </div>
           </div>

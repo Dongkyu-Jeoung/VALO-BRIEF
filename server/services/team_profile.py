@@ -291,7 +291,7 @@ def build_quick_analysis(
     """QuickAnalysisModal(3초 상대분석 팝업)이 필요로 하는 최근 N게임 요약 JSON을 조립.
     build_team_profile과 달리 전체 시즌 누적이 아니라 실제로 받아온 최근 매치
     (QUICK_ANALYSIS_MATCH_LIMIT)만으로 승/패·라운드·개인 순위를 계산한다.
-    상대 프리미어 팀 티어(RP/상위 %)는 Henrik API에 대응 데이터가 없어 이번 범위에서 제외."""
+    상대 프리미어 팀 티어(상위 %)는 Henrik API에 대응 데이터가 없어 이번 범위에서 제외."""
     maps = _load_ref_maps(db)
     agents = _load_ref_agents(db)
 
