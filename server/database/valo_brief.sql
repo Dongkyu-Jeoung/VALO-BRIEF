@@ -5,9 +5,38 @@
 -- 이 파일 하나로 DB 생성부터 전체 테이블·참조 데이터까지 한 번에 구성됩니다.
 
 -- 테이블 생성 순서는 FK 의존관계를 따릅니다:
---   premier_tiers → ref_maps/ref_agents/ref_weapons → teams → riot_accounts
---   → team_members → matches → match_player_stats → team_stats_summary
---   → player_stats_summary → predictions → insights → rank_snapshots
+--   ref_maps/ref_agents/ref_weapons/ref_player_cards/ref_player_titles → teams
+--   → riot_accounts → matches → match_player_stats
+--   → team_stats_summary/player_stats_summary → predictions → insights
+--
+-- 2026-09-08 재정리 (7차 재검토 - 상세 근거는 server/우리팀_기능_구현_가이드.md):
+--   - team_members 테이블 제거. 팀 대표자를 개인 계정 단위로 지정하기가 실무적으로
+--     어려워서(누가 대표인지 정하기 애매함), 팀 인증을 team_name/team_tag 기준으로만
+--     하기로 최종 결정했습니다 - 그러면 "이 팀의 대표 Riot 계정이 누구인지"를 매핑해둘
+--     이유가 없어집니다.
+--   - teams: tier_id/season/conference 컬럼 제거(같은 이유), team_image 컬럼 추가
+--     (Henrik customization.image 팀 로고 URL), team_id를 AUTO_INCREMENT INT에서
+--     VARCHAR(64)로 변경. division/ranking_points는 유지.
+--     ※ premier_team_id는 별도 컬럼으로 안 남기고 team_id 자체로 흡수했습니다 -
+--     team_id 값 자체가 Henrik 프리미어 팀의 실제 id입니다(회원가입 시
+--     services/henrik_api.get_premier_team(team_name, team_tag) 조회 결과의 id를
+--     그대로 씀 - routers/auth.py 참고). 즉 team_name/team_tag가 실제 존재하는
+--     프리미어 팀이어야만 가입이 됩니다.
+--   - team_id 타입 변경에 맞춰 이를 참조하던 모든 FK 컬럼(team_stats_summary.team_id,
+--     matches.team_a_id/team_b_id/winner_team_id, match_player_stats.team_id,
+--     predictions.team_a_id/team_b_id, insights.team_id/opponent_team_id)도 전부
+--     VARCHAR(64)로 함께 변경했습니다.
+--
+-- 2026-09-08 프론트 소스 대조 (우리팀_기능_구현_가이드.md 4-2/4-3번) 반영:
+--   - matches: rounds_won_a/rounds_won_b 추가 (TeamMatchRow.jsx의 match.roundScore 대응).
+--   - match_player_stats: is_mvp 추가 (TeamMatchRow.jsx의 match.mvp 대응).
+--   - teams: verified/verified_at 추가 - 팀 대표 개인 계정이 없어져서 riot_accounts에
+--     있던 인증 상태를 팀 단위(team_name/team_tag)로 옮겼습니다.
+--   - riot_accounts: verification_status/verified_at 제거 (위 이유로 더 이상 팀 단위
+--     계정에서 쓸 근거가 없음).
+-- 이미 RDS에 생성되어 있는 DB에는 이 파일 맨 아래 "마이그레이션" 섹션의 SQL을
+-- 실행하세요 (team_id 타입이 바뀌면서 여러 테이블의 FK를 순서대로 내렸다 올리는
+-- 다단계 마이그레이션입니다 - 실행 전 꼭 검토하세요).
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -24,22 +53,7 @@ USE valobrief;
 SET NAMES utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 1. PREMIER_TIERS  (프리미어 티어 기준 테이블 - 정적 참조 데이터)
--- ---------------------------------------------------------------------
-CREATE TABLE premier_tiers (
-    tier_id             INT             NOT NULL AUTO_INCREMENT,
-    name_kr             VARCHAR(30)     NOT NULL COMMENT '한글 티어명 (예: 디비전 3)',
-    name_en             VARCHAR(30)     NOT NULL COMMENT '영문 티어명',
-    sub_division_range  VARCHAR(20)     NULL COMMENT '세부 구간 (예: 1~5)',
-    tier_order          INT             NOT NULL COMMENT '정렬 순서 (낮을수록 상위 티어)',
-    image_path          VARCHAR(255)    NULL COMMENT '티어 문양 이미지 경로',
-    PRIMARY KEY (tier_id),
-    UNIQUE KEY uq_premier_tiers_order (tier_order)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='프리미어 티어 기준 정보';
-
--- ---------------------------------------------------------------------
--- 2. REF_MAPS / REF_AGENTS / REF_WEAPONS  (요원·무기·맵 GUID 참조 테이블)
+-- 1. REF_MAPS / REF_AGENTS / REF_WEAPONS  (요원·무기·맵 GUID 참조 테이블)
 -- ---------------------------------------------------------------------
 -- 데이터 출처 및 검증 방법:
 --   맵     : valorant-api.com/v1/maps 실제 응답을 직접 fetch, mapUrl 필드를
@@ -179,7 +193,7 @@ INSERT INTO ref_weapons (uuid, display_name, name_ko, category, base_cost, verif
 ('a03b24d3-4319-996d-0f8c-94bbfba1dfc7','Operator','오퍼레이터','Sniper',4700,'datasci');
 
 -- ---------------------------------------------------------------------
--- 2-1. REF_PLAYER_CARDS / REF_PLAYER_TITLES  (프로필 아바타/칭호 참조 테이블)
+-- 1-1. REF_PLAYER_CARDS / REF_PLAYER_TITLES  (프로필 아바타/칭호 참조 테이블)
 --
 -- ref_agents/ref_maps/ref_weapons와 달리 개수가 많아(카드 982개, 칭호 415개, 계속 늘어남)
 -- 전체를 미리 시드하지 않는다. Henrik account API가 puuid마다 card/title uuid를 주면,
@@ -205,36 +219,51 @@ CREATE TABLE ref_player_titles (
   COMMENT='플레이어 칭호 참조 테이블(텍스트만, 이미지 없음) - 최초 조회 시 캐싱';
 
 -- ---------------------------------------------------------------------
--- 3. TEAMS  (팀 단위 계정 - 회원가입/로그인/팀 프로필 겸용)
+-- 2. TEAMS  (팀 단위 계정 - 회원가입/로그인/팀 프로필 겸용)
+--
+-- 2026-09-08 재정리 (7차 재검토 - server/우리팀_기능_구현_가이드.md 참고):
+--   - tier_id/season/conference 컬럼 제거. 팀 인증을 대표 개인 계정이 아니라
+--     team_name/team_tag 기준으로 하기로 하면서(대표자를 지정하기 어렵다는 실무 이유)
+--     별도로 안 들고 있어도 되는 값들이 됨.
+--   - division/ranking_points는 유지 (13번 재검토와 달리 이번엔 유지로 확정 - 팀 프로필
+--     헤더에 캐싱해서 보여줄 값으로 남겨둠).
+--   - team_image 신규 추가 - Henrik 프리미어 API의 customization.image(팀 로고) 원격
+--     URL을 그대로 저장 (front ProfileHeader.jsx의 avatarUrl prop과 동일 개념,
+--     services/team_profile.py의 ratingIconUrl과 같은 소스).
+--   - team_id: AUTO_INCREMENT INT → VARCHAR(64)로 변경하면서 premier_team_id 컬럼을
+--     따로 두지 않고 team_id 자체가 그 값을 갖도록 흡수했다. 즉 회원가입 시
+--     services/henrik_api.get_premier_team(team_name, team_tag)로 실제 프리미어 팀을
+--     조회해서 그 응답의 id를 그대로 team_id로 쓴다(routers/auth.py의 signup() 참고) -
+--     team_name/team_tag가 실제 존재하는 프리미어 팀이 아니면 애초에 team_id를 정할 수
+--     없어 가입 자체가 실패한다. 이 변경 때문에 teams.team_id를 참조하는 다른
+--     테이블들의 FK 컬럼도 전부 VARCHAR(64)로 같이 바뀐다(team_stats_summary.team_id,
+--     matches.team_a_id/team_b_id/winner_team_id, match_player_stats.team_id,
+--     predictions.team_a_id/team_b_id, insights.team_id/opponent_team_id).
 -- ---------------------------------------------------------------------
 CREATE TABLE teams (
-    team_id             INT             NOT NULL AUTO_INCREMENT,
+    team_id             VARCHAR(64)     NOT NULL COMMENT 'Henrik 프리미어 팀 API(get_premier_team) 응답의 id를 그대로 사용 (회원가입 시 team_name/team_tag로 조회)',
     email               VARCHAR(255)    NOT NULL,
     login_id            VARCHAR(50)     NOT NULL,
     password_hash       VARCHAR(255)    NOT NULL,
     privacy_agreed      BOOLEAN         NOT NULL DEFAULT FALSE,
     team_name           VARCHAR(50)     NOT NULL,
     team_tag            VARCHAR(10)     NOT NULL,
-    premier_team_id     VARCHAR(64)     NULL COMMENT 'Henrik/Riot 프리미어 team_id (외부 식별자)',
-    tier_id             INT             NULL COMMENT 'premier_tiers 참조',
-    season              VARCHAR(20)     NULL,
-    conference          VARCHAR(50)     NULL,
-    division            VARCHAR(20)     NULL,
+    team_image          VARCHAR(255)    NULL COMMENT '팀 로고 - Henrik 프리미어 API customization.image 원격 URL',
+    verified            BOOLEAN         NOT NULL DEFAULT FALSE
+                                        COMMENT 'team_name/team_tag가 실제 Henrik 프리미어 팀으로 확인됐는지 (팀 단위 인증 - 우리팀_기능_구현_가이드.md 4-3번)',
+    verified_at         DATETIME        NULL,
+    division             VARCHAR(20)    NULL,
     ranking_points      INT             NOT NULL DEFAULT 0,
     created_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (team_id),
     UNIQUE KEY uq_teams_login_id (login_id),
     UNIQUE KEY uq_teams_email (email),
-    UNIQUE KEY uq_teams_name_tag (team_name, team_tag),
-    KEY idx_teams_tier (tier_id),
-    CONSTRAINT fk_teams_tier
-        FOREIGN KEY (tier_id) REFERENCES premier_tiers (tier_id)
-        ON DELETE SET NULL ON UPDATE CASCADE
+    UNIQUE KEY uq_teams_name_tag (team_name, team_tag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='팀 단위 계정 (개인 로그인 없음, op.gg 스타일)';
 
 -- ---------------------------------------------------------------------
--- 4. RIOT_ACCOUNTS  (로스터 개인 Riot 계정 - 서비스 로그인과 무관)
+-- 3. RIOT_ACCOUNTS  (로스터 개인 Riot 계정 - 서비스 로그인과 무관)
 -- ---------------------------------------------------------------------
 CREATE TABLE riot_accounts (
     puuid               VARCHAR(64)     NOT NULL COMMENT 'Riot PUUID (고정키)',
@@ -247,10 +276,6 @@ CREATE TABLE riot_accounts (
     avatar_url           VARCHAR(255)    NULL COMMENT '프로필 카드 아바타 이미지 URL (ref_player_cards로 변환된 값)',
     current_rank        VARCHAR(30)     NULL COMMENT 'Henrik mmr API current.tier.name',
     current_rr          INT             NULL COMMENT 'Henrik mmr API current.rr',
-    verification_status ENUM('none','pending','verified','failed')
-                                        NOT NULL DEFAULT 'none'
-                                        COMMENT '팀 대표 계정만 실질적으로 사용',
-    verified_at         DATETIME        NULL,
     updated_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                         ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (puuid),
@@ -259,40 +284,28 @@ CREATE TABLE riot_accounts (
   COMMENT='Riot 개인 계정 (로스터 구성원)';
 
 -- ---------------------------------------------------------------------
--- 5. TEAM_MEMBERS  (팀 로스터 매핑)
--- ---------------------------------------------------------------------
-CREATE TABLE team_members (
-    team_member_id      INT             NOT NULL AUTO_INCREMENT,
-    team_id             INT             NOT NULL,
-    puuid               VARCHAR(64)     NOT NULL,
-    is_representative   BOOLEAN         NOT NULL DEFAULT FALSE COMMENT '팀 계정 소유 검증 대상',
-    is_starter          BOOLEAN         NOT NULL DEFAULT TRUE,
-    role_type_override  VARCHAR(20)     NULL COMMENT '역할군 자동매핑 override용',
-    joined_at           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (team_member_id),
-    UNIQUE KEY uq_team_members_team_puuid (team_id, puuid),
-    KEY idx_team_members_puuid (puuid),
-    CONSTRAINT fk_team_members_team
-        FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_team_members_riot_account
-        FOREIGN KEY (puuid) REFERENCES riot_accounts (puuid)
-        ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='팀 로스터';
-
--- ---------------------------------------------------------------------
--- 6. MATCHES  (매치 메타데이터 + 라운드/킬 원본 JSON)
---    ※ map_name(varchar) 대신 map_uuid(FK → ref_maps)로 최종 구성
+-- 4. MATCHES  (매치 메타데이터 캐시)
+--    ※ map_name(varchar) 대신 map_uuid(FK → ref_maps)로 구성
+--
+-- 2026-09-07: 한 번 DROP 후보(코드에서 안 쓴다는 이유)였다가 되돌림 - "우리팀 로스터
+-- 멤버 스탯"을 보여주는 화면(우리팀 분석, 3초 상대분석 등)마다 매번 Henrik 매치 상세
+-- (v2/match, 건당 ~1.3MB)를 실시간으로 다시 불러오면 성능 부담이 크다는 지적을 받아
+-- 되살렸다. Henrik이 이미 원본을 갖고 있으니 여기서는 "다시 파싱할 필요 없이 로컬에서
+-- 바로 집계"하기 위한 캐시로 쓴다 - match_player_stats/team_stats_summary/
+-- player_stats_summary를 채우는 원본 소스 (server/우리팀_기능_구현_가이드.md 참고).
+-- 아직 이 테이블에 쓰는 서비스 코드는 없음 - 우리팀 로스터 스탯 캐싱 기능을 구현할 때
+-- Henrik에서 가져온 매치 상세를 여기 저장하는 로직과 함께 만들면 됨.
 -- ---------------------------------------------------------------------
 CREATE TABLE matches (
     match_id            VARCHAR(64)     NOT NULL COMMENT 'Riot match id (UUID)',
     map_uuid            VARCHAR(64)     NULL COMMENT 'REF_MAPS.uuid 참조',
     mode                VARCHAR(30)     NULL,
     game_start          DATETIME        NULL,
-    team_a_id           INT             NULL,
-    team_b_id           INT             NULL,
-    winner_team_id      INT             NULL,
+    team_a_id           VARCHAR(64)     NULL,
+    team_b_id           VARCHAR(64)     NULL,
+    winner_team_id      VARCHAR(64)     NULL,
+    rounds_won_a        INT             NULL COMMENT 'team_a_id 팀이 획득한 라운드 수',
+    rounds_won_b        INT             NULL COMMENT 'team_b_id 팀이 획득한 라운드 수',
     round_detail_json   JSON            NULL COMMENT '라운드/킬/데미지 원본 (필요시에만 파싱)',
     api_source          VARCHAR(30)     NULL COMMENT '예: premier_history, v4_matches',
     collected_at        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -315,18 +328,22 @@ CREATE TABLE matches (
         FOREIGN KEY (winner_team_id) REFERENCES teams (team_id)
         ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='매치 메타데이터';
+  COMMENT='매치 메타데이터 캐시';
 
 -- ---------------------------------------------------------------------
--- 7. MATCH_PLAYER_STATS  (매치별 선수 집계 스탯)
+-- 5. MATCH_PLAYER_STATS  (매치별 선수 집계 스탯 캐시)
 --    ※ agent(varchar) → agent_uuid(FK → ref_agents)
 --    ※ most_used_weapon(varchar) → most_used_weapon_uuid(FK → ref_weapons)
+--
+-- matches와 같은 이유로 유지 - 팀 로스터 멤버별 스탯(무기/역할/킬·데스 등)을 매번
+-- Henrik 매치 상세에서 다시 파싱하지 않고 이미 파싱해둔 값을 바로 읽기 위한 캐시.
 -- ---------------------------------------------------------------------
 CREATE TABLE match_player_stats (
     stat_id                 INT             NOT NULL AUTO_INCREMENT,
     match_id                VARCHAR(64)     NOT NULL,
     puuid                   VARCHAR(64)     NOT NULL,
-    team_id                 INT             NULL,
+    team_id                 VARCHAR(64)     NULL,
+    is_mvp                  BOOLEAN         NOT NULL DEFAULT FALSE COMMENT '그 매치에서 team_id 로스터 내 MVP였는지',
     agent_uuid              VARCHAR(64)     NULL COMMENT 'REF_AGENTS.uuid 참조',
     role_type               VARCHAR(20)     NULL COMMENT '타격대/척후대/감시자/전략가',
     side                    VARCHAR(10)     NULL COMMENT 'Attack/Defense 등',
@@ -363,14 +380,25 @@ CREATE TABLE match_player_stats (
         FOREIGN KEY (most_used_weapon_uuid) REFERENCES ref_weapons (uuid)
         ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='매치별 선수 집계 스탯';
+  COMMENT='매치별 선수 집계 스탯 캐시';
 
 -- ---------------------------------------------------------------------
--- 8. TEAM_STATS_SUMMARY  (팀 단위 집계: 맵/사이드/조합 등)
+-- 6. TEAM_STATS_SUMMARY  (팀 단위 집계: 맵/사이드/조합/라운드페이즈/교전 등)
+--
+-- 2026-09-07: 한 번 DROP 후보로 분류했다가 되돌림 - "3초 상대분석 리포트"(QuickAnalysisModal),
+-- "상대팀 vs 우리팀 분석"(MatchPredictionPage AnalysisTab), "우리팀 맞춤 전략 제안"
+-- (MyTeamAnalysisPage/MatchPredictionPage AiReportTab)이 아직 백엔드 미구현이라 실제
+-- 코드에서는 안 쓰지만, front/src/mocks/prediction.mock.js의 analysis.roundInfo/
+-- mapInfoByMap/engagementInfo, front/src/mocks/myTeam.mock.js의 myTeamAnalysisMock이
+-- 이 테이블의 stat_type(map_side/agent/composition/round_phase/engagement) 구조와
+-- 그대로 대응된다. "3초" 안에 응답해야 하는 화면이라 매번 Henrik 매치 상세를 다시 불러
+-- 실시간 집계하기엔 느려서(팀당 매치 1건 ~1.3MB, team_profile.py 주석 참고), 이 집계
+-- 결과를 미리 계산해 캐싱해두는 용도로 필요하다고 판단해 유지한다. matches/
+-- match_player_stats에 캐싱해둔 원본으로부터 이 집계를 계산한다.
 -- ---------------------------------------------------------------------
 CREATE TABLE team_stats_summary (
     summary_id          INT             NOT NULL AUTO_INCREMENT,
-    team_id             INT             NOT NULL,
+    team_id             VARCHAR(64)     NOT NULL,
     stat_type           ENUM('map_side','agent','composition','round_phase','engagement')
                                         NOT NULL,
     dimension_key       VARCHAR(100)    NOT NULL
@@ -389,7 +417,13 @@ CREATE TABLE team_stats_summary (
   COMMENT='팀 단위 집계 통계';
 
 -- ---------------------------------------------------------------------
--- 9. PLAYER_STATS_SUMMARY  (개인 단위 집계: 무기/히트박스/클러치 등)
+-- 7. PLAYER_STATS_SUMMARY  (개인 단위 집계: 무기/히트박스/클러치/역할매치업/교전 등)
+--
+-- team_stats_summary와 같은 이유로 유지 - front/src/mocks/myTeam.mock.js의
+-- myTeamPlayerDetailMock.aim(hitzones/weapons/clutch), .engagement가 이 테이블의
+-- stat_type(weapon/hitbox/clutch/role_matchup/engagement)과 1:1로 대응된다
+-- ("우리팀 맞춤 전략 제안"의 선수별 피드백 카드용 데이터). matches/match_player_stats에
+-- 캐싱해둔 원본으로부터 이 집계를 계산한다.
 -- ---------------------------------------------------------------------
 CREATE TABLE player_stats_summary (
     summary_id          INT             NOT NULL AUTO_INCREMENT,
@@ -410,13 +444,15 @@ CREATE TABLE player_stats_summary (
   COMMENT='개인 단위 집계 통계';
 
 -- ---------------------------------------------------------------------
--- 10. PREDICTIONS  (승부 예측 결과 - Layer1 모델 산출값)
---     ※ map_name(varchar) → map_uuid(FK → ref_maps)
+-- 8. PREDICTIONS  (승부 예측 결과 - Layer1 모델 산출값)
+--    현재는 ml/predictor.py가 매 요청마다 실시간으로 계산만 하고 이 테이블에 쓰지는
+--    않는다. 모델 정확도 추적(actual_result)을 실제로 시작할 때 연동 예정.
+--    ※ map_name(varchar) → map_uuid(FK → ref_maps)
 -- ---------------------------------------------------------------------
 CREATE TABLE predictions (
     prediction_id       INT             NOT NULL AUTO_INCREMENT,
-    team_a_id           INT             NOT NULL,
-    team_b_id           INT             NOT NULL,
+    team_a_id           VARCHAR(64)     NOT NULL,
+    team_b_id           VARCHAR(64)     NOT NULL,
     map_uuid             VARCHAR(64)    NULL COMMENT 'REF_MAPS.uuid 참조',
     predicted_winrate_a FLOAT           NOT NULL,
     predicted_winrate_b FLOAT           NOT NULL,
@@ -441,12 +477,14 @@ CREATE TABLE predictions (
   COMMENT='승부 예측 모델(Layer1) 결과';
 
 -- ---------------------------------------------------------------------
--- 11. INSIGHTS  (AI 리포트 - 팀/개인 서술형 결과, Layer2)
+-- 9. INSIGHTS  (AI 리포트 - 팀/개인 서술형 결과, Layer2)
+--    my-team 분석/AI 리포트 화면(front MyTeamAnalysisPage, AiReportCard 등)은 이미
+--    스캐폴딩돼 있으나 백엔드 연동 전이라 아직 이 테이블에 쓰지 않는다.
 -- ---------------------------------------------------------------------
 CREATE TABLE insights (
     insight_id          INT             NOT NULL AUTO_INCREMENT,
-    team_id             INT             NOT NULL,
-    opponent_team_id    INT             NULL COMMENT '매치업 리포트일 때만 사용',
+    team_id             VARCHAR(64)     NOT NULL,
+    opponent_team_id    VARCHAR(64)     NULL COMMENT '매치업 리포트일 때만 사용',
     target_type         ENUM('team','player')  NOT NULL DEFAULT 'team',
     target_puuid        VARCHAR(64)     NULL COMMENT 'target_type=player일 때만 사용',
     insight_type        VARCHAR(30)     NULL COMMENT 'weakness, strategy, personal_feedback, agent_comment',
@@ -468,36 +506,136 @@ CREATE TABLE insights (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='AI 리포트(Layer2) - 팀/개인 서술형 결과';
 
--- ---------------------------------------------------------------------
--- 12. RANK_SNAPSHOTS  (팀/개인 랭크 추이 - 폴리모픽 참조)
--- ---------------------------------------------------------------------
--- owner_type + owner_id 조합으로 teams.team_id 또는 riot_accounts.puuid를
--- 가리키는 폴리모픽 구조입니다. 대상 테이블이 둘로 나뉘어 있어
--- 일반적인 단일 FK 제약을 걸 수 없으므로, 무결성은 애플리케이션(백엔드) 레벨에서
--- 보장해야 합니다 (owner_type='team'이면 teams.team_id, 'player'면 riot_accounts.puuid 존재 검증).
-CREATE TABLE rank_snapshots (
-    snapshot_id         INT             NOT NULL AUTO_INCREMENT,
-    owner_type          ENUM('team','player')  NOT NULL,
-    owner_id            VARCHAR(64)     NOT NULL COMMENT 'team_id 또는 puuid (폴리모픽, FK 제약 없음)',
-    tier_or_division    VARCHAR(30)     NULL,
-    points              INT             NULL,
-    snapshot_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (snapshot_id),
-    KEY idx_rank_snapshots_owner (owner_type, owner_id, snapshot_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='팀/개인 랭크·RP 추이 스냅샷 (폴리모픽)';
-
--- =====================================================================
--- 참고: 자주 쓰게 될 조인 예시
---
--- 매치 선수 스탯을 사람이 읽을 수 있는 이름으로 조회:
--- SELECT mps.stat_id, ra.display_name AS agent_name, ra.role_type,
---        rw.display_name AS weapon_name, m.map_uuid, rm.display_name AS map_name
--- FROM match_player_stats mps
--- LEFT JOIN ref_agents  ra ON mps.agent_uuid = ra.uuid
--- LEFT JOIN ref_weapons rw ON mps.most_used_weapon_uuid = rw.uuid
--- JOIN matches m ON mps.match_id = m.match_id
--- LEFT JOIN ref_maps rm ON m.map_uuid = rm.uuid;
 -- =====================================================================
 -- 끝
 -- =====================================================================
+
+
+-- #######################################################################
+-- 마이그레이션 (이미 생성되어 있는 RDS DB에 적용)
+--
+-- 위 CREATE TABLE 문들은 "새 DB를 처음부터 만들 때" 기준 최종 스키마입니다.
+-- 이미 예전 스키마로 생성되어 데이터가 들어있는 RDS에는 파일 맨 위 DROP DATABASE부터
+-- 다시 실행하면 안 되고, 아래 ALTER/DROP 문만 한 번 실행해서 같은 상태로 맞추면 됩니다.
+-- (분석 근거: server/우리팀_기능_구현_가이드.md)
+-- #######################################################################
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 1) 팀 대표자를 개인 계정 단위로 지정하기 어렵다는 실무 이유로, 팀 인증을
+--    team_name/team_tag 기준으로만 하기로 하면서 team_members(로스터/대표자 매핑)를
+--    완전히 제거합니다.
+DROP TABLE IF EXISTS team_members;
+
+-- 2) rank_snapshots 제거 - 랭크 추이 저장하는 코드/화면이 없고, Henrik mmr-history
+--    (by_season)가 이미 Act별 최종 티어 이력을 제공해서 대체할 필요가 없습니다.
+DROP TABLE IF EXISTS rank_snapshots;
+
+-- 3) teams.team_id를 참조하는 모든 FK를 먼저 제거합니다 - 이후 team_id 컬럼 타입을
+--    INT(AUTO_INCREMENT) -> VARCHAR(64)로 바꾸려면 이걸 참조하는 컬럼들의 FK가 먼저
+--    없어져야 합니다.
+ALTER TABLE team_stats_summary DROP FOREIGN KEY fk_tss_team;
+ALTER TABLE matches
+    DROP FOREIGN KEY fk_matches_team_a,
+    DROP FOREIGN KEY fk_matches_team_b,
+    DROP FOREIGN KEY fk_matches_winner;
+ALTER TABLE match_player_stats DROP FOREIGN KEY fk_mps_team;
+ALTER TABLE predictions
+    DROP FOREIGN KEY fk_predictions_team_a,
+    DROP FOREIGN KEY fk_predictions_team_b;
+ALTER TABLE insights
+    DROP FOREIGN KEY fk_insights_team,
+    DROP FOREIGN KEY fk_insights_opponent;
+
+-- 4) teams: premier_team_id/tier_id/season/conference 컬럼 제거(팀 인증을
+--    team_name/team_tag 기준으로만 하기로 하면서 외부 프리미어 팀 ID를 별도로 안
+--    들고 있어도 됨 - division/ranking_points는 유지), team_image 컬럼 추가(Henrik
+--    customization.image 팀 로고 URL), team_id를 AUTO_INCREMENT INT에서 애플리케이션이
+--    직접 채우는 VARCHAR(64)로 변경. premier_team_id/tier_id/season/conference는 현재
+--    운영 RDS에서 팀 4개 전부 NULL인 것을 확인했으므로 안전합니다.
+ALTER TABLE teams
+    DROP FOREIGN KEY fk_teams_tier,
+    DROP COLUMN premier_team_id,
+    DROP COLUMN tier_id,
+    DROP COLUMN season,
+    DROP COLUMN conference,
+    ADD COLUMN team_image VARCHAR(255) NULL COMMENT '팀 로고 - Henrik 프리미어 API customization.image 원격 URL' AFTER team_tag,
+    MODIFY COLUMN team_id VARCHAR(64) NOT NULL COMMENT 'Henrik 프리미어 팀 API(get_premier_team) 응답의 id를 그대로 사용 (회원가입 시 team_name/team_tag로 조회)';
+-- team_id는 INT -> VARCHAR 전환이라 기존 값(예: 3)은 MySQL이 문자열('3')로 그대로
+-- 보존합니다 - 기존 4개 팀 행이 사라지지 않습니다. 다만 이후 신규 가입 팀부터는
+-- routers/auth.py의 signup()이 henrik_api.get_premier_team()으로 조회한 실제
+-- premier team id를 services/auth.py의 create_team()에 넘겨서 team_id로 씁니다
+-- (AUTO_INCREMENT가 더 이상 동작하지 않음 - team_name/team_tag가 실제 프리미어 팀이
+-- 아니면 가입 자체가 실패합니다).
+
+-- 5) teams.tier_id가 참조하던 premier_tiers도 함께 제거 (참조하는 컬럼이 없어짐)
+DROP TABLE IF EXISTS premier_tiers;
+
+-- 6) teams.team_id를 참조하던 컬럼들도 같은 타입(VARCHAR(64))으로 맞춰 변경합니다.
+ALTER TABLE team_stats_summary MODIFY COLUMN team_id VARCHAR(64) NOT NULL;
+ALTER TABLE matches
+    MODIFY COLUMN team_a_id VARCHAR(64) NULL,
+    MODIFY COLUMN team_b_id VARCHAR(64) NULL,
+    MODIFY COLUMN winner_team_id VARCHAR(64) NULL;
+ALTER TABLE match_player_stats MODIFY COLUMN team_id VARCHAR(64) NULL;
+ALTER TABLE predictions
+    MODIFY COLUMN team_a_id VARCHAR(64) NOT NULL,
+    MODIFY COLUMN team_b_id VARCHAR(64) NOT NULL;
+ALTER TABLE insights
+    MODIFY COLUMN team_id VARCHAR(64) NOT NULL,
+    MODIFY COLUMN opponent_team_id VARCHAR(64) NULL;
+
+-- 7) 3)에서 내렸던 FK들을 새 타입 기준으로 다시 겁니다.
+ALTER TABLE team_stats_summary
+    ADD CONSTRAINT fk_tss_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE matches
+    ADD CONSTRAINT fk_matches_team_a FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    ADD CONSTRAINT fk_matches_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    ADD CONSTRAINT fk_matches_winner FOREIGN KEY (winner_team_id) REFERENCES teams (team_id)
+        ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE match_player_stats
+    ADD CONSTRAINT fk_mps_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
+        ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE predictions
+    ADD CONSTRAINT fk_predictions_team_a FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE insights
+    ADD CONSTRAINT fk_insights_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    ADD CONSTRAINT fk_insights_opponent FOREIGN KEY (opponent_team_id) REFERENCES teams (team_id)
+        ON DELETE SET NULL ON UPDATE CASCADE;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- 8) riot_accounts.verification_status/verified_at은 원래 "팀 대표 계정" 인증용이었는데
+--    team_members가 없어지면서 그 근거가 사라졌습니다. 팀 인증은 team_name/team_tag를
+--    Henrik 프리미어 팀 API로 조회하는 방식(teams.verified/verified_at)으로 옮깁니다
+--    (우리팀_기능_구현_가이드.md 4-3번 참고).
+ALTER TABLE teams
+    ADD COLUMN verified BOOLEAN NOT NULL DEFAULT FALSE
+        COMMENT 'team_name/team_tag가 실제 Henrik 프리미어 팀으로 확인됐는지 (팀 단위 인증 - 우리팀_기능_구현_가이드.md 4-3번)' AFTER team_image,
+    ADD COLUMN verified_at DATETIME NULL AFTER verified;
+ALTER TABLE riot_accounts
+    DROP COLUMN verification_status,
+    DROP COLUMN verified_at;
+
+-- 9) 프론트 TeamMatchRow.jsx가 라운드 스코어(match.roundScore)와 매치별 MVP
+--    (match.mvp)를 표시하는데 대응하는 컬럼이 없었습니다 (우리팀_기능_구현_가이드.md
+--    4-2번 참고).
+ALTER TABLE matches
+    ADD COLUMN rounds_won_a INT NULL COMMENT 'team_a_id 팀이 획득한 라운드 수' AFTER winner_team_id,
+    ADD COLUMN rounds_won_b INT NULL COMMENT 'team_b_id 팀이 획득한 라운드 수' AFTER rounds_won_a;
+ALTER TABLE match_player_stats
+    ADD COLUMN is_mvp BOOLEAN NOT NULL DEFAULT FALSE COMMENT '그 매치에서 team_id 로스터 내 MVP였는지' AFTER team_id;
+
+-- 참고: predictions, insights, ref_weapons, matches, match_player_stats,
+-- team_stats_summary, player_stats_summary는 현재 코드에서 아직 안 쓰지만 이미
+-- 스캐폴딩되었거나(AI 리포트 프론트 컴포넌트) mock 데이터 구조가 그대로
+-- 대응되거나(예측 정확도 추적, 무기별 스탯, 3초 상대분석/우리팀 분석/전략 제안)
+-- 성능상 라이브 조회 대신 캐싱이 필요한(매치 원본) 기능과 바로 연결되므로 남겨둡니다.
+-- 각 테이블이 실제로 어느 화면에 연결될지는 우리팀_기능_구현_가이드.md 1번 항목 참고.

@@ -3,9 +3,10 @@
 card/title은 uuid라 그대로 노출하면 안 되고, ref_player_cards/ref_player_titles에
 DB 캐시가 있으면 그대로 쓰고 없으면 valorant-api.com에서 한 번 조회해 캐싱한다.
 """
-from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from models.cosmetics import RefPlayerCard, RefPlayerTitle
 from services import valorant_api
 
 
@@ -14,29 +15,23 @@ async def resolve_card(db: Session, uuid: str | None) -> str | None:
     if not uuid:
         return None
 
-    row = db.execute(
-        text("SELECT display_icon FROM ref_player_cards WHERE uuid = :uuid"),
-        {"uuid": uuid},
-    ).mappings().first()
-    if row:
-        return row["display_icon"]
+    cached = db.get(RefPlayerCard, uuid)
+    if cached is not None:
+        return cached.display_icon
 
     card = await valorant_api.get_player_card(uuid)
     if not card:
         return None
 
     display_icon = card.get("displayIcon")
-    db.execute(
-        text(
-            """
-            INSERT INTO ref_player_cards (uuid, name_ko, display_icon)
-            VALUES (:uuid, :name_ko, :display_icon)
-            ON DUPLICATE KEY UPDATE name_ko = VALUES(name_ko), display_icon = VALUES(display_icon)
-            """
-        ),
-        {"uuid": uuid, "name_ko": card.get("displayName"), "display_icon": display_icon},
-    )
-    db.commit()
+    db.add(RefPlayerCard(uuid=uuid, name_ko=card.get("displayName"), display_icon=display_icon))
+    try:
+        db.commit()
+    except IntegrityError:
+        # 동시 요청이 먼저 캐싱한 경우 - 그 값을 그대로 쓴다
+        db.rollback()
+        existing = db.get(RefPlayerCard, uuid)
+        return existing.display_icon if existing else display_icon
     return display_icon
 
 
@@ -45,27 +40,20 @@ async def resolve_title(db: Session, uuid: str | None) -> str | None:
     if not uuid:
         return None
 
-    row = db.execute(
-        text("SELECT title_ko FROM ref_player_titles WHERE uuid = :uuid"),
-        {"uuid": uuid},
-    ).mappings().first()
-    if row:
-        return row["title_ko"]
+    cached = db.get(RefPlayerTitle, uuid)
+    if cached is not None:
+        return cached.title_ko
 
     title = await valorant_api.get_player_title(uuid)
     if not title:
         return None
 
     title_ko = title.get("titleText") or title.get("displayName")
-    db.execute(
-        text(
-            """
-            INSERT INTO ref_player_titles (uuid, title_ko)
-            VALUES (:uuid, :title_ko)
-            ON DUPLICATE KEY UPDATE title_ko = VALUES(title_ko)
-            """
-        ),
-        {"uuid": uuid, "title_ko": title_ko},
-    )
-    db.commit()
+    db.add(RefPlayerTitle(uuid=uuid, title_ko=title_ko))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.get(RefPlayerTitle, uuid)
+        return existing.title_ko if existing else title_ko
     return title_ko

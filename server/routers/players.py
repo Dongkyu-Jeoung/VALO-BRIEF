@@ -28,7 +28,7 @@ async def get_player_profile(riot_name: str, riot_tag: str, db: Session = Depend
     account/mmr_history/matches를 전부 동시에 호출하고, 모르면 계정 조회로 region을
     먼저 확정한 뒤 나머지를 호출한다."""
     cached = find_riot_account(db, riot_name, riot_tag)
-    region = cached["region"] if cached else None
+    region = cached.region if cached else None
 
     if region:
         account_task = asyncio.create_task(henrik_api.get_account(riot_name, riot_tag))
@@ -66,13 +66,13 @@ async def get_player_profile(riot_name: str, riot_tag: str, db: Session = Depend
         # Henrik 호출이 실패(레이트리밋/일시 장애 등)해도 캐시가 있으면 마지막으로
         # 확인된 레벨/칭호/아바타로 프로필을 계속 보여준다
         account = {
-            "puuid": cached.get("puuid"),
-            "name": cached.get("riot_name"),
-            "tag": cached.get("riot_tag"),
-            "account_level": cached.get("account_level"),
-            "title": cached.get("title"),
-            "avatarUrl": cached.get("avatar_url"),
-            "region": cached.get("region"),
+            "puuid": cached.puuid,
+            "name": cached.riot_name,
+            "tag": cached.riot_tag,
+            "account_level": cached.account_level,
+            "title": cached.title,
+            "avatarUrl": cached.avatar_url,
+            "region": cached.region,
         }
     else:
         raise HTTPException(status_code=404, detail="선수를 찾을 수 없습니다.")
@@ -102,7 +102,7 @@ async def get_player_mode_stats(
     /api/players/{riot_name}/{riot_tag}가 이미 내려주므로 여기서 다시 부를 필요 없다.
     season/act는 actOptions 값 그대로(예: "Episode 11"/"Act 5")."""
     cached = find_riot_account(db, riot_name, riot_tag)
-    region = cached["region"] if cached else None
+    region = cached.region if cached else None
 
     if not region:
         account = await henrik_api.get_account(riot_name, riot_tag)
@@ -110,7 +110,7 @@ async def get_player_mode_stats(
             raise HTTPException(status_code=404, detail="선수를 찾을 수 없습니다.")
         region = account.get("region") or _DEFAULT_REGION
         upsert_riot_account(db, account)
-    elif not cached.get("puuid"):
+    elif not cached.puuid:
         raise HTTPException(status_code=404, detail="선수를 찾을 수 없습니다.")
 
     mmr_history, matches = await asyncio.gather(
