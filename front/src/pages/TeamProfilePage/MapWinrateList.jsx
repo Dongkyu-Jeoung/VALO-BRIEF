@@ -1,11 +1,15 @@
 import EmptyImageBox from '../../components/common/EmptyImageBox';
 import { mapKey } from '../../utils/gameDataKey';
 
-export default function MapWinrateList({ maps, title = '주요 맵 승률' }) {
+export default function MapWinrateList({ maps = [], title = '주요 맵 승률' }) {
+  const topMaps = [...maps]
+    .sort((a, b) => b.winRate - a.winRate)
+    .slice(0, 3);
+
   return (
     <div className="mh-box">
       <h5>{title}</h5>
-      {maps.map((m) => (
+      {topMaps.map((m) => (
         <div className="map-row" key={m.map}>
           <span className="map-name-cell">
             <EmptyImageBox 
