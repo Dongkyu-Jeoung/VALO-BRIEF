@@ -8,7 +8,12 @@ export default function MapWinrateList({ maps, title = '주요 맵 승률' }) {
       {maps.map((m) => (
         <div className="map-row" key={m.map}>
           <span className="map-name-cell">
-            <EmptyImageBox className="map-thumb" folder="maps" assetKey={mapKey(m.map)} label="" />
+            <EmptyImageBox 
+              className="map-thumb" 
+              folder="maps" 
+              assetKey={mapKey(m.map) || m.map?.toLowerCase()} 
+              label="" 
+            />
             {m.map}
           </span>
           <b>{m.win} / {m.lose}</b>
