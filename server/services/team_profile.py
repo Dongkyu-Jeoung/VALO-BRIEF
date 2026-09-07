@@ -69,6 +69,25 @@ def _first_blood_count(match: dict, our_puuids: set[str]) -> int:
     return sum(1 for k in earliest.values() if k.get("killer_puuid") in our_puuids)
 
 
+def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
+    """라운드별로 가장 빠른 킬(kill_time_in_round 최소)의 피살자(victim)가 우리 로스터면
+    그 선수의 선사망(first death) 카운트를 1 증가시킨다. _first_blood_count와 대칭 - 맵별
+    BEST(ACS 최고)/WORST(선사망률 최고) 선수 산출에 쓰인다."""
+    earliest: dict[int, dict] = {}
+    for k in match.get("kills") or []:
+        rnd = k.get("round")
+        if rnd is None:
+            continue
+        if rnd not in earliest or k.get("kill_time_in_round", 0) < earliest[rnd].get("kill_time_in_round", 0):
+            earliest[rnd] = k
+    counts: dict[str, int] = {}
+    for k in earliest.values():
+        victim = k.get("victim_puuid")
+        if victim in our_puuids:
+            counts[victim] = counts.get(victim, 0) + 1
+    return counts
+
+
 def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, agents: dict):
     """매치 1건(v2/match)을 팀 관점 Match Record + 우리 로스터 개인 스탯 리스트로 변환.
     우리 팀 로스터를 못 찾으면 None."""
@@ -100,9 +119,11 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         score = (p.get("stats") or {}).get("score", 0)
         return round(score / rounds_played) if rounds_played else 0
 
+    first_death_counts = _first_death_counts(match, our_puuids)
     for p in roster_stats:
         p["_match_acs"] = acs_of(p)
         p["_match_adr"] = round((p.get("damage_made") or 0) / rounds_played) if rounds_played else 0
+        p["_match_first_death"] = first_death_counts.get(p.get("puuid"), 0)
 
     kills = sum((p.get("stats") or {}).get("kills", 0) for p in roster_stats)
     deaths = sum((p.get("stats") or {}).get("deaths", 0) for p in roster_stats)
@@ -155,6 +176,18 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         if isinstance(raw_time, (int, float)) and raw_time > 0:
             plant_times.append(int(raw_time))
 
+    # 맵별 BEST(ACS 최고)/WORST(선사망률 최고) 선수 산출용 개인 스탯 (이 매치 1건 기준)
+    player_stats = [
+        {
+            "puuid": p.get("puuid"),
+            "name": p.get("name") or "-",
+            "acs": p.get("_match_acs", 0),
+            "firstDeaths": p.get("_match_first_death", 0),
+            "roundsPlayed": rounds_played,
+        }
+        for p in roster_stats
+    ]
+
     record = {
         "map": map_ko,
         "result": result,
@@ -175,6 +208,7 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         "rosterAgents": [p.get("character") for p in roster_stats],
         "plantSiteCounts": plant_site_counts,
         "plantTimes": plant_times,
+        "playerStats": player_stats,
     }
     return record, roster_stats
 
@@ -201,7 +235,7 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         map_name = r["map"]
         b = buckets.setdefault(
             map_name,
-            {"win": 0, "lose": 0, "games": 0, "combos": [], "plantSiteCounts": {}, "plantTimes": []},
+            {"win": 0, "lose": 0, "games": 0, "combos": [], "plantSiteCounts": {}, "plantTimes": [], "players": {}},
         )
         b["games"] += 1
         b["win" if r["result"] == "win" else "lose"] += 1
@@ -210,6 +244,20 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         for site, cnt in r.get("plantSiteCounts", {}).items():
             b["plantSiteCounts"][site] = b["plantSiteCounts"].get(site, 0) + cnt
         b["plantTimes"].extend(r.get("plantTimes", []))
+
+        # BEST/WORST 선수 산출용 개인 스탯 누적 (puuid 기준)
+        for ps in r.get("playerStats", []):
+            puuid = ps.get("puuid")
+            if not puuid:
+                continue
+            pbucket = b["players"].setdefault(
+                puuid, {"name": ps.get("name") or "-", "acsSum": 0, "acsCount": 0, "firstDeaths": 0, "roundsPlayed": 0}
+            )
+            pbucket["name"] = ps.get("name") or pbucket["name"]
+            pbucket["acsSum"] += ps.get("acs", 0)
+            pbucket["acsCount"] += 1
+            pbucket["firstDeaths"] += ps.get("firstDeaths", 0)
+            pbucket["roundsPlayed"] += ps.get("roundsPlayed", 0)
 
         # 등장한 요원 조합 수집 (한글명 변환)
         agent_names = []
@@ -255,8 +303,21 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             reverse=True
         )
 
-        best_combo = sorted_combos[:1] if sorted_combos else []
-        worst_combo = sorted_combos[-1:] if sorted_combos else []
+        # BEST(ACS 최고)/WORST(선사망률 최고, 동률이면 ACS 낮은 쪽) 선수 산출
+        player_summaries = []
+        for pbucket in b["players"].values():
+            avg_acs = round(pbucket["acsSum"] / pbucket["acsCount"]) if pbucket["acsCount"] else 0
+            fd_rate = round(pbucket["firstDeaths"] / pbucket["roundsPlayed"] * 100) if pbucket["roundsPlayed"] else 0
+            player_summaries.append({"name": pbucket["name"], "acs": avg_acs, "fd": fd_rate})
+
+        best_player = max(player_summaries, key=lambda p: p["acs"], default=None)
+        worst_player = max(player_summaries, key=lambda p: (p["fd"], -p["acs"]), default=None)
+
+        best_players = [{"name": best_player["name"], "acs": best_player["acs"]}] if best_player else []
+        worst_players = (
+            [{"name": worst_player["name"], "fd": worst_player["fd"], "acs": worst_player["acs"]}]
+            if worst_player else []
+        )
 
         result[map_name] = {
             "mapWinRate": win_rate,
@@ -265,9 +326,9 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             "defenseWinRate": win_rate,  # 임시 매칭 승률 연동 방어
             "preferredSite": preferred_site,
             "avgSpikePlantTime": f"{avg_plant_sec}초" if avg_plant_sec else "-",
-            "combos": sorted_combos,
-            "comboAce": best_combo,
-            "comboWeakness": worst_combo,
+            "combos": sorted_combos,       # "선호 요원 조합" 섹션(조합 A/B)에서 사용
+            "comboAce": best_players,      # BEST 섹션에서 사용 (선수 1명)
+            "comboWeakness": worst_players, # WORST 섹션에서 사용 (선수 1명)
         }
     return result
 
