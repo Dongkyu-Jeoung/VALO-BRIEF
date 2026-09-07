@@ -1,7 +1,5 @@
 // ============================================================
 // FastAPI 서버에 맞춘 엔드포인트 경로 모음
-// 백엔드 라우터를 이 경로에 맞춰 구현하면 프론트 수정 없이 바로 연동됩니다.
-// (경로/파라미터 이름은 자유롭게 바꿔도 되고, 바꾸면 여기 한 곳만 고치면 됩니다)
 // ============================================================
 
 export const ENDPOINTS = {
@@ -25,7 +23,10 @@ export const ENDPOINTS = {
   teamProfile: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}`,
   teamQuickAnalysis: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}/quick-analysis`,
 
-  // 승부 예측 (Frame 07, 08)
+  // [추가] 상대 팀 분석 및 승부 예측 탭 전용 엔드포인트 (백엔드 teams.py /analysis와 연동)
+  teamAnalysis: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}/analysis`,
+
+  // 승부 예측 (기존 유지)
   prediction: (teamName, teamTag) => `/api/predict/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}`,
 
   // 우리팀 분석 (Frame 09~13, 로그인 필요)

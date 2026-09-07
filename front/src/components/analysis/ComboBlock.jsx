@@ -15,12 +15,13 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
   return (
     <div className="combo-block">
       <div className="combo-block-title">{title}</div>
-      {combos?.map((c, idx) => {
+      {/* 4개씩 뜨는 문제를 해결하기 위해 .slice(0, 2)를 추가하여 최대 2개만 렌더링 */}
+      {combos?.slice(0, 2).map((c, idx) => {
         const agentList = c.agents || c.agentList || c.members || c.characters || c.agentNames || Object.values(c).find(val => Array.isArray(val)) || [];
 
         return (
-          <div className="combo-row" key={c.label || idx}>
-            <span className="combo-label">{c.label}</span>
+          <div className="combo-row" key={c.label ? `${c.label}-${idx}` : idx}>
+            <span className="combo-label">{c.label ?? `조합 ${String.fromCharCode(65 + idx)}`}</span>
             <div className="combo-agents">
               {agentList.length > 0 ? agentList.map((agentKey, i) => (
                 <EmptyImageBox 
@@ -41,8 +42,8 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
       <div className="combo-detail-cols">
         <div>
           <div className="combo-detail-title text-win">BEST</div>
-          {ace?.map((p) => (
-            <div className="combo-detail-row" key={p.name}>
+          {ace?.map((p, idx) => (
+            <div className="combo-detail-row" key={p?.name ? `${p.name}-${idx}` : idx}>
               <span>{p.name}</span>
               <div className="stats-group">
                 <b>ACS {p.acs}</b>
@@ -52,8 +53,8 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
         </div>
         <div>
           <div className="combo-detail-title text-lose">WORST</div>
-          {weakness?.map((p) => (
-            <div className="combo-detail-row" key={p.name}>
+          {weakness?.map((p, idx) => (
+            <div className="combo-detail-row" key={p?.name ? `${p.name}-${idx}` : idx}>
               <span>{p.name}</span>
               <div className="stats-group">
                 <b>FD {p.fd}%</b>

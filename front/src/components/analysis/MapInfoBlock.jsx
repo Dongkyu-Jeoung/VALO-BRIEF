@@ -3,9 +3,23 @@ import EmptyImageBox from '../common/EmptyImageBox';
 import DropdownSelect from '../common/DropdownSelect';
 import ComboBlock from './ComboBlock';
 import { gameData } from '../../constants/gameData';
+import { mapKey } from '../../utils/gameDataKey';
 
-export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange }) {
-  const currentMapMeta = mapMeta || gameData.maps.find(m => m.id === selectedMapId) || gameData.maps[0];
+export default function MapInfoBlock({ data, selectedMapId, mapMeta, maps, onMapChange }) {
+
+  // 상위에서 넘어온 maps(경기 기록이 있는 맵들)와 gameData.maps를 교집합하여 0경기 맵만 스크롤바에서 제외
+  const availableMaps = maps && maps.length > 0 
+    ? gameData.maps.filter(m => maps.some(validMap => validMap.id === m.id || validMap.name === m.name))
+    : gameData.maps;
+
+  const currentMapMeta = mapMeta || availableMaps.find(m => m.id === selectedMapId) || availableMaps[0];
+  const computedAssetKey = mapKey(currentMapMeta?.name) || currentMapMeta?.id?.toLowerCase();
+
+  // 선호 사이트 데이터가 객체(집계 완료)인지 아닌지에 따라 표시.
+  // 객체가 아니면(=백엔드가 아직 집계를 못한 경우) 임의의 수치를 지어내지 않고 '데이터 없음'으로 표시.
+  const siteValue = typeof data?.preferredSite === 'object' && data?.preferredSite !== null
+    ? `A ${data.preferredSite.A ?? 0}% · B ${data.preferredSite.B ?? 0}%`
+    : '데이터 없음';
 
   const items = [
     { label: '맵 승률', value: `${data?.mapWinRate ?? 0}%` },
@@ -13,8 +27,8 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
     { label: '수비 승률', value: `${data?.defWinRate ?? 0}%` },
     {
       label: '선호 사이트',
-      value: `A ${data?.preferredSites?.A ?? 0}% · B ${data?.preferredSites?.B ?? 0}%`,
-      sub: `센터 ${data?.preferredSites?.center ?? 0}%`,
+      value: siteValue,
+      sub: data?.preferredSite?.center ? `센터 ${data.preferredSite.center}%` : null,
       smallValue: true,
     },
     { 
@@ -36,17 +50,19 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
         <DropdownSelect 
           icon="🗺" 
           label={currentMapMeta?.name} 
-          options={gameData.maps.map(m => m.name)} 
+          options={availableMaps.map(m => m.name)} 
           value={currentMapMeta?.name} 
           onChange={(mapName) => {
-            if (mapName) onMapChange(mapName);
+            if (typeof onMapChange === 'function') {
+              onMapChange(mapName);
+            }
           }} 
         />
       </div>
       <div className="map-analysis-body">
         <EmptyImageBox
           folder="maps"
-          assetKey={currentMapMeta?.id}
+          assetKey={computedAssetKey}
           label={`선택한 맵 이미지\n영역 (220×220)`}
           className="map-image-box"
         />
@@ -57,13 +73,7 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
               <div className={`val ${item.smallValue ? 'sm' : ''}`.trim()}>
                 {item.value}
                 {item.unit && (
-                  <span style={{ 
-                    fontFamily: 'var(--font-body)', 
-                    fontSize: '14px', 
-                    fontWeight: 500, 
-                    marginLeft: '3px',
-                    color: 'var(--text-2)'
-                  }}>
+                  <span className="stat-unit">
                     {item.unit}
                   </span>
                 )}

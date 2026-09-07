@@ -6,6 +6,7 @@ prefix/파일명/함수명을 전부 팀 전용으로 분리했다 (players.py/p
 호출한다 (team_search.md의 캐싱 전략 검토 참고, 로그인 기능 붙기 전까지는 보류).
 """
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -26,9 +27,11 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
     """팀 프로필 전체 조회. 팀 기본 정보(get_premier_team)와 매치 이력(get_premier_team_history)을
     동시에 불러온 뒤, 이력에서 얻은 최근 매치 id들로 매치 상세(get_match_detail)를 다시 동시에
     불러온다 - 상세 없이는 맵/스코어/로스터 스탯을 알 수 없어 이력 조회가 먼저 끝나야 한다."""
+    clean_name = team_name.strip()
+    clean_tag = team_tag.strip()
     team_info, history = await asyncio.gather(
-        henrik_api.get_premier_team(team_name, team_tag),
-        henrik_api.get_premier_team_history(team_name, team_tag),
+        henrik_api.get_premier_team(clean_name, clean_tag),
+        henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -41,8 +44,8 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
 
     return build_team_profile(
         db,
-        team_name=team_name,
-        team_tag=team_tag,
+        team_name=clean_name,
+        team_tag=clean_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
@@ -53,9 +56,11 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
     """QuickAnalysisModal(통합검색 '팀명#태그' 팝업)용 최근 5게임 요약 조회.
     get_team_profile과 동일하게 team_info + history를 동시에 불러온 뒤 최근 매치 상세를
     한 번 더 동시에 불러오지만, 매치 건수는 QUICK_ANALYSIS_MATCH_LIMIT(5)로 더 적게 가져온다."""
+    clean_name = team_name.strip()
+    clean_tag = team_tag.strip()
     team_info, history = await asyncio.gather(
-        henrik_api.get_premier_team(team_name, team_tag),
-        henrik_api.get_premier_team_history(team_name, team_tag),
+        henrik_api.get_premier_team(clean_name, clean_tag),
+        henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -68,22 +73,89 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
 
     analysis = build_quick_analysis(
         db,
-        team_name=team_name,
-        team_tag=team_tag,
+        team_name=clean_name,
+        team_tag=clean_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
 
-    # 상대 프리미어 팀 티어(2번 섹션). division 문자열 가공/등급 매핑과 등급 아이콘 모두
-    # 프론트가 로컬 에셋(team-tiers/*)으로 처리한다(ProfileHeader.jsx: teamTierKey()와 동일
-    # 패턴 - QuickAnalysisModal도 동일하게 맞춤). customization.image는 팀 로고이지 티어
-    # 아이콘이 아니라서 여기 내려주지 않는다 - placement.points가 division/RP 둘 다의
-    # 소스(사용자 확인).
-    placement = team_info.get("placement") or {}
-    points = placement.get("points")
-    analysis["tier"] = {
-        "division": points,
-        "rp": points,
+
+@router.get("/{team_name}/{team_tag}/analysis")
+async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends(get_db)):
+    """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
+    get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다."""
+
+    clean_name = team_name.strip()
+    clean_tag = team_tag.strip()
+
+    print(f"===== DEBUG: API Called for team: {clean_name}#{clean_tag} =====")
+
+    team_info, history = await asyncio.gather(
+        henrik_api.get_premier_team(clean_name, clean_tag),
+        henrik_api.get_premier_team_history(clean_name, clean_tag),
+    )
+
+    print(f"===== DEBUG: team_info loaded: {bool(team_info)} =====")
+    print(f"===== DEBUG: history raw data: {history} =====")
+
+    if not team_info:
+        raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
+
+    league_matches = (history or {}).get("league_matches") or []
+    recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
+    match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
+
+    print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
+
+    match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
+
+    print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
+
+        # 라운드 데이터 구조(공격/수비 사이드, economy 등) 확인용 임시 디버그 로그.
+    # roundInfo의 공격/수비/에코 승률 구현이 끝나면 삭제할 것.
+    print("===== DEBUG: SAMPLE ROUND (planted round, top-level keys only) =====")
+    sample_match = next((m for m in match_details if m), None)
+    if sample_match:
+        rounds = sample_match.get("rounds") or []
+        planted_round = next((r for r in rounds if r.get("bomb_planted")), None)
+        if planted_round:
+            trimmed = {k: v for k, v in planted_round.items() if k not in ("player_stats", "player_locations")}
+            print(json.dumps(trimmed, indent=2, ensure_ascii=False))
+        else:
+            print("NO PLANTED ROUND FOUND IN THIS MATCH")
+    else:
+        print("NO VALID MATCH")
+
+    profile = build_team_profile(
+        db,
+        team_name=clean_name,
+        team_tag=clean_tag,
+        team_info=team_info,
+        match_details=list(match_details),
+    )
+
+    # 맵 이미지 매칭 키 디버깅용 로그 추가
+    print("===== DEBUG: mapInfoByMap keys =====")
+    print(list(profile.get("mapInfoByMap", {}).keys()))
+
+    print("===== DEBUG: FINAL PROFILE RESPONSE =====")
+    print("roundInfo:", profile.get("roundInfo"))
+    print("mapInfoByMap:", profile.get("mapInfoByMap"))
+
+    # 0경기(sampleGames <= 0)인 맵을 API 응답 레벨에서 원천적으로 필터링하여 방어
+    raw_map_info = profile.get("mapInfoByMap", {})
+    filtered_map_info = {
+        k: v for k, v in raw_map_info.items() 
+        if (v.get("sampleGames") or v.get("games") or 0) > 0
     }
 
-    return analysis
+    filtered_map_winrates = [
+        m for m in profile.get("mapWinrates", [])
+        if (raw_map_info.get(m.get("map"), {}).get("sampleGames") or 0) > 0
+    ]
+
+    return {
+        "roundInfo": profile.get("roundInfo", {}),
+        "mapWinrates": filtered_map_winrates,
+        "mapInfoByMap": filtered_map_info,
+    }

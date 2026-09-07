@@ -8,9 +8,15 @@ export default function EngagementInfoBlock({
   ourLabel = '우리팀', 
   theirLabel = '상대팀' 
 }) {
+  // 데이터 자체가 없으면 여기서 안전하게 종료
+  if (!data) return null;
+
   const duel = data.duelistVsDuelist ?? data.duelistCompare ?? { us: 50, them: 50 };
-  const leftPct = duel.us ?? duel.me;
-  const rightPct = duel.them ?? duel.opponent;
+  const leftPct = duel.us ?? duel.me ?? 50;
+  const rightPct = duel.them ?? duel.opponent ?? 50;
+
+  // 스킬 배열도 없을 수 있으니 기본값 처리
+  const skills = data.skills ?? [];
 
   return (
     <div className="analysis-row">
@@ -24,8 +30,8 @@ export default function EngagementInfoBlock({
         <StatInlineGrid
           columns={2}
           items={[
-            { label: '1대1 상황', value: `${data.trade1v1}%` },
-            { label: '1대2 상황', value: `${data.trade1v2}%` },
+            { label: '1대1 상황', value: `${data.trade1v1 ?? '-'}%` },
+            { label: '1대2 상황', value: `${data.trade1v2 ?? '-'}%` },
           ]}
         />
       </div>
@@ -34,15 +40,19 @@ export default function EngagementInfoBlock({
       <div className="duel-compare-block">
         <div className="duel-compare-title">스킬 사용 유효성 (스킬명 · 교전 성사율 · 성공률)</div>
         <div className="skill-box-row">
-          {data.skills.map((s) => (
-            <div className="skill-box" key={s.name}>
-              <div className="sk-name">{s.name}</div>
-              <div className="sk-metrics">
-                <div>교전 성사율<b>{s.engageRate}%</b></div>
-                <div>성공률<b>{s.successRate}%</b></div>
+          {skills.length > 0 ? (
+            skills.map((s) => (
+              <div className="skill-box" key={s.name}>
+                <div className="sk-name">{s.name}</div>
+                <div className="sk-metrics">
+                  <div>교전 성사율<b>{s.engageRate}%</b></div>
+                  <div>성공률<b>{s.successRate}%</b></div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <div className="empty-text">스킬 데이터가 없습니다.</div>
+          )}
         </div>
       </div>
 
