@@ -120,7 +120,8 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
             <div className="tier-row">
               <EmptyImageBox
                 className="tier-badge-img"
-                src={data.tier.iconUrl}
+                folder="team-tiers"
+                assetKey={teamTierKey(data.tier.division)}
                 label={`TIER\nICON\nIMAGE`}
               />
               <div className="tier-info">
@@ -138,7 +139,7 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
         </div>
 
         <Link
-          to={ROUTES.team(data.teamName.replace(/\s+/g, '-').toLowerCase(), data.teamTag)}
+          to={ROUTES.team(data.teamName, data.teamTag)}
           className="popup-cta"
           onClick={onClose}
         >
