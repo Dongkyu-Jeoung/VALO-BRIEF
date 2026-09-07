@@ -37,6 +37,9 @@ def build_player_feature(name: str, tag: str):
             match_id
         )
 
+        if detail is None:
+            continue
+
         player_rows = extract_player_rows_from_match(
             detail,
             puuid

@@ -72,13 +72,14 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
-    analysis = build_quick_analysis(
+    return build_quick_analysis(
         db,
         team_name=clean_name,
         team_tag=clean_tag,
         team_info=team_info,
         match_details=list(match_details),
     )
+
 
 @router.get("/{team_name}/{team_tag}/header")
 async def get_team_header(team_name: str, team_tag: str):

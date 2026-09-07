@@ -8,7 +8,7 @@ export default function PredictBox({ ourTeam, opponentTeam, ourWinChance }) {
     <div className="predict-box">
       <div className="pv-team">
         <div className="pv-label">우리팀</div>
-        <EmptyImageBox className="avatar-frame" folder="teams" assetKey={ourTeam.tag} label="TEAM" />
+        <EmptyImageBox className="avatar-frame" src={ourTeam.logoUrl} folder="teams" assetKey={ourTeam.tag} label="TEAM" />
         <div className="tname display">{ourTeam.name}</div>
       </div>
       
@@ -44,7 +44,7 @@ export default function PredictBox({ ourTeam, opponentTeam, ourWinChance }) {
 
       <div className="pv-team">
         <div className="pv-label">상대팀</div>
-        <EmptyImageBox className="avatar-frame" folder="teams" assetKey={opponentTeam.tag} label="TEAM" />
+        <EmptyImageBox className="avatar-frame" src={opponentTeam.logoUrl} folder="teams" assetKey={opponentTeam.tag} label="TEAM" />
         <div className="tname display">{opponentTeam.name}</div>
       </div>
     </div>

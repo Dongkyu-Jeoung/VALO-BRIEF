@@ -3,8 +3,9 @@ import sys
 import requests
 import time
 import pandas as pd
+from collections import deque
 from urllib import parse
-from threading import Semaphore
+from threading import Lock, Semaphore
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -35,6 +36,31 @@ MAX_CONCURRENT_REQUEST = 6
 API_SEMAPHORE = Semaphore(MAX_CONCURRENT_REQUEST)
 MAX_RETRIES_ON_429 = 5
 
+# 위 주석엔 "매 호출 사이 대기"라고 적혀 있었지만 실제로 그 대기 코드가 없었다 - 선수
+# 10명 각각의 최근 전적을 조회하면서(1인당 puuid 1회 + 매치목록 1회 + 매치상세 최대 5회)
+# 요청이 순식간에 쏟아져 분당 30건 한도를 넘기고 429 → 재시도 소진 → 500으로 이어지던
+# 원인이었다. services/henrik_api.py의 _throttle과 같은 알고리즘(동기/스레드 버전)으로
+# 실제 요청 전에 미리 속도를 늦춘다.
+RATE_LIMIT_PER_MIN = 28
+RATE_WINDOW_SECONDS = 60.0
+_request_times: deque = deque()
+_rate_lock = Lock()
+
+
+def _throttle() -> None:
+    with _rate_lock:
+        now = time.monotonic()
+        while _request_times and now - _request_times[0] > RATE_WINDOW_SECONDS:
+            _request_times.popleft()
+        if len(_request_times) >= RATE_LIMIT_PER_MIN:
+            wait = RATE_WINDOW_SECONDS - (now - _request_times[0]) + 0.05
+            if wait > 0:
+                time.sleep(wait)
+            now = time.monotonic()
+            while _request_times and now - _request_times[0] > RATE_WINDOW_SECONDS:
+                _request_times.popleft()
+        _request_times.append(now)
+
 PLAYER_FEATURES = [
     "rr",
     "acs",
@@ -60,6 +86,7 @@ def api_get(url: str) -> dict:
     - 429(Rate Limited)를 받으면 지수 백오프로 재시도한다.
     """
     for attempt in range(MAX_RETRIES_ON_429 + 1):
+        _throttle()
         with API_SEMAPHORE:
 
             res = requests.get(url, headers=HEADERS)

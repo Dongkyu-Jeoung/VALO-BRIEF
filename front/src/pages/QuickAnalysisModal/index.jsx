@@ -25,6 +25,11 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
   const [loading, setLoading] = useState(false);
   const skipNextFetch = useRef(Boolean(initialData));
 
+  // initialData(데모용)만 있고 아직 실제로 팀을 검색한 적 없으면, "상세 정보 보기"가
+  // 존재하지 않는 데모 팀 페이지로 넘어가지 않도록 막는다.
+  const [hasSearched, setHasSearched] = useState(!initialData);
+  const [showCtaToast, setShowCtaToast] = useState(false);
+
   useEffect(() => {
     setActiveTeamName(teamName);
     setActiveTeamTag(teamTag);
@@ -91,6 +96,7 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
 
         <ModalTeamSearchBar
           onTeamFound={(name, tag) => {
+            setHasSearched(true);
             setActiveTeamName(name);
             setActiveTeamTag(tag);
           }}
@@ -149,13 +155,26 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
           </div>
         </div>
 
-        <Link
-          to={ROUTES.team(data.teamName, data.teamTag)}
-          className="popup-cta"
-          onClick={onClose}
-        >
-          상세 정보 보기 →
-        </Link>
+        <div className="popup-cta-wrap">
+          {showCtaToast && (
+            <div className="popup-cta-toast">먼저 팀을 검색해 주세요.</div>
+          )}
+          <Link
+            to={ROUTES.team(data.teamName, data.teamTag)}
+            className="popup-cta"
+            onClick={(e) => {
+              if (!hasSearched) {
+                e.preventDefault();
+                setShowCtaToast(true);
+                setTimeout(() => setShowCtaToast(false), 3000);
+                return;
+              }
+              onClose();
+            }}
+          >
+            상세 정보 보기 →
+          </Link>
+        </div>
       </div>
     </div>
   );

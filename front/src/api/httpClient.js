@@ -19,6 +19,12 @@ async function request(path, { method = 'GET', body, headers } = {}) {
   });
 
   if (!res.ok) {
+    // 우리 토큰을 실어 보냈는데도 401이면(만료/서명 불일치 등) 세션이 죽은 것 - 로그인
+    // 폼의 "비밀번호 오류" 401과 헷갈리지 않게 토큰을 실어 보낸 경우에만 로그아웃시킨다.
+    // AuthContext가 이 이벤트를 듣고 있다가 localStorage/상태를 정리한다.
+    if (res.status === 401 && token) {
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
     const message = await res.text().catch(() => res.statusText);
     throw new Error(`[HTTP ${res.status}] ${message}`);
   }

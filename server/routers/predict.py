@@ -38,6 +38,16 @@ def predict(request: PredictRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/recent-opponent")
+async def get_recent_opponent(current: Team = Depends(get_current_team)):
+    """로그인한 팀의 가장 최근 프리미어 매치 상대팀을 찾는다. 승부예측 페이지가 로그인
+    상태일 때 데모용 상대팀(team-ascend) 대신 이 팀을 자동으로 상대팀으로 쓴다."""
+    opponent = await predict_service.resolve_recent_opponent(current.team_name, current.team_tag)
+    if opponent is None:
+        raise HTTPException(status_code=404, detail="최근 매치 상대팀을 찾을 수 없습니다.")
+    return opponent
+
+
 @router.get("/{team_name}/{team_tag}")
 async def predict_match(
     team_name: str,
@@ -81,16 +91,21 @@ async def predict_match(
         feature_snapshot={"blue_summary": result["blue_summary"], "red_summary": result["red_summary"]},
     )
 
+    our_logo = ((our_info or {}).get("customization") or {}).get("image")
+    opp_logo = (opp_info.get("customization") or {}).get("image")
+
     return {
         "ourTeam": {
             "name": current.team_name,
             "tag": current.team_tag,
             "avgWinRate20": result["blue_summary"]["winrate"],
+            "logoUrl": our_logo,
         },
         "opponentTeam": {
             "name": opp_info.get("name") or team_name,
             "tag": opp_info.get("tag") or team_tag,
             "avgWinRate20": result["red_summary"]["winrate"],
+            "logoUrl": opp_logo,
         },
         "ourWinChance": result["blue_win_probability"],
     }

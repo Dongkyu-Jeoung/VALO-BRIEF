@@ -87,7 +87,7 @@ def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
             counts[victim] = counts.get(victim, 0) + 1
     return counts
 
-def _team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
+def build_team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
     """team_info(get_premier_team 응답) 하나만으로 계산되는 필드 - 매치 상세 조회 불필요.
     build_team_header/build_team_profile이 공유."""
     stats = team_info.get("stats") or {}
@@ -503,6 +503,9 @@ def build_quick_analysis(
     wins = sum(1 for r in records if r["result"] == "win")
     losses = games - wins
 
+    placement = team_info.get("placement") or {}
+    customization = team_info.get("customization") or {}
+
     return {
         "teamName": team_info.get("name") or team_name,
         "teamTag": team_info.get("tag") or team_tag,
@@ -513,4 +516,9 @@ def build_quick_analysis(
         "avgRoundWin": round(sum(r["roundsWon"] for r in records) / games, 1) if games else 0,
         "avgRoundLose": round(sum(r["roundsLost"] for r in records) / games, 1) if games else 0,
         "playerRanking": _player_ranking(all_roster_stats, agents),
+        "tier": {
+            "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
+            "rp": placement.get("points") or 0,
+            "iconUrl": customization.get("image"),
+        },
     }
