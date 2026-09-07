@@ -10,6 +10,7 @@ export const ENDPOINTS = {
   signup: () => `/api/auth/signup`,
   verifyRiotId: () => `/api/auth/riot-verify`,
   checkIdAvailable: (id) => `/api/auth/id-available?id=${encodeURIComponent(id)}`,
+  me: () => `/api/auth/me`,
 
   // 통합 검색 (메인/헤더 검색창)
   checkPlayerExists: (riotId, tag) => `/api/search/players/${encodeURIComponent(riotId)}/${encodeURIComponent(tag)}/exists`,

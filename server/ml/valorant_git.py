@@ -1,11 +1,27 @@
+import os
+import sys
 import requests
 import time
 import pandas as pd
 from urllib import parse
 from threading import Semaphore
 from pathlib import Path
+from dotenv import load_dotenv
 
-API_KEY = "HDEV-c316ec57-b450-4592-84a8-b126981fb838"  # 발급받으신 HenrikDev API 키 입력
+# services/henrik_api.py와 같은 .env(HENRIK_API_KEY)를 공유해서 쓴다 - 키를 소스에
+# 하드코딩하지 않기 위함(예전엔 여기 평문으로 박혀 있었음, git 이력엔 남아있으니 키를
+# 재발급하는 걸 권장).
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+API_KEY = os.getenv("HENRIK_API_KEY")
+
+# 아래 디버그 print()들이 이모지(✅❌⚠️)를 쓰는데, Windows 콘솔 기본 인코딩(cp949)에서는
+# print()가 그대로 죽는다(UnicodeEncodeError) - 이 모듈이 실제 요청 경로(routers/predict.py)에
+# 물리기 전까진 아무도 안 불러서 안 드러났던 버그. 인코딩을 못 바꾸는 스트림(일부 테스트
+# 러너 등)도 있어 실패해도 무시한다.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 HEADERS = {
     "Authorization": API_KEY,

@@ -445,14 +445,21 @@ CREATE TABLE player_stats_summary (
 
 -- ---------------------------------------------------------------------
 -- 8. PREDICTIONS  (승부 예측 결과 - Layer1 모델 산출값)
---    현재는 ml/predictor.py가 매 요청마다 실시간으로 계산만 하고 이 테이블에 쓰지는
---    않는다. 모델 정확도 추적(actual_result)을 실제로 시작할 때 연동 예정.
+--    routers/predict.py(GET /api/predict/{team_name}/{team_tag})가 예측할 때마다 저장한다.
 --    ※ map_name(varchar) → map_uuid(FK → ref_maps)
+--
+-- 2026-09-07 재검토: team_b_id(상대팀)를 NOT NULL FK로 두면 "이 서비스에 가입 안 한
+-- 임의의 프리미어 팀"을 상대로 예측할 때(원래 이 기능의 정상적인 주 사용 케이스 - 팀
+-- 검색과 동일한 패턴) FK 위반으로 저장 자체가 실패한다. team_b_id를 nullable로 바꾸고
+-- (가입 팀이면 채워짐, 아니면 NULL) opponent_team_name/opponent_team_tag를 추가해
+-- 가입 여부와 무관하게 상대팀을 항상 식별할 수 있게 했다.
 -- ---------------------------------------------------------------------
 CREATE TABLE predictions (
     prediction_id       INT             NOT NULL AUTO_INCREMENT,
     team_a_id           VARCHAR(64)     NOT NULL,
-    team_b_id           VARCHAR(64)     NOT NULL,
+    team_b_id           VARCHAR(64)     NULL COMMENT '상대팀이 가입 계정일 때만 채워짐(teams.team_id)',
+    opponent_team_name  VARCHAR(50)     NOT NULL COMMENT '상대팀 가입 여부와 무관하게 항상 채워짐',
+    opponent_team_tag   VARCHAR(10)     NOT NULL,
     map_uuid             VARCHAR(64)    NULL COMMENT 'REF_MAPS.uuid 참조',
     predicted_winrate_a FLOAT           NOT NULL,
     predicted_winrate_b FLOAT           NOT NULL,
@@ -469,7 +476,7 @@ CREATE TABLE predictions (
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_predictions_team_b
         FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
+        ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT fk_predictions_map
         FOREIGN KEY (map_uuid) REFERENCES ref_maps (uuid)
         ON DELETE SET NULL ON UPDATE CASCADE
@@ -633,9 +640,22 @@ ALTER TABLE matches
 ALTER TABLE match_player_stats
     ADD COLUMN is_mvp BOOLEAN NOT NULL DEFAULT FALSE COMMENT '그 매치에서 team_id 로스터 내 MVP였는지' AFTER team_id;
 
--- 참고: predictions, insights, ref_weapons, matches, match_player_stats,
--- team_stats_summary, player_stats_summary는 현재 코드에서 아직 안 쓰지만 이미
--- 스캐폴딩되었거나(AI 리포트 프론트 컴포넌트) mock 데이터 구조가 그대로
--- 대응되거나(예측 정확도 추적, 무기별 스탯, 3초 상대분석/우리팀 분석/전략 제안)
--- 성능상 라이브 조회 대신 캐싱이 필요한(매치 원본) 기능과 바로 연결되므로 남겨둡니다.
+-- 10) predictions.team_b_id(상대팀)를 NOT NULL FK로 두면, 이 서비스에 가입 안 한 임의의
+--     프리미어 팀을 상대로 예측할 때(원래 이 기능의 정상적인 주 사용 케이스 - 팀 검색과
+--     동일한 패턴) FK 위반으로 저장 자체가 실패합니다. team_b_id를 nullable로 바꾸고
+--     (가입 팀이면 채워짐, 아니면 NULL) opponent_team_name/opponent_team_tag를 추가해
+--     가입 여부와 무관하게 상대팀을 항상 식별할 수 있게 합니다 (routers/predict.py 연동).
+ALTER TABLE predictions
+    DROP FOREIGN KEY fk_predictions_team_b,
+    MODIFY COLUMN team_b_id VARCHAR(64) NULL COMMENT '상대팀이 가입 계정일 때만 채워짐(teams.team_id)',
+    ADD COLUMN opponent_team_name VARCHAR(50) NOT NULL COMMENT '상대팀 가입 여부와 무관하게 항상 채워짐' AFTER team_b_id,
+    ADD COLUMN opponent_team_tag VARCHAR(10) NOT NULL AFTER opponent_team_name,
+    ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
+        ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 참고: insights, ref_weapons, matches, match_player_stats, team_stats_summary,
+-- player_stats_summary는 현재 코드에서 아직 안 쓰지만 이미 스캐폴딩되었거나(AI 리포트
+-- 프론트 컴포넌트) mock 데이터 구조가 그대로 대응되거나(무기별 스탯, 3초 상대분석/우리팀
+-- 분석/전략 제안) 성능상 라이브 조회 대신 캐싱이 필요한(매치 원본) 기능과 바로
+-- 연결되므로 남겨둡니다. predictions는 routers/predict.py가 실제로 저장하기 시작했습니다.
 -- 각 테이블이 실제로 어느 화면에 연결될지는 우리팀_기능_구현_가이드.md 1번 항목 참고.
