@@ -71,7 +71,7 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
-    return build_quick_analysis(
+    analysis = build_quick_analysis(
         db,
         team_name=clean_name,
         team_tag=clean_tag,

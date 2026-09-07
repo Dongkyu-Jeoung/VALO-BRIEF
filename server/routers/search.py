@@ -4,9 +4,9 @@
 import asyncio
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 from database.connection import SessionLocal, get_db
+from models.team import Team
 from services import cosmetics, henrik_api
 from services.riot_accounts import find_riot_account, upsert_riot_account
 from services.team_profile import MATCH_HISTORY_LIMIT
@@ -79,20 +79,13 @@ async def _prefetch_team_profile_data(team_name: str, team_tag: str) -> None:
         await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
 
-def _find_team(db: Session, team_name: str, team_tag: str) -> dict | None:
-    """teams 테이블에서 팀명#태그로 캐시된 row 조회."""
-    row = db.execute(
-        text(
-            """
-            SELECT team_id, team_name, team_tag
-            FROM teams
-            WHERE team_name = :team_name AND team_tag = :team_tag
-            LIMIT 1
-            """
-        ),
-        {"team_name": team_name, "team_tag": team_tag},
-    ).mappings().first()
-    return dict(row) if row else None
+def _find_team(db: Session, team_name: str, team_tag: str) -> Team | None:
+    """teams 테이블에서 팀명#태그로 가입된 row 조회 (회원가입 계정 존재 여부 확인용)."""
+    return (
+        db.query(Team)
+        .filter(Team.team_name == team_name, Team.team_tag == team_tag)
+        .first()
+    )
 
 
 @router.get("/players/{riot_name}/{riot_tag}/exists")
@@ -101,8 +94,8 @@ async def check_player_exists(riot_name: str, riot_tag: str, db: Session = Depen
     존재가 확인되면 이어질 프로필 조회를 백그라운드로 프리페치한다."""
     cached = find_riot_account(db, riot_name, riot_tag)
     if cached is not None:
-        _prefetch_profile_data(cached["region"], riot_name, riot_tag)
-        return {"exists": True, "riotId": cached["riot_name"], "tag": cached["riot_tag"]}
+        _prefetch_profile_data(cached.region, riot_name, riot_tag)
+        return {"exists": True, "riotId": cached.riot_name, "tag": cached.riot_tag}
 
     # region을 모르는 최초 검색 - 계정 조회 결과를 기다리는 동안 kr로 추측해 병행 프리페치
     _fire_and_forget(henrik_api.get_mmr_history(_GUESS_REGION, riot_name, riot_tag))
@@ -134,7 +127,7 @@ async def check_team_exists(team_name: str, team_tag: str, db: Session = Depends
     cached = _find_team(db, team_name, team_tag)
     if cached is not None:
         _fire_and_forget(_prefetch_team_profile_data(team_name, team_tag))
-        return {"exists": True, "teamName": cached["team_name"], "teamTag": cached["team_tag"]}
+        return {"exists": True, "teamName": cached.team_name, "teamTag": cached.team_tag}
 
     team = await henrik_api.get_premier_team(team_name, team_tag)
     if team is None:
