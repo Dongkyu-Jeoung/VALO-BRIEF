@@ -74,17 +74,16 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
         match_details=list(match_details),
     )
 
-    # 상대 프리미어 팀 티어(2번 섹션). division 문자열 가공/등급 매핑은 팀 프로필 페이지
-    # (ProfileHeader.jsx: teamTierKey())와 동일하게 프론트에서 처리하므로 여기서는
-    # raw 값만 내려준다 - placement.points가 division/RP 둘 다의 소스(사용자 확인).
+    # 상대 프리미어 팀 티어(2번 섹션). division 문자열 가공/등급 매핑과 등급 아이콘 모두
+    # 프론트가 로컬 에셋(team-tiers/*)으로 처리한다(ProfileHeader.jsx: teamTierKey()와 동일
+    # 패턴 - QuickAnalysisModal도 동일하게 맞춤). customization.image는 팀 로고이지 티어
+    # 아이콘이 아니라서 여기 내려주지 않는다 - placement.points가 division/RP 둘 다의
+    # 소스(사용자 확인).
     placement = team_info.get("placement") or {}
-    customization = team_info.get("customization") or {}
     points = placement.get("points")
     analysis["tier"] = {
         "division": points,
         "rp": points,
-        "iconUrl": customization.get("image"),
     }
 
-    print(analysis)
     return analysis
