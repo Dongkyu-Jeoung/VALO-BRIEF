@@ -6,6 +6,7 @@ import asyncio
 import os
 import time
 import httpx
+from collections import deque
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -31,6 +32,60 @@ _inflight: dict[str, asyncio.Future] = {}
 # 요청마다 새 AsyncClient를 만들면 매번 TCP+TLS 핸드셰이크가 발생해 호출당 1~2초씩 더 든다.
 # 프로세스 생존 기간 동안 커넥션 풀을 유지하는 클라이언트 하나를 재사용한다.
 _client: httpx.AsyncClient | None = None
+
+
+class HenrikRateLimitError(Exception):
+    """Henrik API 레이트리밋(429)에 계속 걸렸을 때 - "존재하지 않음"(None)과 반드시
+    구분해야 한다. 예전엔 429도 다른 실패와 똑같이 None으로 뭉뚱그려 반환했는데, 그게
+    /exists 응답에서 "존재하지 않는 팀/선수"와 동일하게 처리돼 - 실제로는 존재하는 팀인데
+    검색이 갑자기 안 되는 것처럼 보이는 버그의 원인이었다(팀 검색 1건이 exists 확인 +
+    백그라운드 프리페치(이력+매치상세 최대 10건)까지 겹쳐 최대 12개 요청을 짧은 시간에
+    쓰는데, Henrik 무료 키 한도가 분당 30건이라 검색을 2~3번만 연달아 해도 넘기기 쉬움 -
+    실측으로 재현 확인). main.py의 전역 예외 핸들러가 이걸 잡아 503으로 응답한다."""
+
+
+# Henrik 키의 실측 한도는 응답 헤더 기준 "per1min";q=30 (분당 30건, 전체 엔드포인트 공유
+# 버킷 - /status와 /premier 호출이 같은 x-ratelimit-bucket을 썼음을 확인). 위 문제를 애초에
+# 덜 겪도록, 실제로 요청을 보내기 전에 우리 쪽에서 먼저 한도보다 살짝 낮게(28/분) 스스로
+# 속도를 늦춘다 - 그래도 남이(다른 프로세스/키 공유) 같은 키를 동시에 쓰면 429가 날 수
+# 있으므로 _get()의 재시도+예외 처리가 최종 안전장치.
+_RATE_LIMIT_PER_MIN = 28
+_RATE_WINDOW_SECONDS = 60.0
+_request_times: deque[float] = deque()
+_rate_lock = asyncio.Lock()
+
+
+async def _throttle() -> None:
+    """직전 60초 안에 보낸 요청이 한도 이상이면, 가장 오래된 요청이 창 밖으로 나갈
+    때까지 대기한 뒤 진행한다(캐시/in-flight로 해소되는 요청은 여기 도달하지 않으므로
+    실제 네트워크 왕복이 필요한 요청만 세어진다)."""
+    async with _rate_lock:
+        now = time.monotonic()
+        while _request_times and now - _request_times[0] > _RATE_WINDOW_SECONDS:
+            _request_times.popleft()
+        if len(_request_times) >= _RATE_LIMIT_PER_MIN:
+            wait = _RATE_WINDOW_SECONDS - (now - _request_times[0]) + 0.05
+            if wait > 0:
+                await asyncio.sleep(wait)
+            now = time.monotonic()
+            while _request_times and now - _request_times[0] > _RATE_WINDOW_SECONDS:
+                _request_times.popleft()
+        _request_times.append(now)
+
+
+def _retry_after_seconds(res: httpx.Response, default: float = 2.0) -> float:
+    """429 응답의 Retry-After(표준) 또는 x-ratelimit-reset(Henrik 커스텀) 헤더를 초 단위로
+    파싱. 값이 너무 크면(리셋까지 오래 남음) 요청 하나 때문에 응답을 그만큼 붙잡아두지 않게
+    상한을 둔다."""
+    for header in ("Retry-After", "x-ratelimit-reset"):
+        raw = res.headers.get(header)
+        if raw is None:
+            continue
+        try:
+            return min(float(raw), 5.0)
+        except ValueError:
+            continue
+    return default
 
 
 def _cache_key(path: str, params: dict | None) -> str:
@@ -66,8 +121,10 @@ async def warm_up() -> None:
 
 
 async def _get(path: str, params: dict | None = None) -> dict | list | None:
-    """GET 요청 공통 진입점. 성공(200)이면 응답의 data, 실패/404 등은 None.
-    성공 응답은 TTL 캐싱하고, 캐시가 없는 상태에서 겹치는 요청은 in-flight로 공유한다."""
+    """GET 요청 공통 진입점. 성공(200)이면 응답의 data, 404 등 확정적 실패는 None.
+    성공 응답은 TTL 캐싱하고, 캐시가 없는 상태에서 겹치는 요청은 in-flight로 공유한다.
+    429(레이트리밋)는 "존재하지 않음"과 절대 같은 값(None)으로 섞이면 안 되므로
+    HenrikRateLimitError로 별도 전파한다(위 클래스 docstring 참고)."""
     key = _cache_key(path, params)
     cached = _response_cache.get(key)
     if cached is not None and time.monotonic() - cached[0] < _CACHE_TTL_SECONDS:
@@ -81,21 +138,48 @@ async def _get(path: str, params: dict | None = None) -> dict | list | None:
     future: asyncio.Future = loop.create_future()
     _inflight[key] = future
     try:
-        client = _get_client()
         try:
-            res = await client.get(path, params=params)
-        except httpx.HTTPError:
-            # 네트워크/타임아웃 등 - 존재 여부를 확정할 수 없으므로 미존재로 간주
-            value = None
-        else:
-            value = res.json().get("data") if res.status_code == 200 else None
-
+            value = await _get_uncached(path, params)
+        except BaseException as exc:
+            # future를 resolve하지 않고 그냥 두면 이 요청을 함께 기다리던(in-flight 공유)
+            # 다른 동시 호출자가 영원히 멈춘다 - 반드시 같은 예외를 넘겨줘야 한다.
+            future.set_exception(exc)
+            # 아무도 이 future를 await하지 않는 경우(보통 - 공유 대기자가 없을 때) asyncio가
+            # "exception was never retrieved" 경고를 남기므로, 우리가 이미 raise로 처리한다는
+            # 걸 미리 확인 처리해둔다(exception()을 여러 번 호출해도 결과는 그대로 유지됨 -
+            # 나중에 동시 대기자가 `await existing`해도 동일하게 예외를 받는다).
+            future.exception()
+            raise
         if value is not None:
             _response_cache[key] = (time.monotonic(), value)
         future.set_result(value)
         return value
     finally:
         _inflight.pop(key, None)
+
+
+async def _get_uncached(path: str, params: dict | None) -> dict | list | None:
+    """실제 네트워크 요청 - 429면 Retry-After만큼 한 번 기다렸다 재시도하고, 그래도
+    막히면 HenrikRateLimitError를 던진다."""
+    await _throttle()
+    client = _get_client()
+    try:
+        res = await client.get(path, params=params)
+    except httpx.HTTPError:
+        # 네트워크/타임아웃 등 - 존재 여부를 확정할 수 없으므로 미존재로 간주
+        return None
+
+    if res.status_code == 429:
+        await asyncio.sleep(_retry_after_seconds(res))
+        await _throttle()
+        try:
+            res = await client.get(path, params=params)
+        except httpx.HTTPError:
+            return None
+        if res.status_code == 429:
+            raise HenrikRateLimitError(path)
+
+    return res.json().get("data") if res.status_code == 200 else None
 
 
 async def get_account(riot_name: str, riot_tag: str) -> dict | None:

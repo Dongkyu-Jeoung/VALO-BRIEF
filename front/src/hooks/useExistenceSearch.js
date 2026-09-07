@@ -43,8 +43,17 @@ export function useExistenceSearch() {
         return null;
       }
       return { namePart, tagPart };
-    } catch {
-      triggerErrorToast('검색 중 오류가 발생했습니다.');
+    } catch (err) {
+      // 백엔드가 Henrik 레이트리밋(429)에 걸리면 503 + 안내 메시지로 응답한다
+      // (server/main.py의 HenrikRateLimitError 핸들러 참고) - 이걸 "존재하지 않음"과 같은
+      // 일반 에러 문구로 보여주면 실제로는 존재하는데 검색이 그냥 안 되는 것처럼 오해하기
+      // 쉬워서 별도 메시지로 구분한다.
+      const isRateLimited = err instanceof Error && err.message.startsWith('[HTTP 503]');
+      triggerErrorToast(
+        isRateLimited
+          ? '요청이 많아 잠시 조회할 수 없습니다. 몇 초 후 다시 시도해 주세요.'
+          : '검색 중 오류가 발생했습니다.'
+      );
       return null;
     } finally {
       setLoading(false);

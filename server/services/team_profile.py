@@ -87,6 +87,28 @@ def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
             counts[victim] = counts.get(victim, 0) + 1
     return counts
 
+def _team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
+    """team_info(get_premier_team 응답) 하나만으로 계산되는 필드 - 매치 상세 조회 불필요.
+    build_team_header/build_team_profile이 공유."""
+    stats = team_info.get("stats") or {}
+    placement = team_info.get("placement") or {}
+    customization = team_info.get("customization") or {}
+    matches_played = stats.get("matches") or 0
+    return {
+        "name": team_info.get("name") or team_name,
+        "tag": team_info.get("tag") or team_tag,
+        "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
+        "ratingIconUrl": customization.get("image"),
+        "recentSummary": {
+            "winRate": round((stats.get("wins") or 0) / matches_played * 100) if matches_played else 0,
+            "wins": stats.get("wins") or 0,
+            "losses": stats.get("losses") or 0,
+            "avgRoundWin": round((stats.get("rounds_won") or 0) / matches_played, 1) if matches_played else 0,
+            "avgRoundLose": round((stats.get("rounds_lost") or 0) / matches_played, 1) if matches_played else 0,
+        },
+    }
+
+
 
 def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, agents: dict):
     """매치 1건(v2/match)을 팀 관점 Match Record + 우리 로스터 개인 스탯 리스트로 변환.

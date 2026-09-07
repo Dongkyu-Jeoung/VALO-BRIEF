@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchQuickAnalysis } from '../../api/teams';
 import EmptyImageBox from '../../components/common/EmptyImageBox';
@@ -11,12 +11,19 @@ import { ROUTES } from '../../constants/routes';
 /**
  * 통합검색에서 '팀명#태그'로 검색했을 때 뜨는 팝업.
  * 사용법: <QuickAnalysisModal teamName="team-ascend" teamTag="ASC" onClose={...} />
+ *
+ * initialData: 이미 갖고 있는 데이터로 바로 렌더링하고 첫 fetch를 건너뛴다(HomePage 데모
+ * 카드처럼 애초에 존재하지 않는 팀명으로 여는 경우 - 실제 백엔드가 붙어있으면 매번 Henrik
+ * 조회 2건(team_info+history)이 404로 끝난 뒤에야 mock로 폴백해서 그만큼 느려 보이고,
+ * Henrik 레이트리밋(분당 30건) 예산도 그냥 날아갔었다). ModalTeamSearchBar로 실제 팀을
+ * 검색하면(activeTeamName/Tag 변경) 그때는 정상적으로 fetchQuickAnalysis를 부른다.
  */
-export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
+export default function QuickAnalysisModal({ teamName, teamTag, initialData, onClose }) {
   const [activeTeamName, setActiveTeamName] = useState(teamName);
   const [activeTeamTag, setActiveTeamTag] = useState(teamTag);
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(initialData ?? null);
   const [loading, setLoading] = useState(false);
+  const skipNextFetch = useRef(Boolean(initialData));
 
   useEffect(() => {
     setActiveTeamName(teamName);
@@ -24,6 +31,10 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
   }, [teamName, teamTag]);
 
   useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
     let active = true;
     setLoading(true);
     fetchQuickAnalysis(activeTeamName, activeTeamTag).then((res) => {

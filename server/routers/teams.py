@@ -17,6 +17,7 @@ from services.team_profile import (
     QUICK_ANALYSIS_MATCH_LIMIT,
     build_quick_analysis,
     build_team_profile,
+    build_team_header
 )
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
@@ -78,6 +79,20 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
         team_info=team_info,
         match_details=list(match_details),
     )
+
+@router.get("/{team_name}/{team_tag}/header")
+async def get_team_header(team_name: str, team_tag: str):
+    """성능 개선(엔드포인트 분리) - ProfileHeader(팀 로고/이름/디비전/누적 승률)만 필요할 때
+    쓰는 경량 엔드포인트. get_team_profile은 매치 이력+상세 10건까지 다 기다려야 응답이
+    나가서(~2.5~3.1s, 실측) 팀 로고가 늦게 뜨는 원인이었는데, 이 엔드포인트는 get_premier_team
+    한 번(~0.3~0.6s, 대부분 search.py의 존재확인 프리페치로 이미 캐시돼 있어 더 빠름)만으로
+    응답한다. TeamProfilePage가 이 엔드포인트와 get_team_profile을 동시에 호출해서, 먼저
+    도착하는 이 응답으로 헤더부터 그리고 나머지(매치 이력/순위 등)는 get_team_profile이
+    도착하는 대로 채운다."""
+    team_info = await henrik_api.get_premier_team(team_name, team_tag)
+    if not team_info:
+        raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
+    return build_team_header(team_name, team_tag, team_info)
 
 
 @router.get("/{team_name}/{team_tag}/analysis")
