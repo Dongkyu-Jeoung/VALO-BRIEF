@@ -101,9 +101,10 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         return round(score / rounds_played) if rounds_played else 0
 
     # 여러 매치에 걸친 평균을 낼 때(_player_ranking) 매치마다 라운드 수가 다르므로,
-    # 매치당 ACS를 미리 계산해 심어둔다 - 원본 score를 그대로 평균 내면 안 됨(라운드 수 무시하게 됨)
+    # 매치당 ACS/ADR을 미리 계산해 심어둔다 - 원본 score/damage를 그대로 평균 내면 안 됨(라운드 수 무시하게 됨)
     for p in roster_stats:
         p["_match_acs"] = acs_of(p)
+        p["_match_adr"] = round((p.get("damage_made") or 0) / rounds_played) if rounds_played else 0
 
     kills = sum((p.get("stats") or {}).get("kills", 0) for p in roster_stats)
     deaths = sum((p.get("stats") or {}).get("deaths", 0) for p in roster_stats)
@@ -184,6 +185,7 @@ def _player_ranking(all_roster_stats: list, agents: dict, limit: int = 5) -> lis
         records = bucket["records"]
         n = len(records)
         acs_values = [r.get("_match_acs", 0) for r in records]
+        adr_values = [r.get("_match_adr", 0) for r in records]
         kills = sum((r.get("stats") or {}).get("kills", 0) for r in records)
         deaths = sum((r.get("stats") or {}).get("deaths", 0) for r in records)
         heads = sum((r.get("stats") or {}).get("headshots", 0) for r in records)
@@ -197,6 +199,7 @@ def _player_ranking(all_roster_stats: list, agents: dict, limit: int = 5) -> lis
         ranked.append({
             "name": bucket["name"],
             "acs": round(sum(acs_values) / n) if n else 0,
+            "adr": round(sum(adr_values) / n) if n else 0,
             "hs": round(heads / shots * 100) if shots else 0,
             "position": ROLE_LABELS.get((agent_meta or {}).get("role_type"), "-"),
             "kd": round(kills / deaths, 2) if deaths else float(kills),
@@ -269,4 +272,53 @@ def build_team_profile(
         "mapWinrates": _map_winrates(records),
         "matchHistory": records,
         "actOptions": act_options,
+    }
+
+
+# routers/teams.py의 quick-analysis 엔드포인트가 불러올 매치 건수. build_team_profile용
+# MATCH_HISTORY_LIMIT(10)과 달리 QuickAnalysisModal은 "최근 5게임"만 요약해서 보여준다.
+QUICK_ANALYSIS_MATCH_LIMIT = 5
+
+
+def build_quick_analysis(
+    db: Session,
+    *,
+    team_name: str,
+    team_tag: str,
+    team_info: dict,
+    match_details: list,
+) -> dict:
+    """QuickAnalysisModal(3초 상대분석 팝업)이 필요로 하는 최근 N게임 요약 JSON을 조립.
+    build_team_profile과 달리 전체 시즌 누적이 아니라 실제로 받아온 최근 매치
+    (QUICK_ANALYSIS_MATCH_LIMIT)만으로 승/패·라운드·개인 순위를 계산한다.
+    상대 프리미어 팀 티어(RP/상위 %)는 Henrik API에 대응 데이터가 없어 이번 범위에서 제외."""
+    maps = _load_ref_maps(db)
+    agents = _load_ref_agents(db)
+
+    records: list = []
+    all_roster_stats: list = []
+    for match in match_details:
+        if not match:
+            continue
+        parsed = _parse_team_match(match, team_name, team_tag, maps, agents)
+        if parsed is None:
+            continue
+        record, roster_stats = parsed
+        records.append(record)
+        all_roster_stats.extend(roster_stats)
+
+    games = len(records)
+    wins = sum(1 for r in records if r["result"] == "win")
+    losses = games - wins
+
+    return {
+        "teamName": team_info.get("name") or team_name,
+        "teamTag": team_info.get("tag") or team_tag,
+        "recentForm": [r["result"] for r in records],
+        "wins": wins,
+        "losses": losses,
+        "winRate": round(wins / games * 100) if games else 0,
+        "avgRoundWin": round(sum(r["roundsWon"] for r in records) / games, 1) if games else 0,
+        "avgRoundLose": round(sum(r["roundsLost"] for r in records) / games, 1) if games else 0,
+        "playerRanking": _player_ranking(all_roster_stats, agents),
     }

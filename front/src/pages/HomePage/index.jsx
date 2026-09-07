@@ -9,10 +9,10 @@ const DEMO_TEAM_NAME = 'team-ascend';
 const DEMO_TEAM_TAG = 'ASC';
 
 export default function HomePage() {
-  const [quickAnalysisTeamTag, setQuickAnalysisTeamTag] = useState(null);
+  const [quickAnalysisTeam, setQuickAnalysisTeam] = useState(null);
 
-  const openQuickAnalysis = () => setQuickAnalysisTeamTag(DEMO_TEAM_TAG);
-  const closeQuickAnalysis = () => setQuickAnalysisTeamTag(null);
+  const openQuickAnalysis = () => setQuickAnalysisTeam({ name: DEMO_TEAM_NAME, tag: DEMO_TEAM_TAG });
+  const closeQuickAnalysis = () => setQuickAnalysisTeam(null);
 
   const PILLS = [
     { label: '정확한 승률 예측' },
@@ -51,8 +51,12 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-      {quickAnalysisTeamTag ? (
-        <QuickAnalysisModal teamTag={quickAnalysisTeamTag} onClose={closeQuickAnalysis} />
+      {quickAnalysisTeam ? (
+        <QuickAnalysisModal
+          teamName={quickAnalysisTeam.name}
+          teamTag={quickAnalysisTeam.tag}
+          onClose={closeQuickAnalysis}
+        />
       ) : null}
     </>
   );
