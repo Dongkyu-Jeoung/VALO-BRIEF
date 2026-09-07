@@ -11,7 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from services import henrik_api
-from services.team_profile import MATCH_HISTORY_LIMIT, build_team_profile
+from services.team_profile import (
+    MATCH_HISTORY_LIMIT,
+    QUICK_ANALYSIS_MATCH_LIMIT,
+    build_quick_analysis,
+    build_team_profile,
+)
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -35,6 +40,33 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
     return build_team_profile(
+        db,
+        team_name=team_name,
+        team_tag=team_tag,
+        team_info=team_info,
+        match_details=list(match_details),
+    )
+
+
+@router.get("/{team_name}/{team_tag}/quick-analysis")
+async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = Depends(get_db)):
+    """QuickAnalysisModal(통합검색 '팀명#태그' 팝업)용 최근 5게임 요약 조회.
+    get_team_profile과 동일하게 team_info + history를 동시에 불러온 뒤 최근 매치 상세를
+    한 번 더 동시에 불러오지만, 매치 건수는 QUICK_ANALYSIS_MATCH_LIMIT(5)로 더 적게 가져온다."""
+    team_info, history = await asyncio.gather(
+        henrik_api.get_premier_team(team_name, team_tag),
+        henrik_api.get_premier_team_history(team_name, team_tag),
+    )
+    if not team_info:
+        raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
+
+    league_matches = (history or {}).get("league_matches") or []
+    recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
+    match_ids = [m["id"] for m in recent[:QUICK_ANALYSIS_MATCH_LIMIT] if m.get("id")]
+
+    match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
+
+    return build_quick_analysis(
         db,
         team_name=team_name,
         team_tag=team_tag,

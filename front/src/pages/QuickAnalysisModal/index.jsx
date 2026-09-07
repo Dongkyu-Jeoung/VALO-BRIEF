@@ -10,28 +10,30 @@ import { ROUTES } from '../../constants/routes';
 
 /**
  * 통합검색에서 '팀명#태그'로 검색했을 때 뜨는 팝업.
- * 사용법: <QuickAnalysisModal teamTag="ASC" onClose={...} />
+ * 사용법: <QuickAnalysisModal teamName="team-ascend" teamTag="ASC" onClose={...} />
  */
-export default function QuickAnalysisModal({ teamTag, onClose }) {
+export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
+  const [activeTeamName, setActiveTeamName] = useState(teamName);
   const [activeTeamTag, setActiveTeamTag] = useState(teamTag);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    setActiveTeamName(teamName);
     setActiveTeamTag(teamTag);
-  }, [teamTag]);
+  }, [teamName, teamTag]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetchQuickAnalysis(activeTeamTag).then((res) => {
+    fetchQuickAnalysis(activeTeamName, activeTeamTag).then((res) => {
       if (active) {
         setData(res);
         setLoading(false);
       }
     });
     return () => { active = false; };
-  }, [activeTeamTag]);
+  }, [activeTeamName, activeTeamTag]);
 
   //로딩 상태 화면 추가
   if (!data) {
@@ -76,7 +78,12 @@ export default function QuickAnalysisModal({ teamTag, onClose }) {
           </button>
         </div>
 
-        <ModalTeamSearchBar onTeamFound={setActiveTeamTag} />
+        <ModalTeamSearchBar
+          onTeamFound={(name, tag) => {
+            setActiveTeamName(name);
+            setActiveTeamTag(tag);
+          }}
+        />
 
         <div className={`popup-body ${loading ? 'is-loading' : ''}`.trim()}>
           <div className="p-box">

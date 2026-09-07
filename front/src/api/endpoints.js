@@ -22,7 +22,7 @@ export const ENDPOINTS = {
 
   // 상대팀 전적 검색 (Frame 06) + 3초 상대분석 팝업 (Frame 05)
   teamProfile: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}`,
-  teamQuickAnalysis: (teamTag) => `/api/teams/${encodeURIComponent(teamTag)}/quick-analysis`,
+  teamQuickAnalysis: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}/quick-analysis`,
 
   // 승부 예측 (Frame 07, 08)
   prediction: (teamName, teamTag) => `/api/predict/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}`,

@@ -4,7 +4,7 @@ import '../../styles/components/modal-team-search-bar.css';
 
 /**
  * QuickAnalysisModal 전용 팀 검색창.
- * 모달을 닫지 않고, 검색된 팀의 태그를 onTeamFound로 넘겨 데이터만 교체합니다.
+ * 모달을 닫지 않고, 검색된 팀의 이름/태그를 onTeamFound로 넘겨 데이터만 교체합니다.
  */
 export default function ModalTeamSearchBar({ onTeamFound }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,7 +14,7 @@ export default function ModalTeamSearchBar({ onTeamFound }) {
     const found = await checkExists(searchTerm, 'team');
     if (!found) return;
     setSearchTerm('');
-    onTeamFound(found.tagPart);
+    onTeamFound(found.namePart, found.tagPart);
   };
 
   const handleKeyDown = (e) => {
