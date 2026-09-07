@@ -1,21 +1,31 @@
 import { useState } from 'react';
 import AnalysisSection from '../../components/analysis/AnalysisSection';
 import { gameData } from '../../constants/gameData';
+import { mapKey } from '../../utils/gameDataKey';
 
 export default function TeamAnalysisTab({ analysis }) {
-  // 이름 대신 맵의 ID(id)를 상태로 관리하도록 수정
   const [selectedMapId, setSelectedMapId] = useState(gameData.maps[0].id);
 
-  // 선택된 ID에 해당하는 맵 메타 정보와 통계 데이터 추출
-  const currentMapMeta = gameData.maps.find(m => m.id === selectedMapId) || gameData.maps[0];
-  const currentMapStats = analysis?.mapInfoByMap?.[currentMapMeta.name];
+  const currentMapMeta = gameData.maps.find(m => m.id === selectedMapId || m.name === selectedMapId || mapKey(m.name) === mapKey(selectedMapId)) || gameData.maps[0];
+  const currentMapStats = analysis?.mapInfoByMap?.[currentMapMeta.name] || analysis?.mapInfoByMap?.[currentMapMeta.id];
 
   return (
     <AnalysisSection
       analysis={analysis}
       currentMapStats={currentMapStats}
       selectedMapId={selectedMapId}
-      onMapChange={setSelectedMapId}
+      onMapChange={(mapValue) => {
+        const found = gameData.maps.find(m => 
+          m.id === mapValue || 
+          m.name === mapValue ||
+          m.name?.toLowerCase() === mapValue?.toLowerCase() ||
+          mapKey(m.name) === mapKey(mapValue)
+        );
+        
+        if (found) {
+          setSelectedMapId(found.id);
+        }
+      }}
       ourLabel="우리팀"
       theirLabel="상대팀"
     />

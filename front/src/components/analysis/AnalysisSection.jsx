@@ -2,7 +2,7 @@ import RoundInfoBlock from './RoundInfoBlock';
 import MapInfoBlock from './MapInfoBlock';
 import EngagementInfoBlock from './EngagementInfoBlock';
 
-export default function AnalysisSection({ analysis, onMapChange, ourLabel, theirLabel }) {
+export default function AnalysisSection({ analysis, selectedMapId, onMapChange, ourLabel, theirLabel }) {
   const mapData = analysis?.mapInfo;
 
   return (
@@ -10,7 +10,7 @@ export default function AnalysisSection({ analysis, onMapChange, ourLabel, their
       <RoundInfoBlock data={analysis?.roundInfo} />
       <MapInfoBlock 
         data={mapData} 
-        selectedMapId={mapData?.selectedMap}
+        selectedMapId={selectedMapId} 
         onMapChange={onMapChange} 
         combos={mapData?.combos} 
         comboAce={mapData?.comboAce} 
