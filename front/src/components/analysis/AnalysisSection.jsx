@@ -2,19 +2,17 @@ import RoundInfoBlock from './RoundInfoBlock';
 import MapInfoBlock from './MapInfoBlock';
 import EngagementInfoBlock from './EngagementInfoBlock';
 
-export default function AnalysisSection({ analysis, onMapChange, ourLabel, theirLabel }) {
-  const mapData = analysis?.mapInfo;
-
+export default function AnalysisSection({ analysis, currentMapStats, selectedMapId, onMapChange, ourLabel, theirLabel }) {
   return (
     <>
       <RoundInfoBlock data={analysis?.roundInfo} />
       <MapInfoBlock 
-        data={mapData} 
-        selectedMapId={mapData?.selectedMap}
+        data={currentMapStats} 
+        selectedMapId={selectedMapId} 
         onMapChange={onMapChange} 
-        combos={mapData?.combos} 
-        comboAce={mapData?.comboAce} 
-        comboWeakness={mapData?.comboWeakness} 
+        combos={currentMapStats?.combos || currentMapStats?.agentCombos} 
+        comboAce={currentMapStats?.comboAce || currentMapStats?.bestCombo} 
+        comboWeakness={currentMapStats?.comboWeakness || currentMapStats?.worstCombo} 
       />
       <EngagementInfoBlock data={analysis?.engagementInfo} ourLabel={ourLabel} theirLabel={theirLabel} />
     </>

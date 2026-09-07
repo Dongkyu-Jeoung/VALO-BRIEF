@@ -133,8 +133,8 @@ export const myTeamAnalysisMock = {
       avgSpikePlantTime: 29,
       matchSample: 13,
       combos: [
-        { label: '조합 A', pct: 38 },
-        { label: '조합 B', pct: 19 },
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
       ],
       comboAce: [
         { name: 'Zeta', acs: 268 },
@@ -151,8 +151,8 @@ export const myTeamAnalysisMock = {
       avgSpikePlantTime: 33,
       matchSample: 12,
       combos: [
-        { label: '조합 A', pct: 30 },
-        { label: '조합 B', pct: 17 },
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
       ],
       comboAce: [
         { name: 'Rho', acs: 235 },
@@ -169,8 +169,8 @@ export const myTeamAnalysisMock = {
       avgSpikePlantTime: 36,
       matchSample: 10,
       combos: [
-        { label: '조합 A', pct: 24 },
-        { label: '조합 B', pct: 21 },
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
       ],
       comboAce: [
         { name: 'Kai', acs: 227 },
@@ -187,8 +187,8 @@ export const myTeamAnalysisMock = {
       avgSpikePlantTime: 31,
       matchSample: 9,
       combos: [
-        { label: '조합 A', pct: 33 },
-        { label: '조합 B', pct: 18 },
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
       ],
       comboAce: [
         { name: 'Zeta', acs: 274 },
@@ -205,8 +205,8 @@ export const myTeamAnalysisMock = {
       avgSpikePlantTime: 35,
       matchSample: 8,
       combos: [
-        { label: '조합 A', pct: 21 },
-        { label: '조합 B', pct: 20 },
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
       ],
       comboAce: [
         { name: 'Rho', acs: 229 },
@@ -222,7 +222,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 45, B: 35, center: 20 },
       avgSpikePlantTime: 30,
       matchSample: 10,
-      combos: [{ label: '조합 A', pct: 35 }, { label: '조합 B', pct: 20 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Zeta', acs: 260 }, { name: 'Rho', acs: 235 }],
       comboWeakness: [{ name: 'Vex', fd: 28, acs: 182 }, { name: 'Milo', fd: 24, acs: 195 }],
     },
@@ -231,7 +234,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 40, B: 40, center: 20 },
       avgSpikePlantTime: 34,
       matchSample: 10,
-      combos: [{ label: '조합 A', pct: 28 }, { label: '조합 B', pct: 22 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Rho', acs: 240 }, { name: 'Kai', acs: 215 }],
       comboWeakness: [{ name: 'Vex', fd: 30, acs: 180 }, { name: 'Milo', fd: 26, acs: 190 }],
     },
@@ -240,7 +246,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 35, B: 35, center: 30 },
       avgSpikePlantTime: 32,
       matchSample: 8,
-      combos: [{ label: '조합 A', pct: 30 }, { label: '조합 B', pct: 20 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Zeta', acs: 250 }, { name: 'Rho', acs: 230 }],
       comboWeakness: [{ name: 'Vex', fd: 25, acs: 185 }, { name: 'Milo', fd: 25, acs: 190 }],
     },
@@ -249,7 +258,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 45, B: 45, center: 10 },
       avgSpikePlantTime: 31,
       matchSample: 13,
-      combos: [{ label: '조합 A', pct: 32 }, { label: '조합 B', pct: 19 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Zeta', acs: 265 }, { name: 'Kai', acs: 220 }],
       comboWeakness: [{ name: 'Vex', fd: 29, acs: 183 }, { name: 'Milo', fd: 27, acs: 192 }],
     },
@@ -258,7 +270,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 40, B: 50, center: 10 },
       avgSpikePlantTime: 33,
       matchSample: 17,
-      combos: [{ label: '조합 A', pct: 34 }, { label: '조합 B', pct: 18 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Rho', acs: 245 }, { name: 'Zeta', acs: 258 }],
       comboWeakness: [{ name: 'Vex', fd: 31, acs: 179 }, { name: 'Milo', fd: 28, acs: 188 }],
     },
@@ -267,7 +282,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 38, B: 42, center: 20 },
       avgSpikePlantTime: 35,
       matchSample: 13,
-      combos: [{ label: '조합 A', pct: 25 }, { label: '조합 B', pct: 22 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Kai', acs: 225 }, { name: 'Rho', acs: 232 }],
       comboWeakness: [{ name: 'Vex', fd: 30, acs: 176 }, { name: 'Milo', fd: 26, acs: 191 }],
     },
@@ -276,7 +294,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 42, B: 38, center: 20 },
       avgSpikePlantTime: 30,
       matchSample: 9,
-      combos: [{ label: '조합 A', pct: 33 }, { label: '조합 B', pct: 21 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Zeta', acs: 262 }, { name: 'Rho', acs: 238 }],
       comboWeakness: [{ name: 'Vex', fd: 27, acs: 184 }, { name: 'Milo', fd: 23, acs: 197 }],
     },
@@ -285,7 +306,10 @@ export const myTeamAnalysisMock = {
       preferredSites: { A: 40, B: 40, center: 20 },
       avgSpikePlantTime: 32,
       matchSample: 15,
-      combos: [{ label: '조합 A', pct: 31 }, { label: '조합 B', pct: 20 }],
+      combos: [
+        { label: '조합 A', pct: 38, agents: ['jett', 'omen', 'killjoy', 'sova', 'reyna'] },
+        { label: '조합 B', pct: 19, agents: ['jett', 'omen', 'sova', 'cypher', 'viper'] },
+      ],
       comboAce: [{ name: 'Zeta', acs: 260 }, { name: 'Kai', acs: 218 }],
       comboWeakness: [{ name: 'Vex', fd: 29, acs: 181 }, { name: 'Milo', fd: 25, acs: 194 }],
     },

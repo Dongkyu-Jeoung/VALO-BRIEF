@@ -20,6 +20,6 @@ httpx
 openai
 gunicorn
 watchfiles
-# model_loader
 xgboost
 requests
+#model_loader
