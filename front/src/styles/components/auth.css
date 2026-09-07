@@ -236,3 +236,11 @@
   margin-bottom: var(--sp-5);
   line-height: var(--lh-loose);
 }
+
+.stat-unit {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  margin-left: 3px;
+  color: var(--text-2);
+}

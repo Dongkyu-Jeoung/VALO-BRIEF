@@ -3,9 +3,13 @@ import EmptyImageBox from '../common/EmptyImageBox';
 import DropdownSelect from '../common/DropdownSelect';
 import ComboBlock from './ComboBlock';
 import { gameData } from '../../constants/gameData';
+import { mapKey } from '../../utils/gameDataKey';
 
 export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange }) {
+
   const currentMapMeta = mapMeta || gameData.maps.find(m => m.id === selectedMapId) || gameData.maps[0];
+
+  const computedAssetKey = mapKey(currentMapMeta?.name) || currentMapMeta?.id?.toLowerCase();
 
   const items = [
     { label: '맵 승률', value: `${data?.mapWinRate ?? 0}%` },
@@ -39,14 +43,16 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
           options={gameData.maps.map(m => m.name)} 
           value={currentMapMeta?.name} 
           onChange={(mapName) => {
-            if (mapName) onMapChange(mapName);
+            if (typeof onMapChange === 'function') {
+              onMapChange(mapName);
+            }
           }} 
         />
       </div>
       <div className="map-analysis-body">
         <EmptyImageBox
           folder="maps"
-          assetKey={currentMapMeta?.id}
+          assetKey={computedAssetKey}
           label={`선택한 맵 이미지\n영역 (220×220)`}
           className="map-image-box"
         />
@@ -57,13 +63,7 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, onMapChange
               <div className={`val ${item.smallValue ? 'sm' : ''}`.trim()}>
                 {item.value}
                 {item.unit && (
-                  <span style={{ 
-                    fontFamily: 'var(--font-body)', 
-                    fontSize: '14px', 
-                    fontWeight: 500, 
-                    marginLeft: '3px',
-                    color: 'var(--text-2)'
-                  }}>
+                  <span className="stat-unit">
                     {item.unit}
                   </span>
                 )}

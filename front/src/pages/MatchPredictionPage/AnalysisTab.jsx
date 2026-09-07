@@ -32,8 +32,9 @@ export default function AnalysisTab({ analysis }) {
   return (
     <AnalysisSection
       analysis={{ ...analysis, mapInfo }}
-      currentMapStats={mapInfo} 
-      selectedMapId={currentMapObj.name} 
+      currentMapStats={mapInfo}
+      selectedMapId={currentMapObj.id}   
+      mapMeta={currentMapObj}            
       onMapChange={(mapName) => {
         setSelectedMap(mapName);
       }}

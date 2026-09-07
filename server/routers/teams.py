@@ -73,3 +73,39 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
         team_info=team_info,
         match_details=list(match_details),
     )
+
+
+@router.get("/{team_name}/{team_tag}/analysis")
+async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends(get_db)):
+    """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
+    get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다."""
+    team_info, history = await asyncio.gather(
+        henrik_api.get_premier_team(team_name, team_tag),
+        henrik_api.get_premier_team_history(team_name, team_tag),
+    )
+    if not team_info:
+        raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
+
+    league_matches = (history or {}).get("league_matches") or []
+    recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
+    match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
+
+    match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
+
+    profile = build_team_profile(
+        db,
+        team_name=team_name,
+        team_tag=team_tag,
+        team_info=team_info,
+        match_details=list(match_details),
+    )
+
+    # 맵 이미지 매칭 키 디버깅용 로그 추가
+    print("===== DEBUG: mapInfoByMap keys =====")
+    print(list(profile.get("mapInfoByMap", {}).keys()))
+
+    return {
+        "roundInfo": profile.get("roundInfo", {}),
+        "mapWinrates": profile.get("mapWinrates", []),
+        "mapInfoByMap": profile.get("mapInfoByMap", {}),
+    }
