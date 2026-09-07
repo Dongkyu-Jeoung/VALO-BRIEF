@@ -7,7 +7,17 @@ export default function TeamAnalysisTab({ analysis }) {
   const [selectedMapId, setSelectedMapId] = useState(gameData.maps[0].id);
 
   const currentMapMeta = gameData.maps.find(m => m.id === selectedMapId || m.name === selectedMapId || mapKey(m.name) === mapKey(selectedMapId)) || gameData.maps[0];
-  const currentMapStats = analysis?.mapInfoByMap?.[currentMapMeta.name] || analysis?.mapInfoByMap?.[currentMapMeta.id];
+  
+  const mapStatsMap = analysis?.mapInfoByMap || {};
+  const targetKey = currentMapMeta.id?.toLowerCase();
+  const alternativeKey = mapKey(currentMapMeta.name);
+
+  const currentMapStats = 
+    mapStatsMap[targetKey] || 
+    mapStatsMap[alternativeKey] ||
+    mapStatsMap[currentMapMeta.name] || 
+    mapStatsMap[currentMapMeta.id] || 
+    Object.values(mapStatsMap)[0];
 
   return (
     <AnalysisSection
