@@ -37,7 +37,7 @@ export default function AnalysisTab({ analysis }) {
     mapWinRate: rawMapData.mapWinRate ?? 0,
     atkWinRate: rawMapData.attackWinRate ?? 0,
     defWinRate: rawMapData.defenseWinRate ?? 0,
-    preferredSites: rawMapData.preferredSites || { A: 0, B: 0, center: 0 },
+        preferredSite: rawMapData.preferredSite || { A: 0, B: 0 },
     avgSpikePlantTime: rawPlantTime,
     matchSample: rawMapData.sampleGames ?? 0,
     combos: rawMapData.combos || [],

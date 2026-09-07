@@ -137,6 +137,24 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         if (rounds[i].get("winning_team") or "").lower() == side
     )
 
+    # 스파이크 설치 사이트 / 설치 시간 집계 (우리 팀이 직접 설치한 라운드만 대상 -
+    # 상대가 설치한 라운드까지 포함하면 "우리 팀 선호 사이트"라는 의미가 깨짐)
+    plant_site_counts: dict[str, int] = {}
+    plant_times: list[int] = []
+    for rnd in rounds:
+        plant = rnd.get("plant_events") or {}
+        planted_by = plant.get("planted_by") or {}
+        if planted_by.get("puuid") not in our_puuids:
+            continue
+        site = plant.get("plant_site")
+        if site:
+            plant_site_counts[site] = plant_site_counts.get(site, 0) + 1
+        raw_time = plant.get("plant_time_in_round")
+        if isinstance(raw_time, str):
+            raw_time = int(raw_time) if raw_time.isdigit() else None
+        if isinstance(raw_time, (int, float)) and raw_time > 0:
+            plant_times.append(int(raw_time))
+
     record = {
         "map": map_ko,
         "result": result,
@@ -155,6 +173,8 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         "pistolRoundsWon": pistol_won,
         "pistolRoundsPlayed": len(pistol_indexes),
         "rosterAgents": [p.get("character") for p in roster_stats],
+        "plantSiteCounts": plant_site_counts,
+        "plantTimes": plant_times,
     }
     return record, roster_stats
 
@@ -179,10 +199,18 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
     buckets: dict[str, dict] = {}
     for r in records:
         map_name = r["map"]
-        b = buckets.setdefault(map_name, {"win": 0, "lose": 0, "games": 0, "combos": []})
+        b = buckets.setdefault(
+            map_name,
+            {"win": 0, "lose": 0, "games": 0, "combos": [], "plantSiteCounts": {}, "plantTimes": []},
+        )
         b["games"] += 1
         b["win" if r["result"] == "win" else "lose"] += 1
-        
+
+        # 스파이크 설치 사이트/시간 누적
+        for site, cnt in r.get("plantSiteCounts", {}).items():
+            b["plantSiteCounts"][site] = b["plantSiteCounts"].get(site, 0) + cnt
+        b["plantTimes"].extend(r.get("plantTimes", []))
+
         # 등장한 요원 조합 수집 (한글명 변환)
         agent_names = []
         for char in r.get("rosterAgents", []):
@@ -197,11 +225,23 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         if games <= 0:
             continue
         win_rate = round(b["win"] / games * 100) if games else 0
-        
+
+        # 선호 사이트: 우리 팀이 설치한 라운드 기준 사이트별 비율
+        total_plants = sum(b["plantSiteCounts"].values())
+        preferred_site = (
+            {site: round(cnt / total_plants * 100) for site, cnt in b["plantSiteCounts"].items()}
+            if total_plants > 0
+            else {"A": 0, "B": 0}
+        )
+
+        # 평균 스파이크 설치 시간: plant_time_in_round(ms) 평균 -> 초 단위 표시
+        avg_plant_ms = round(sum(b["plantTimes"]) / len(b["plantTimes"])) if b["plantTimes"] else 0
+        avg_plant_sec = round(avg_plant_ms / 1000) if avg_plant_ms else 0
+
         # 요원 조합 통계 처리 (BEST / WORST 산출)
         combo_stats = {}
         for c in b["combos"]:
-            key = tuple(sorted(c["agents"][:3])) # 대표 3인 조합 기준
+            key = tuple(sorted(c["agents"])) # 5인 전체 조합 기준
             if not key:
                 continue
             stat = combo_stats.setdefault(key, {"wins": 0, "total": 0})
@@ -223,8 +263,8 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             "sampleGames": games,
             "attackWinRate": win_rate,   # 임시 매칭 승률 연동 방어
             "defenseWinRate": win_rate,  # 임시 매칭 승률 연동 방어
-            "preferredSite": "A",   
-            "avgSpikePlantTime": "35초",
+            "preferredSite": preferred_site,
+            "avgSpikePlantTime": f"{avg_plant_sec}초" if avg_plant_sec else "-",
             "combos": sorted_combos,
             "comboAce": best_combo,
             "comboWeakness": worst_combo,

@@ -15,14 +15,20 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, maps, onMap
   const currentMapMeta = mapMeta || availableMaps.find(m => m.id === selectedMapId) || availableMaps[0];
   const computedAssetKey = mapKey(currentMapMeta?.name) || currentMapMeta?.id?.toLowerCase();
 
+  // 선호 사이트 데이터가 객체(집계 완료)인지 아닌지에 따라 표시.
+  // 객체가 아니면(=백엔드가 아직 집계를 못한 경우) 임의의 수치를 지어내지 않고 '데이터 없음'으로 표시.
+  const siteValue = typeof data?.preferredSite === 'object' && data?.preferredSite !== null
+    ? `A ${data.preferredSite.A ?? 0}% · B ${data.preferredSite.B ?? 0}%`
+    : '데이터 없음';
+
   const items = [
     { label: '맵 승률', value: `${data?.mapWinRate ?? 0}%` },
     { label: '공격 승률', value: `${data?.atkWinRate ?? 0}%` },
     { label: '수비 승률', value: `${data?.defWinRate ?? 0}%` },
     {
       label: '선호 사이트',
-      value: `A ${data?.preferredSites?.A ?? 0}% · B ${data?.preferredSites?.B ?? 0}%`,
-      sub: `센터 ${data?.preferredSites?.center ?? 0}%`,
+      value: siteValue,
+      sub: data?.preferredSite?.center ? `센터 ${data.preferredSite.center}%` : null,
       smallValue: true,
     },
     { 
