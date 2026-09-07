@@ -342,9 +342,11 @@
   margin-top: auto;
   display: flex;
   justify-content: flex-start;
+  gap: var(--sp-3);
 }
 
-.sidebar-logout-btn {
+.sidebar-logout-btn,
+.sidebar-mypage-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
@@ -356,6 +358,7 @@
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-md);
   cursor: pointer;
+  text-decoration: none;
   transition: all 0.2s ease;
 }
 
@@ -363,6 +366,12 @@
   background: #ff4655;
   color: #ffffff;
   border-color: #ff4655;
+}
+
+.sidebar-mypage-btn:hover {
+  background: var(--bg-panel-2);
+  color: var(--text-1);
+  border-color: var(--border-strong);
 }
 
 /* ===== 5. 반응형 처리 ===== */

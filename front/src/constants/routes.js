@@ -6,4 +6,5 @@ export const ROUTES = {
   team: (teamName = ':teamName', teamTag = ':teamTag') => `/teams/${teamName}/${teamTag}`,
   predict: (teamName = ':teamName', teamTag = ':teamTag') => `/predict/${teamName}/${teamTag}`,
   myTeam: '/my-team',
+  myPage: '/my-page',
 };

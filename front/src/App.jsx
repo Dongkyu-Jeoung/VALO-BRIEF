@@ -11,6 +11,7 @@ import PlayerProfilePage from './pages/PlayerProfilePage';
 import TeamProfilePage from './pages/TeamProfilePage';
 import MatchPredictionPage from './pages/MatchPredictionPage';
 import MyTeamAnalysisPage from './pages/MyTeamAnalysisPage';
+import MyPage from './pages/MyPage';
 
 export default function App() {
   return (
@@ -36,6 +37,10 @@ export default function App() {
         <Route
           path="/my-team"
           element={<ProtectedRoute><MyTeamAnalysisPage /></ProtectedRoute>}
+        />
+        <Route
+          path="/my-page"
+          element={<ProtectedRoute><MyPage /></ProtectedRoute>}
         />
       </Route>
 

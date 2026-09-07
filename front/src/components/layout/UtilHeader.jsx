@@ -78,6 +78,13 @@ export default function UtilHeader() {
 
             {isAuthenticated ? (
               <div className="sidebar-footer">
+                <Link
+                  to={ROUTES.myPage}
+                  className="sidebar-mypage-btn"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  마이페이지
+                </Link>
                 <button
                   type="button"
                   className="sidebar-logout-btn"

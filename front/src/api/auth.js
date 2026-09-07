@@ -41,3 +41,46 @@ export async function checkIdAvailable(id) {
   }
   return httpClient.get(ENDPOINTS.checkIdAvailable(id));
 }
+
+// 마이페이지 (routers/auth.py: GET/PATCH/DELETE /api/auth/me) - 로그인 상태에서만 호출됨.
+// mock 모드에서는 로그인 시 저장해둔 valo_auth_user를 그대로 흉내내서 돌려준다.
+function mockTeam() {
+  const user = JSON.parse(localStorage.getItem('valo_auth_user') || 'null');
+  return {
+    teamId: 'mock-team-id',
+    email: 'mock@valobrief.com',
+    loginId: user?.id || user?.loginId || 'mockuser',
+    teamName: user?.teamName || 'Team Phoenix',
+    teamTag: user?.teamTag || 'PHX',
+    teamImage: null,
+    division: null,
+    rankingPoints: 0,
+    verified: false,
+    verifiedAt: null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function getMe() {
+  if (USE_MOCK_ONLY) {
+    await delay(MOCK_DELAY_MS);
+    return mockTeam();
+  }
+  return httpClient.get(ENDPOINTS.me());
+}
+
+export async function updateMe(payload) {
+  if (USE_MOCK_ONLY) {
+    await delay(MOCK_DELAY_MS);
+    return { ...mockTeam(), ...(payload.email ? { email: payload.email } : {}) };
+  }
+  return httpClient.patch(ENDPOINTS.me(), payload);
+}
+
+export async function deleteMe(password) {
+  if (USE_MOCK_ONLY) {
+    await delay(MOCK_DELAY_MS);
+    return { success: true };
+  }
+  return httpClient.delete(ENDPOINTS.me(), { password });
+}
