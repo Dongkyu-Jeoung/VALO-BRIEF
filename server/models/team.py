@@ -19,6 +19,8 @@ class Team(Base):
     team_name = Column(String(50), nullable=False)
     team_tag = Column(String(10), nullable=False)
     team_image = Column(String(255), nullable=True)
+    verified = Column(Boolean, nullable=False, default=False)
+    verified_at = Column(DateTime, nullable=True)
     division = Column(String(20), nullable=True)
     ranking_points = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, server_default=func.now())
