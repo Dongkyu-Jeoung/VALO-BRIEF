@@ -136,6 +136,17 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
             "acs": acs_of(mvp_player),
         }
 
+    # 피스톨 라운드(1R, 13R)는 rounds[].winning_team이 "Red"/"Blue"로 내려오는 것을
+    # side("red"/"blue")와 소문자 비교하면 사이드 전환 로직 없이도 안전하게 집계 가능.
+    # 공격/수비, 에코 라운드 승률은 라운드별 사이드 배정 스키마 확인이 끝나야 정확히
+    # 계산할 수 있어 이번 수정에서는 제외했다 (roundInfo에 None으로 표시 - TODO).
+    rounds = match.get("rounds") or []
+    pistol_indexes = [i for i in (0, 12) if i < len(rounds)]
+    pistol_won = sum(
+        1 for i in pistol_indexes
+        if (rounds[i].get("winning_team") or "").lower() == side
+    )
+
     record = {
         "map": map_ko,
         "result": result,
@@ -151,6 +162,8 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         "mvp": mvp,
         "season": season,
         "act": act,
+        "pistolRoundsWon": pistol_won,
+        "pistolRoundsPlayed": len(pistol_indexes),
     }
     return record, roster_stats
 
@@ -166,6 +179,30 @@ def _map_winrates(records: list) -> list:
         games = b["win"] + b["lose"]
         b["winRate"] = round(b["win"] / games * 100) if games else 0
         result.append(b)
+    return result
+
+
+def _map_info_by_map(records: list) -> dict:
+    """맵별 상세 정보(분석 탭 "② 맵 정보" 용). 현재는 맵 승률/표본 수만 계산한다.
+    공격/수비 승률, 선호 사이트, 평균 스파이크 설치 시간, 요원 조합(BEST/WORST)은
+    라운드 단위 원본 데이터(rounds, plant_events)의 사이드/설치 스키마 확인이 끝나야
+    정확히 계산할 수 있어 우선 None으로 비워둔다 (TODO)."""
+    buckets: dict[str, dict] = {}
+    for r in records:
+        b = buckets.setdefault(r["map"], {"win": 0, "lose": 0, "games": 0})
+        b["games"] += 1
+        b["win" if r["result"] == "win" else "lose"] += 1
+
+    result = {}
+    for map_name, b in buckets.items():
+        result[map_name] = {
+            "mapWinRate": round(b["win"] / b["games"] * 100) if b["games"] else 0,
+            "sampleGames": b["games"],
+            "attackWinRate": 0,   
+            "defenseWinRate": 0,  
+            "preferredSite": "-",   
+            "avgSpikePlantTime": "0",
+        }
     return result
 
 
@@ -253,6 +290,11 @@ def build_team_profile(
 
     act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
 
+    # ① 라운드 정보(분석 탭)용 집계. 공격/수비/에코 승률은 라운드별 사이드·경제 스키마
+    # 확인이 끝나야 정확히 계산할 수 있어 우선 None으로 비워둔다 (TODO).
+    pistol_won_total = sum(r.get("pistolRoundsWon", 0) for r in records)
+    pistol_played_total = sum(r.get("pistolRoundsPlayed", 0) for r in records)
+
     return {
         "name": team_info.get("name") or team_name,
         "tag": team_info.get("tag") or team_tag,
@@ -270,13 +312,30 @@ def build_team_profile(
         },
         "playerRanking": _player_ranking(all_roster_stats, agents),
         "mapWinrates": _map_winrates(records),
+        "mapInfoByMap": _map_info_by_map(records),
+        "roundInfo": {
+            "attackWinRate": 0,
+            "defenseWinRate": 0,
+            "pistolWinRate": round(pistol_won_total / pistol_played_total * 100) if pistol_played_total else 0,
+            "ecoWinRate": 0,
+            "fbWinRate": 0,
+            "fdLoseRate": 0,
+            "fbWin": 0,
+            "fdLose": 0,
+            "firstBloodWinRate": 0,
+            "firstDeathLoseRate": 0,
+            "fbPercentage": 0,
+            "fdPercentage": 0,
+            "fb": {"winRate": 0, "loseRate": 0},
+            "fd": {"winRate": 0, "loseRate": 0},
+            "firstBlood": {"winRate": 0},
+            "firstDeath": {"winRate": 0},
+        },
         "matchHistory": records,
         "actOptions": act_options,
     }
 
 
-# routers/teams.py의 quick-analysis 엔드포인트가 불러올 매치 건수. build_team_profile용
-# MATCH_HISTORY_LIMIT(10)과 달리 QuickAnalysisModal은 "최근 5게임"만 요약해서 보여준다.
 QUICK_ANALYSIS_MATCH_LIMIT = 5
 
 

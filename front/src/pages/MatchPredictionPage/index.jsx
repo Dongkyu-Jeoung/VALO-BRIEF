@@ -21,7 +21,23 @@ export default function MatchPredictionPage() {
 
   useEffect(() => {
     let active = true;
-    fetchTeamAnalysis(teamName, teamTag).then((data) => { if (active) setAnalysisData(data); });
+    fetchTeamAnalysis(teamName, teamTag).then((data) => { 
+      if (active && data) {
+        // [안전 매핑] 백엔드 키와 프론트엔드 키 불일치로 인한 undefined 방지
+        const normalizedData = {
+          ...data,
+          roundInfo: {
+            attackWinRate: data.roundInfo?.attackWinRate ?? data.roundInfo?.atkWinRate ?? 0,
+            defenseWinRate: data.roundInfo?.defenseWinRate ?? data.roundInfo?.defWinRate ?? 0,
+            pistolWinRate: data.roundInfo?.pistolWinRate ?? 0,
+            ecoWinRate: data.roundInfo?.ecoWinRate ?? 0,
+            fbWinRate: data.roundInfo?.fbWinRate ?? 0,
+            fdLoseRate: data.roundInfo?.fdLoseRate ?? 0,
+          }
+        };
+        setAnalysisData(normalizedData);
+      } 
+    });
     fetchTeamProfile(teamName, teamTag).then((data) => { if (active) setOpponentTeam(data); });
     return () => { active = false; };
   }, [teamName, teamTag]);

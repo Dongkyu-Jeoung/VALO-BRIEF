@@ -6,6 +6,7 @@ prefix/파일명/함수명을 전부 팀 전용으로 분리했다 (players.py/p
 호출한다 (team_search.md의 캐싱 전략 검토 참고, 로그인 기능 붙기 전까지는 보류).
 """
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -102,7 +103,22 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
     print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
-    
+
+        # 라운드 데이터 구조(공격/수비 사이드, economy 등) 확인용 임시 디버그 로그.
+    # roundInfo의 공격/수비/에코 승률 구현이 끝나면 삭제할 것.
+    print("===== DEBUG: SAMPLE ROUND (planted round, top-level keys only) =====")
+    sample_match = next((m for m in match_details if m), None)
+    if sample_match:
+        rounds = sample_match.get("rounds") or []
+        planted_round = next((r for r in rounds if r.get("bomb_planted")), None)
+        if planted_round:
+            trimmed = {k: v for k, v in planted_round.items() if k not in ("player_stats", "player_locations")}
+            print(json.dumps(trimmed, indent=2, ensure_ascii=False))
+        else:
+            print("NO PLANTED ROUND FOUND IN THIS MATCH")
+    else:
+        print("NO VALID MATCH")
+
     profile = build_team_profile(
         db,
         team_name=team_name,
@@ -114,6 +130,10 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     # 맵 이미지 매칭 키 디버깅용 로그 추가
     print("===== DEBUG: mapInfoByMap keys =====")
     print(list(profile.get("mapInfoByMap", {}).keys()))
+
+    print("===== DEBUG: FINAL PROFILE RESPONSE =====")
+    print("roundInfo:", profile.get("roundInfo"))
+    print("mapInfoByMap:", profile.get("mapInfoByMap"))
 
     return {
         "roundInfo": profile.get("roundInfo", {}),
