@@ -2,7 +2,7 @@
 riot_accounts 테이블 ORM 모델 (로스터 개인 Riot 계정 캐시). database/valo_brief.sql 참고.
 services/riot_accounts.py 공용.
 """
-from sqlalchemy import Column, DateTime, Enum, Integer, String, func
+from sqlalchemy import Column, DateTime, Integer, String, func
 
 from database.connection import Base
 
@@ -20,10 +20,4 @@ class RiotAccount(Base):
     avatar_url = Column(String(255), nullable=True)
     current_rank = Column(String(30), nullable=True)
     current_rr = Column(Integer, nullable=True)
-    verification_status = Column(
-        Enum("none", "pending", "verified", "failed", name="verification_status"),
-        nullable=False,
-        default="none",
-    )
-    verified_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
