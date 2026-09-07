@@ -36,7 +36,7 @@ export const quickAnalysisMock = {
   teamTag: 'ASC',
   recentForm: ['win', 'win', 'lose', 'win', 'lose'],
   wins: 3, losses: 2, winRate: 60, avgRoundWin: 13, avgRoundLose: 8,
-  tier: { division: '디비전 3', rp: 5432, topPercent: 24 },
+  tier: { division: '디비전 3', rp: 5432, iconUrl: null },
   playerRanking: [
     { rank: 1, name: 'Zeta', acs: 268, hs: 29, position: '타격대', kd: 1.42, adr: 172 },
     { rank: 2, name: 'Rho', acs: 241, hs: 24, position: '척후대', kd: 1.25, adr: 158 },
