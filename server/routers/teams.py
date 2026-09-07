@@ -79,10 +79,17 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
 async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends(get_db)):
     """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
     get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다."""
+
+    print(f"===== DEBUG: API Called for team: {team_name}#{team_tag} =====")
+
     team_info, history = await asyncio.gather(
         henrik_api.get_premier_team(team_name, team_tag),
         henrik_api.get_premier_team_history(team_name, team_tag),
     )
+
+    print(f"===== DEBUG: team_info loaded: {bool(team_info)} =====")
+    print(f"===== DEBUG: history raw data: {history} =====")
+
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
 
@@ -90,8 +97,12 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
     match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
 
+    print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
+
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
 
+    print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
+    
     profile = build_team_profile(
         db,
         team_name=team_name,
