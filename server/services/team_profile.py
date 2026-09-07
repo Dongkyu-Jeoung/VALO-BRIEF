@@ -311,7 +311,7 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             player_summaries.append({"name": pbucket["name"], "acs": avg_acs, "fd": fd_rate})
 
         best_player = max(player_summaries, key=lambda p: p["acs"], default=None)
-        worst_player = max(player_summaries, key=lambda p: (p["fd"], -p["acs"]), default=None)
+        worst_player = min(player_summaries, key=lambda p: p["acs"], default=None)
 
         best_players = [{"name": best_player["name"], "acs": best_player["acs"]}] if best_player else []
         worst_players = (
