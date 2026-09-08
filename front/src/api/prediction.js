@@ -12,9 +12,6 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // "존재하지 않음"이 아니라 "아직 상대팀을 못 정했다"는 정상 상태라 mock으로 대체할
 // 필요 없이 그냥 null로 알려주면 된다.
 export async function fetchRecentOpponent() {
-  // FORCE_MOCK_PREDICTION(config.js): 백엔드를 아예 안 타고 URL의 데모 팀을 그대로
-  // 쓰게 null 반환.
-  if (FORCE_MOCK_PREDICTION) return null;
   try {
     return await httpClient.get('/api/predict/recent-opponent');
   } catch {
