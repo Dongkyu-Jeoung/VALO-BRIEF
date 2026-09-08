@@ -6,7 +6,7 @@
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from database.connection import get_db
 from models.team import Team
 from services import auth as auth_service
 from services import henrik_api
+from services import match_sync
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -102,7 +103,7 @@ def get_current_team(
 
 
 @router.post("/signup")
-async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+async def signup(payload: SignupRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if not payload.agree:
         raise HTTPException(status_code=400, detail="개인정보 수집·이용에 동의해야 합니다.")
 
@@ -134,6 +135,13 @@ async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
         )
     except auth_service.DuplicateTeamError:
         raise HTTPException(status_code=409, detail="이미 사용 중인 이메일, 아이디 또는 팀 정보입니다.")
+
+    # 가입 직후 프리미어 매치 이력을 매치 상세까지 미리 캐싱(Pre-fill)해둔다. 매치 건당
+    # Henrik 레이트리밋 하에서 순차 호출해야 해서 회원가입 응답을 기다리게 할 수 없으므로
+    # 백그라운드로 돌린다 (services/match_sync.py 참고).
+    background_tasks.add_task(
+        match_sync.sync_team_match_history, team_info["id"], payload.teamName, payload.teamTag
+    )
 
     return {"success": True}
 
