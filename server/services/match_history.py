@@ -174,6 +174,11 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     blue_rounds_won = blue.get("rounds_won")
     rounds_played = (red_rounds_won or 0) + (blue_rounds_won or 0)
 
+    # 맵 UUID 캐시 로드 및 파싱
+    map_name = metadata.get("map") or ""
+    map_uuid_map = _load_map_uuid_by_name(db)
+    map_uuid = map_uuid_map.get(map_name.lower())
+
     match_row = db.get(Match, match_id)
     a_is_red = _resolve_a_is_red(match_row, red_team_id, blue_team_id)
     proposed_a = red_team_id if a_is_red else blue_team_id
@@ -184,9 +189,8 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     if match_row is None:
         match_row = Match(match_id=match_id)
         db.add(match_row)
-    # 이미 알고 있던 팀 id를 이번 조회 결과(예: 조회 실패)로 덮어써서 None으로 되돌리지
-    # 않는다 - services/match_sync.py::_backfill_if_needed와 동일한 "채우기만 하고
-    # 후퇴시키지 않는다" 원칙.
+
+    # 이미 알고 있던 팀 id를 이번 조회 결과(예: 조회 실패)로 덮어써서 None으로 되돌리지 않는다
     match_row.team_a_id = proposed_a if proposed_a is not None else match_row.team_a_id
     match_row.team_b_id = proposed_b if proposed_b is not None else match_row.team_b_id
     match_row.winner_team_id = winner_team_id if winner_team_id is not None else match_row.winner_team_id
@@ -213,7 +217,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             _ensure_riot_account_placeholder(db, puuid, player.get("name"), player.get("tag"))
     db.flush()
 
-    # ACS를 먼저 전부 계산해두고, 같은 로스터(red/blue) 안에서 최고 ACS 선수를 MVP로 표시한다.
+    # ACS 및 MVP 계산
     acs_by_puuid: dict[str, int] = {}
     for player in all_players:
         puuid = player.get("puuid")
@@ -259,7 +263,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             db.add(stat_row)
 
         stat_row.team_id = team_id
-        stat_row.is_mvp = puuid == mvp_puuid
+        stat_row.is_mvp = (puuid == mvp_puuid) if mvp_puuid else False
         stat_row.agent_uuid = (agent_meta or {}).get("uuid")
         stat_row.role_type = ROLE_LABELS.get((agent_meta or {}).get("role_type"))
         stat_row.started_at = started_at
