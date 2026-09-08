@@ -5,9 +5,7 @@ import Logo from './Logo';
 import HeaderSearchBar from '../search/HeaderSearchBar';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
-
-const DEMO_TEAM_NAME = 'team-ascend';
-const DEMO_TEAM_TAG = 'ASC';
+import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
 
 const NAV_ITEMS = [
   { label: '개인 검색', to: '/players/example/0000' },

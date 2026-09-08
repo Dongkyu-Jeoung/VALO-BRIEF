@@ -11,12 +11,6 @@ import { ROUTES } from '../../constants/routes';
 /**
  * 통합검색에서 '팀명#태그'로 검색했을 때 뜨는 팝업.
  * 사용법: <QuickAnalysisModal teamName="team-ascend" teamTag="ASC" onClose={...} />
- *
- * initialData: 이미 갖고 있는 데이터로 바로 렌더링하고 첫 fetch를 건너뛴다(HomePage 데모
- * 카드처럼 애초에 존재하지 않는 팀명으로 여는 경우 - 실제 백엔드가 붙어있으면 매번 Henrik
- * 조회 2건(team_info+history)이 404로 끝난 뒤에야 mock로 폴백해서 그만큼 느려 보이고,
- * Henrik 레이트리밋(분당 30건) 예산도 그냥 날아갔었다). ModalTeamSearchBar로 실제 팀을
- * 검색하면(activeTeamName/Tag 변경) 그때는 정상적으로 fetchQuickAnalysis를 부른다.
  */
 export default function QuickAnalysisModal({ teamName, teamTag, initialData, onClose }) {
   const [activeTeamName, setActiveTeamName] = useState(teamName);
@@ -25,8 +19,6 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
   const [loading, setLoading] = useState(false);
   const skipNextFetch = useRef(Boolean(initialData));
 
-  // initialData(데모용)만 있고 아직 실제로 팀을 검색한 적 없으면, "상세 정보 보기"가
-  // 존재하지 않는 데모 팀 페이지로 넘어가지 않도록 막는다.
   const [hasSearched, setHasSearched] = useState(!initialData);
   const [showCtaToast, setShowCtaToast] = useState(false);
 
@@ -51,7 +43,6 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
     return () => { active = false; };
   }, [activeTeamName, activeTeamTag]);
 
-  //로딩 상태 화면 추가
   if (!data) {
     return (
       <div className="popup-overlay" onClick={onClose}>
@@ -94,13 +85,22 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
           </button>
         </div>
 
-        <ModalTeamSearchBar
-          onTeamFound={(name, tag) => {
-            setHasSearched(true);
-            setActiveTeamName(name);
-            setActiveTeamTag(tag);
-          }}
-        />
+        {/* 1. 검색창을 원래 위치인 최상단에 배치 */}
+        <div className="popup-search-area">
+          <ModalTeamSearchBar
+            onTeamFound={(name, tag) => {
+              setHasSearched(true);
+              setActiveTeamName(name);
+              setActiveTeamTag(tag);
+            }}
+          />
+        </div>
+
+        {/* 2. 검색창 바로 밑에 팀 이름을 대문직하게 배치하여 시인성 극대화 */}
+        <div className="popup-team-hero">
+          <span className="popup-team-name display">{activeTeamName}</span>
+          {activeTeamTag && <span className="popup-team-tag">#{activeTeamTag}</span>}
+        </div>
 
         <div className={`popup-body ${loading ? 'is-loading' : ''}`.trim()}>
           <div className="p-box">
@@ -111,7 +111,6 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
               ))}
             </div>
 
-            {/* 상대 팀 전적 하단 지표 */}
             <div className="p-stats-row">
               <div className="stat-item">
                 <div className="stat-label">승패</div>
@@ -142,14 +141,13 @@ export default function QuickAnalysisModal({ teamName, teamTag, initialData, onC
                 label={`TIER\nICON\nIMAGE`}
               />
               <div className="tier-info">
-                <div className="tdiv">{teamTierKey(data.tier.division) ?? data.tier.division}</div>
-                <div className="trp">{data.tier.rp.toLocaleString()} RP</div>
+                <div className="trp">{teamTierKey(data.tier.division) ?? data.tier.division}</div>
+                <div className="tdiv">{data.tier.rp.toLocaleString()}</div>
               </div>
             </div>
           </div>
 
           <div className="p-box">
-            {/* [수정] 3. 번호 추가 */}
             <div className="p-box-title"><span className="num">3.</span>상대 팀 개인 순위 (최근 5게임 기준)</div>
             <MiniRankTable players={data.playerRanking} showAdr />
           </div>

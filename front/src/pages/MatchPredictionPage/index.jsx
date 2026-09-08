@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { fetchTeamAnalysis, fetchTeamProfile } from '../../api/teams';
 import { fetchPrediction, fetchRecentOpponent } from '../../api/prediction';
-import { FORCE_MOCK_PREDICTION } from '../../api/config';
-import { teamProfileMock } from '../../mocks/team.mock';
+import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
 import { useAuth } from '../../context/AuthContext';
 import PredictBox from '../../components/predict/PredictBox';
 import FilterTabs from '../../components/common/FilterTabs';
@@ -31,10 +30,15 @@ export default function MatchPredictionPage() {
     let active = true;
 
     // 로그인 전: URL의 팀(데모 링크는 실존하지 않는 team-ascend라 자동으로 mock 폴백된다).
-    // 로그인 후: 상대팀을 우리 팀의 "가장 최근에 매치했던 팀"으로 자동 설정한다 - 최근
-    // 상대를 못 찾으면(매치 이력 없음 등) URL의 팀으로 그냥 둔다.
+    // 로그인 후 + URL이 기본 데모 링크(네비 메뉴/홈 카드가 항상 이 팀으로 연결)일 때만
+    // 상대팀을 우리 팀의 "가장 최근에 매치했던 팀"으로 자동 설정한다 - 최근 상대를 못
+    // 찾으면(매치 이력 없음 등) URL의 팀으로 그냥 둔다.
+    // 헤더 검색창으로 실제 팀을 검색해 들어온 경우(URL이 데모 링크가 아님)는 이 자동
+    // 대체를 건너뛰고 검색된 팀을 그대로 존중한다 - 안 그러면 로그인 상태에서 팀을
+    // 검색해도 매번 "내 최근 상대팀"으로 덮어써져서 검색한 팀이 안 뜨는 버그가 있었다.
     async function resolveOpponent() {
-      if (!isAuthenticated) return { teamName, teamTag };
+      const isDemoLink = teamName === DEMO_TEAM_NAME && teamTag === DEMO_TEAM_TAG;
+      if (!isAuthenticated || !isDemoLink) return { teamName, teamTag };
       const recent = await fetchRecentOpponent();
       return recent ? { teamName: recent.teamName, teamTag: recent.teamTag } : { teamName, teamTag };
     }
@@ -59,14 +63,7 @@ export default function MatchPredictionPage() {
           setAnalysisData(normalizedData);
         }
       });
-      // FORCE_MOCK_PREDICTION(api/config.js) - 승부예측 페이지 전체를 백엔드 성능 개선
-      // 전까지 임시로 mock만 쓰게 한다(fetchTeamProfile은 TeamProfilePage와 공유하는
-      // 함수라 여기서 직접 건드리지 않고, 이 페이지에서만 호출을 건너뛴다).
-      if (FORCE_MOCK_PREDICTION) {
-        if (active) setOpponentTeam(teamProfileMock);
-      } else {
-        fetchTeamProfile(name, tag).then((data) => { if (active) setOpponentTeam(data); });
-      }
+      fetchTeamProfile(name, tag).then((data) => { if (active) setOpponentTeam(data); });
       fetchPrediction(name, tag).then((data) => { if (active) setPrediction(data); });
     });
 

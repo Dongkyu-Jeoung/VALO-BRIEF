@@ -11,7 +11,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.connection import get_db
-from services import henrik_api
+from services import henrik_api, match_history
 from services.team_profile import (
     MATCH_HISTORY_LIMIT,
     QUICK_ANALYSIS_MATCH_LIMIT,
@@ -19,6 +19,21 @@ from services.team_profile import (
     build_team_profile,
     build_team_header
 )
+
+
+def _accumulate_match_history(db: Session, match_ids: list[str], match_details: list) -> None:
+    """조회하는 김에 matches/match_player_stats에 쌓는다(opportunistic 캐싱, server/
+    승부예측_성능_분석.md 7-2-1번) - 승부예측 분석 탭 ③번 모델 학습용 데이터 축적이 목적.
+    응답 생성에 영향을 주면 안 되므로 실패해도 조용히 넘어가고(단, 세션은 롤백해서 이후
+    쿼리가 깨지지 않게 함), 화면 응답 자체는 이 함수의 성공 여부와 무관하다."""
+    for match_id, detail in zip(match_ids, match_details):
+        if not detail:
+            continue
+        try:
+            match_history.upsert_match_history(db, match_id, detail)
+        except Exception as e:
+            db.rollback()
+            print(f"  [match_history] upsert 실패(match_id={match_id}): {e}")
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -42,6 +57,7 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
     match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
+    _accumulate_match_history(db, match_ids, match_details)
 
     return build_team_profile(
         db,
@@ -104,15 +120,15 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
 
-    print(f"===== DEBUG: API Called for team: {clean_name}#{clean_tag} =====")
+    #print(f"===== DEBUG: API Called for team: {clean_name}#{clean_tag} =====")
 
     team_info, history = await asyncio.gather(
         henrik_api.get_premier_team(clean_name, clean_tag),
         henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
 
-    print(f"===== DEBUG: team_info loaded: {bool(team_info)} =====")
-    print(f"===== DEBUG: history raw data: {history} =====")
+    # print(f"===== DEBUG: team_info loaded: {bool(team_info)} =====")
+    # print(f"===== DEBUG: history raw data: {history} =====")
 
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -121,22 +137,23 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
     match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
 
-    print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
+    # print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
+    _accumulate_match_history(db, match_ids, match_details)
 
-    print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
+    # print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
 
         # 라운드 데이터 구조(공격/수비 사이드, economy 등) 확인용 임시 디버그 로그.
     # roundInfo의 공격/수비/에코 승률 구현이 끝나면 삭제할 것.
-    print("===== DEBUG: SAMPLE ROUND (planted round, top-level keys only) =====")
+    # print("===== DEBUG: SAMPLE ROUND (planted round, top-level keys only) =====")
     sample_match = next((m for m in match_details if m), None)
     if sample_match:
         rounds = sample_match.get("rounds") or []
         planted_round = next((r for r in rounds if r.get("bomb_planted")), None)
         if planted_round:
             trimmed = {k: v for k, v in planted_round.items() if k not in ("player_stats", "player_locations")}
-            print(json.dumps(trimmed, indent=2, ensure_ascii=False))
+            # print(json.dumps(trimmed, indent=2, ensure_ascii=False))
         else:
             print("NO PLANTED ROUND FOUND IN THIS MATCH")
     else:
@@ -152,11 +169,11 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
 
     # 맵 이미지 매칭 키 디버깅용 로그 추가
     print("===== DEBUG: mapInfoByMap keys =====")
-    print(list(profile.get("mapInfoByMap", {}).keys()))
+    # print(list(profile.get("mapInfoByMap", {}).keys()))
 
     print("===== DEBUG: FINAL PROFILE RESPONSE =====")
-    print("roundInfo:", profile.get("roundInfo"))
-    print("mapInfoByMap:", profile.get("mapInfoByMap"))
+    # print("roundInfo:", profile.get("roundInfo"))
+    # print("mapInfoByMap:", profile.get("mapInfoByMap"))
 
     # 0경기(sampleGames <= 0)인 맵을 API 응답 레벨에서 원천적으로 필터링하여 방어
     raw_map_info = profile.get("mapInfoByMap", {})
