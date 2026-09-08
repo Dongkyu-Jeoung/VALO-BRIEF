@@ -24,7 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from models.match import Match
-from models.match_player_stats import MatchPlayerStats
+from models.match_player_stat import MatchPlayerStat
 from models.riot_account import RiotAccount
 from models.team import Team
 
@@ -138,11 +138,13 @@ def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
     all_players = (match.get("players") or {}).get("all_players") or []
     agent_info = _load_agent_info_by_name(db)
 
-    # riot_accounts placeholder를 먼저 다 만들고 flush - match_player_stats.puuid FK를
-    # DB가 강제하는데(모델에는 ForeignKey()를 안 걸어뒀으므로, models/match_player_stats.py
-    # 상단 주석 참고) SQLAlchemy가 이 둘의 삽입 순서를 자동으로 보장해주지 않는다. flush를
-    # 안 하면 같은 커밋 안에서 match_player_stats INSERT가 riot_accounts INSERT보다 먼저
-    # 나가 FK 위반이 날 수 있다(실측으로 확인된 문제).
+    # riot_accounts placeholder를 먼저 다 만들고 명시적으로 flush - models/match_player_
+    # stat.py는 puuid에 ForeignKey("riot_accounts.puuid")를 걸어뒀으니 SQLAlchemy가 같은
+    # flush 안에서도 riot_accounts INSERT를 먼저 내보내야 정상이지만, 초기 구현(FK 선언이
+    # 없던 버전)에서 이 순서가 안 지켜져 FK 위반이 실제로 났었다(match_history.py가 그
+    # 시점엔 models/match_player_stats.py라는 별도 모델을 썼음 - 이후 models/match_player_
+    # stat.py로 통합). 지금은 자동 정렬로도 될 가능성이 높지만, 이미 검증된 안전장치라
+    # 굳이 제거하지 않고 명시적 flush를 유지한다.
     for player in all_players:
         puuid = player.get("puuid")
         if puuid:
@@ -186,12 +188,12 @@ def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
         total_shots = heads + bodies + legs
 
         stat_row = (
-            db.query(MatchPlayerStats)
-            .filter(MatchPlayerStats.match_id == match_id, MatchPlayerStats.puuid == puuid)
+            db.query(MatchPlayerStat)
+            .filter(MatchPlayerStat.match_id == match_id, MatchPlayerStat.puuid == puuid)
             .first()
         )
         if stat_row is None:
-            stat_row = MatchPlayerStats(match_id=match_id, puuid=puuid)
+            stat_row = MatchPlayerStat(match_id=match_id, puuid=puuid)
             db.add(stat_row)
 
         stat_row.team_id = team_id
