@@ -17,6 +17,30 @@
   margin-right: 5px;
 }
 
+.popup-search-area {
+  padding: 16px 20px 0 20px;
+}
+
+.popup-team-hero {
+  padding: 16px 24px 16px 28px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.popup-team-name {
+  font-size: 24px;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+
+.popup-team-tag {
+  font-size: 15px;
+  color: var(--text-2);
+  font-weight: 700;
+}
+
 /* ============ 3초 상대 분석 POPUP ============ */
 .popup-overlay {
   position: fixed;
@@ -164,6 +188,7 @@
   display: flex;
   align-items: center;
   gap: 20px;
+  padding-left: 12px; 
 }
 
 .tier-badge-img {
