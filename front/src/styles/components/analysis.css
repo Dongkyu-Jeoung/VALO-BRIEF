@@ -294,3 +294,36 @@
 .sentinel-compare .text-lose {
   color: var(--lose);
 }
+
+/* EngagementPredictionBlock: AI 예측 매치업 유불리 텍스트 */
+.matchup-favor-text {
+  font-family: var(--font-body, 'Pretendard', sans-serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+  text-align: center;
+  margin-top: 12px;
+}
+
+.matchup-favor-text.text-win {
+  color: var(--win);
+}
+
+.matchup-favor-text.text-lose {
+  color: var(--lose);
+}
+
+.model-version-note {
+  margin-top: 10px;
+  font-size: 12px;
+  text-align: right;
+}
+
+/* 데이터/모델이 아직 없을 때 표시하는 안내 텍스트 (EngagementInfoBlock의 "스킬 데이터가
+   없습니다"도 같이 씀 - 원래 스타일이 없던 클래스라 여기서 같이 정의) */
+.empty-text {
+  font-size: 13.5px;
+  color: var(--text-2);
+  text-align: center;
+  padding: 12px 0;
+}

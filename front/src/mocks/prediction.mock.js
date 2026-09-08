@@ -183,6 +183,10 @@ export const predictionMock = {
         comboWeakness: [{ name: 'Ruko', fd: 52, acs: 180 }],
       },
     },
+    // 우리팀 분석 화면(EngagementInfoBlock, MyTeamAnalysisPage) 전용 - 실측 통계 mock.
+    // skills 서브 항목은 폐기 결정(server/승부예측_성능_분석.md 6-1번 참고)이라 새 필드
+    // (engagementPrediction, 아래)에는 안 넣었지만, 우리팀 분석 쪽 mock은 기존 컴포넌트가
+    // 그대로 참조하므로 남겨둔다.
     engagementInfo: {
       trade1v1: 58, trade1v2: 31,
       skills: [
@@ -192,6 +196,15 @@ export const predictionMock = {
       ],
       duelistVsDuelist: { us: 58, them: 42 },
       sentinelCompare: 'advantage',
+    },
+    // 상대팀 검색(승부예측) 분석 탭 ③번 전용 - AI 모델 예측 결과 mock.
+    // components/analysis/EngagementPredictionBlock.jsx가 기대하는 shape 그대로
+    // (server/승부예측_성능_분석.md 7번의 API 계약과 동일) - 실제 모델이 만들어지면
+    // routers/teams.py::get_team_analysis가 이 shape으로 engagementPrediction을 채워야 함.
+    engagementPrediction: {
+      trade: { ourWinRate: 62, theirWinRate: 38 },
+      duelistMatchup: { ourScore: 58, theirScore: 42, favor: 'us' },
+      modelVersion: 'engagement-v1 (mock)',
     },
   },
   aiReport: {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AnalysisSection from '../../components/analysis/AnalysisSection';
+import EngagementPredictionBlock from '../../components/analysis/EngagementPredictionBlock';
 import { gameData } from '../../constants/gameData';
 
 export default function AnalysisTab({ analysis }) {
@@ -96,6 +97,8 @@ export default function AnalysisTab({ analysis }) {
       }}
       ourLabel="우리팀"
       theirLabel="상대팀"
+      EngagementComponent={EngagementPredictionBlock}
+      engagementData={analysis?.engagementPrediction}
     />
   );
 }
