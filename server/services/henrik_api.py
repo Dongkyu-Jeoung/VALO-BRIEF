@@ -6,9 +6,10 @@ import asyncio
 import os
 import time
 import httpx
-from collections import deque
 from pathlib import Path
 from dotenv import load_dotenv
+
+from services.rate_limiter import throttle_async
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
@@ -44,33 +45,11 @@ class HenrikRateLimitError(Exception):
     실측으로 재현 확인). main.py의 전역 예외 핸들러가 이걸 잡아 503으로 응답한다."""
 
 
-# Henrik 키의 실측 한도는 응답 헤더 기준 "per1min";q=30 (분당 30건, 전체 엔드포인트 공유
-# 버킷 - /status와 /premier 호출이 같은 x-ratelimit-bucket을 썼음을 확인). 위 문제를 애초에
-# 덜 겪도록, 실제로 요청을 보내기 전에 우리 쪽에서 먼저 한도보다 살짝 낮게(28/분) 스스로
-# 속도를 늦춘다 - 그래도 남이(다른 프로세스/키 공유) 같은 키를 동시에 쓰면 429가 날 수
-# 있으므로 _get()의 재시도+예외 처리가 최종 안전장치.
-_RATE_LIMIT_PER_MIN = 28
-_RATE_WINDOW_SECONDS = 60.0
-_request_times: deque[float] = deque()
-_rate_lock = asyncio.Lock()
-
-
-async def _throttle() -> None:
-    """직전 60초 안에 보낸 요청이 한도 이상이면, 가장 오래된 요청이 창 밖으로 나갈
-    때까지 대기한 뒤 진행한다(캐시/in-flight로 해소되는 요청은 여기 도달하지 않으므로
-    실제 네트워크 왕복이 필요한 요청만 세어진다)."""
-    async with _rate_lock:
-        now = time.monotonic()
-        while _request_times and now - _request_times[0] > _RATE_WINDOW_SECONDS:
-            _request_times.popleft()
-        if len(_request_times) >= _RATE_LIMIT_PER_MIN:
-            wait = _RATE_WINDOW_SECONDS - (now - _request_times[0]) + 0.05
-            if wait > 0:
-                await asyncio.sleep(wait)
-            now = time.monotonic()
-            while _request_times and now - _request_times[0] > _RATE_WINDOW_SECONDS:
-                _request_times.popleft()
-        _request_times.append(now)
+# 레이트리밋 카운터는 services/rate_limiter.py로 통합했다 - ml/valorant_git.py(예측
+# 파이프라인)도 같은 Henrik 키의 같은 버킷을 쓰면서 예전엔 이 파일 안에 따로 카운터를
+# 갖고 있었는데, 그러면 두 클라이언트가 각자 "나는 28/분 이하"라고 안심해도 합치면 실제
+# 한도(30/분)를 넘길 수 있었다(승부예측_성능_분석.md 3번 참고). 이제 throttle_async()
+# 하나가 두 클라이언트가 보낸 요청을 모두 같이 센다.
 
 
 def _retry_after_seconds(res: httpx.Response, default: float = 2.0) -> float:
@@ -161,7 +140,7 @@ async def _get(path: str, params: dict | None = None) -> dict | list | None:
 async def _get_uncached(path: str, params: dict | None) -> dict | list | None:
     """실제 네트워크 요청 - 429면 Retry-After만큼 한 번 기다렸다 재시도하고, 그래도
     막히면 HenrikRateLimitError를 던진다."""
-    await _throttle()
+    await throttle_async()
     client = _get_client()
     try:
         res = await client.get(path, params=params)
@@ -171,7 +150,7 @@ async def _get_uncached(path: str, params: dict | None) -> dict | list | None:
 
     if res.status_code == 429:
         await asyncio.sleep(_retry_after_seconds(res))
-        await _throttle()
+        await throttle_async()
         try:
             res = await client.get(path, params=params)
         except httpx.HTTPError:

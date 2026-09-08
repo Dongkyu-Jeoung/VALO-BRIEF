@@ -19,6 +19,7 @@ from models.team import Team
 from routers.auth import get_current_team
 from schema.predict import PredictRequest, PredictResponse
 from services import predict_service
+from services.henrik_api import HenrikRateLimitError
 
 router = APIRouter(prefix="/api/predict", tags=["Predict"])
 
@@ -34,6 +35,10 @@ def predict(request: PredictRequest):
             red_team=[p.model_dump() for p in request.red_team],
         )
         return result
+    except HenrikRateLimitError:
+        # main.py의 전역 핸들러가 503 + 안내 메시지로 응답하게 그대로 올려보낸다 -
+        # 아래 except Exception으로 잡으면 "존재하지 않음"과 구분 안 되는 500이 된다.
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -75,8 +80,16 @@ async def predict_match(
 
     # ml/valorant_git.py가 동기 requests 기반이라(await 불가), 이벤트 루프를 막지 않도록
     # 별도 스레드에서 돌린다 - 안 그러면 이 예측이 끝날 때까지 서버 전체가 멈춘다.
+    # db를 같이 넘기면 build_player_feature가 riot_accounts에 이미 캐싱된 puuid를 재사용해
+    # 선수당 Henrik 요청을 최대 1건 아낀다(이 시점엔 위 두 resolve_recent_roster 호출이
+    # 이미 끝나 db가 쓰이고 있지 않으니 스레드로 넘겨도 안전 - 아래 save_prediction에서만
+    # 다시 쓰인다).
     try:
-        result = await asyncio.to_thread(predict_blue_win, our_roster, opp_roster)
+        result = await asyncio.to_thread(predict_blue_win, our_roster, opp_roster, db=db)
+    except HenrikRateLimitError:
+        # main.py의 전역 핸들러가 503 + 안내 메시지로 응답하게 그대로 올려보낸다 -
+        # 아래 except Exception으로 잡으면 "존재하지 않음"과 구분 안 되는 500이 된다.
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
