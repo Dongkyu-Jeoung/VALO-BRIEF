@@ -1,0 +1,141 @@
+# VALORANT 승부예측 프로젝트 분석 및 개발 프롬프트
+
+## 역할
+
+당신은 **React + FastAPI + XGBoost 기반 VALORANT 승부예측 프로젝트**의 전담 개발 어시스턴트이다.
+
+새로운 코드를 작성하기 전에 **프로젝트 폴더 구조와 기존 코드의 흐름을 먼저 분석**하고, 기존 아키텍처를 유지하면서 기능을 개선해야 한다.
+
+---
+
+## 프로젝트 개요
+
+이 프로젝트는 VALORANT 경쟁전 팀 간 승률을 예측하는 웹 서비스이다.
+
+### 기술 스택
+
+* Frontend : React (Vite)
+* Backend : FastAPI
+* ML : XGBoost
+* Data : HenrikDev VALORANT API
+* DB : 팀 정보 및 사용자 정보 저장
+* Model : xgboost_valorant.pkl
+
+---
+
+## 머신러닝 파이프라인
+
+모델은 이미 학습 완료되어 있으며 **재학습은 절대 수행하지 않는다.**
+
+### 학습 과정
+
+1. HenrikDev API 수집
+2. player_match_stats.csv 생성
+3. Rolling Feature Engineering
+4. Team Feature Engineering
+5. XGBoost 학습
+6. model(.pkl) 저장
+
+### 예측 과정
+
+1. Riot ID(Name + Tag) 입력
+2. PUUID 조회
+3. 최근 5경기 수집
+4. Rolling Feature 생성
+5. Team Feature 생성
+6. 저장된 XGBoost 모델로 predict_proba()
+7. 승률 반환
+
+---
+
+## Feature 정보
+
+모델은 최근 **5경기 기준** Feature를 사용한다.
+
+사용 Feature는 총 18개이다.
+
+* blue_recent_acs
+* red_recent_acs
+* diff_recent_acs
+* blue_recent_kd
+* red_recent_kd
+* diff_recent_kd
+* blue_recent_kast
+* red_recent_kast
+* diff_recent_kast
+* blue_recent_headshot_pct
+* red_recent_headshot_pct
+* diff_recent_headshot_pct
+* blue_recent_winrate
+* red_recent_winrate
+* diff_recent_winrate
+* blue_duelist_count
+* red_duelist_count
+* diff_duelist_count
+
+---
+
+## 현재 FastAPI 구조
+
+예측 API는 이미 존재한다.
+
+* POST /predict
+* GET /team/my
+
+predictor.py는 저장된 model_loader.py의 모델만 로드하며 model.fit()은 존재하면 안 된다.
+
+---
+
+## React 구조
+
+React는 Vite 기반이다.
+
+예측 페이지는 MatchPredictionPage(index.jsx)이며 승률 UI는 PredictBox.jsx가 담당한다.
+
+PredictBox는 다음 Props를 사용한다.
+
+* ourTeam
+* opponentTeam
+* ourWinChance
+
+FastAPI 응답의 blue_win_probability를 ourWinChance로 연결한다.
+
+---
+
+## 중요한 개발 규칙
+
+### 반드시 지킬 것
+
+* 기존 폴더 구조 유지
+* 기존 컴포넌트 최대한 재사용
+* XGBoost 모델 재학습 금지
+* predictor.py에서는 predict_proba()만 수행
+* Feature Engineering 로직 변경 금지
+* API 스키마를 임의로 변경하지 말 것
+
+### 개선 가능한 부분
+
+* API 호출 속도 개선
+* 병렬 처리(asyncio)
+* PUUID 캐싱
+* Rolling Feature DB 캐싱
+* React UX 개선
+* FastAPI 응답 속도 최적화
+
+---
+
+## 코드 작성 방식
+
+1. 먼저 프로젝트 구조를 분석한다.
+2. 관련 파일을 모두 확인한다.
+3. 수정이 필요한 파일만 제안한다.
+4. 전체 파일을 덮어쓰기보다 변경 부분만 제시한다.
+5. 변경 이유를 함께 설명한다.
+
+---
+
+## 최종 목표
+
+현재 프로젝트의 목적은 **실시간 VALORANT 팀 승부예측 서비스**를 완성하는 것이다.
+
+정확도보다도 **예측 속도와 기존 구조의 안정성**을 우선적으로 고려하여 개발을 진행한다.

@@ -284,6 +284,30 @@ CREATE TABLE riot_accounts (
   COMMENT='Riot 개인 계정 (로스터 구성원)';
 
 -- ---------------------------------------------------------------------
+-- 3-1. PLAYER_ROLLING_CACHE  (선수별 Rolling Feature 캐시)
+--
+-- 2026-09-08 신규: 승부예측(ml/predictor.py, ml/rolling.py)이 매번 Henrik에서 다시
+-- 계산하던 "최근 5경기 평균"(acs/kd/kast/headshot_pct/winrate)을 puuid 단위로
+-- 캐싱한다. riot_accounts(계정 정보, 사실상 무기한 유효)와 달리 이 값은 선수가 새
+-- 경기를 하면 바뀌므로 애플리케이션 레벨 TTL(ml/rolling.py ROLLING_CACHE_TTL)로
+-- 일정 시간 뒤엔 무효로 취급한다 - 그래서 riot_accounts에 대한 FK를 걸지 않았다
+-- (predict 파이프라인이 riot_accounts에 그 puuid를 먼저 upsert해둔다는 보장이 없음).
+-- ---------------------------------------------------------------------
+CREATE TABLE player_rolling_cache (
+    puuid                   VARCHAR(64)     NOT NULL COMMENT 'Riot PUUID (고정키)',
+    agent                   VARCHAR(30)     NULL COMMENT '최근 경기 중 가장 최근 매치의 요원',
+    recent_acs              FLOAT           NOT NULL,
+    recent_kd               FLOAT           NOT NULL,
+    recent_kast             FLOAT           NOT NULL,
+    recent_headshot_pct     FLOAT           NOT NULL,
+    recent_winrate          FLOAT           NOT NULL,
+    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                            ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (puuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='선수별 Rolling Feature(최근 N경기 평균) 캐시 - TTL은 애플리케이션에서 관리';
+
+-- ---------------------------------------------------------------------
 -- 4. MATCHES  (매치 메타데이터 캐시)
 --    ※ map_name(varchar) 대신 map_uuid(FK → ref_maps)로 구성
 --
@@ -652,6 +676,22 @@ ALTER TABLE predictions
     ADD COLUMN opponent_team_tag VARCHAR(10) NOT NULL AFTER opponent_team_name,
     ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
         ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 11) 승부예측 Rolling Feature 캐싱(ml/predictor.py, ml/rolling.py) - 신규 테이블이라
+--     기존 데이터/FK에 영향 없음.
+CREATE TABLE IF NOT EXISTS player_rolling_cache (
+    puuid                   VARCHAR(64)     NOT NULL COMMENT 'Riot PUUID (고정키)',
+    agent                   VARCHAR(30)     NULL COMMENT '최근 경기 중 가장 최근 매치의 요원',
+    recent_acs              FLOAT           NOT NULL,
+    recent_kd               FLOAT           NOT NULL,
+    recent_kast             FLOAT           NOT NULL,
+    recent_headshot_pct     FLOAT           NOT NULL,
+    recent_winrate          FLOAT           NOT NULL,
+    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                            ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (puuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='선수별 Rolling Feature(최근 N경기 평균) 캐시 - TTL은 애플리케이션에서 관리';
 
 -- 참고: insights, ref_weapons, matches, match_player_stats, team_stats_summary,
 -- player_stats_summary는 현재 코드에서 아직 안 쓰지만 이미 스캐폴딩되었거나(AI 리포트
