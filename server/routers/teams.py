@@ -11,7 +11,10 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.connection import get_db
-from services import henrik_api, match_history
+from ml import engagement_predictor
+from models.team import Team
+from routers.auth import get_current_team
+from services import henrik_api, match_history, team_engagement_cache
 from services.team_profile import (
     MATCH_HISTORY_LIMIT,
     QUICK_ANALYSIS_MATCH_LIMIT,
@@ -22,8 +25,9 @@ from services.team_profile import (
 
 
 def _accumulate_match_history(db: Session, match_ids: list[str], match_details: list) -> None:
-    """조회하는 김에 matches/match_player_stats에 쌓는다(opportunistic 캐싱, server/
-    승부예측_성능_분석.md 7-2-1번) - 승부예측 분석 탭 ③번 모델 학습용 데이터 축적이 목적.
+    """조회하는 김에 team_engagement_cache에 write-through로 쌓는다(opportunistic 캐싱,
+    server/승부예측_성능_분석.md 7-2-1/11번) - 승부예측 분석 탭 ③번 모델 학습용 데이터
+    축적이 목적.
     응답 생성에 영향을 주면 안 되므로 실패해도 조용히 넘어가고(단, 세션은 롤백해서 이후
     쿼리가 깨지지 않게 함), 화면 응답 자체는 이 함수의 성공 여부와 무관하다."""
     for match_id, detail in zip(match_ids, match_details):
@@ -113,9 +117,20 @@ async def get_team_header(team_name: str, team_tag: str):
 
 
 @router.get("/{team_name}/{team_tag}/analysis")
-async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends(get_db)):
+async def get_team_analysis(
+    team_name: str,
+    team_tag: str,
+    current: Team = Depends(get_current_team),
+    db: Session = Depends(get_db),
+):
     """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
-    get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다."""
+    get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다.
+
+    2026-09-08: Depends(get_current_team) 추가 - engagementPrediction(③번 교전 매치업
+    예측, server/승부예측_성능_분석.md 6~9번)이 "우리팀 vs 상대팀"을 비교하려면 로그인한
+    팀이 누군지 알아야 한다. 이 엔드포인트를 쓰는 프론트 화면은 MatchPredictionPage뿐이고
+    그 라우트는 이미 ProtectedRoute(로그인 필수)라서 실제 접근 패턴은 안 바뀐다 - 9-4번에
+    적어둔 "구조적 변경" 우려와 달리 실질적인 파급 효과는 없는 것으로 확인."""
 
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
@@ -168,10 +183,10 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
     )
 
     # 맵 이미지 매칭 키 디버깅용 로그 추가
-    print("===== DEBUG: mapInfoByMap keys =====")
+    #print("===== DEBUG: mapInfoByMap keys =====")
     # print(list(profile.get("mapInfoByMap", {}).keys()))
 
-    print("===== DEBUG: FINAL PROFILE RESPONSE =====")
+    #print("===== DEBUG: FINAL PROFILE RESPONSE =====")
     # print("roundInfo:", profile.get("roundInfo"))
     # print("mapInfoByMap:", profile.get("mapInfoByMap"))
 
@@ -187,8 +202,26 @@ async def get_team_analysis(team_name: str, team_tag: str, db: Session = Depends
         if (raw_map_info.get(m.get("map"), {}).get("sampleGames") or 0) > 0
     ]
 
+    # ③번 교전 매치업 예측(engagementPrediction, 9-4번) - 상대팀(URL)은 이 요청에서 방금
+    # 라이브로 받은 match_details를 그대로 쓰고, 우리팀(current)은 team_engagement_cache
+    # (Henrik 호출 없음, DB 쿼리 한 번)를 쓴다 - 우리팀 매치 이력을 여기서 다시 Henrik으로
+    # 조회하지 않는 이유는 services/match_sync.py가 회원가입 시점에, services/
+    # match_history.py가 팀 프로필/분석 조회 때마다 각각 write-through로 이 캐시를 이미
+    # 채워뒀기 때문 - 그 값을 그대로 재사용한다(server/승부예측_성능_분석.md 11번).
+    opponent_trade = engagement_predictor.trade_rate_from_matches(list(match_details), clean_name, clean_tag)
+    opponent_duelist = engagement_predictor.duelist_acs_from_matches(list(match_details), clean_name, clean_tag)
+    our_engagement = team_engagement_cache.get_recent_team_engagement(db, current.team_id)
+
+    engagement_prediction = engagement_predictor.build_engagement_prediction_from_features(
+        team_trade_rate=our_engagement["trade_rate"] if our_engagement else None,
+        opponent_trade_rate=opponent_trade,
+        team_duelist_acs=our_engagement["duelist_acs"] if our_engagement else None,
+        opponent_duelist_acs=opponent_duelist,
+    )
+
     return {
         "roundInfo": profile.get("roundInfo", {}),
         "mapWinrates": filtered_map_winrates,
         "mapInfoByMap": filtered_map_info,
+        "engagementPrediction": engagement_prediction,
     }

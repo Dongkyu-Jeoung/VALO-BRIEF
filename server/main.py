@@ -7,6 +7,7 @@ from routers.players import router as players_router
 from routers.teams import router as teams_router
 from routers.auth import router as auth_router
 from routers.predict import router as predict_router
+from routers.ml import router as ml_router
 from services import henrik_api, valorant_api
 
 app = FastAPI()
@@ -62,3 +63,6 @@ app.include_router(auth_router)
 
 # 승률 예측 모델 연결
 app.include_router(predict_router)
+
+# 교전 정보 예측 모델 연결
+app.include_router(ml_router)
