@@ -136,11 +136,13 @@ async def signup(payload: SignupRequest, background_tasks: BackgroundTasks, db: 
     except auth_service.DuplicateTeamError:
         raise HTTPException(status_code=409, detail="이미 사용 중인 이메일, 아이디 또는 팀 정보입니다.")
 
-    # 가입 직후 프리미어 매치 이력을 매치 상세까지 미리 캐싱(Pre-fill)해둔다. 매치 건당
-    # Henrik 레이트리밋 하에서 순차 호출해야 해서 회원가입 응답을 기다리게 할 수 없으므로
-    # 백그라운드로 돌린다 (services/match_sync.py 참고).
+    # 가입 직후 최근 매치 이력을 team_engagement_cache에 미리 채워둔다(Pre-fill) - 매치
+    # 건당 Henrik 레이트리밋 하에서 순차 호출해야 해서 회원가입 응답을 기다리게 할 수
+    # 없으므로 백그라운드로 돌린다. sync_team_match_history 내부가 매치 하나를 받을
+    # 때마다 바로 write-through로 캐싱하므로(services/match_sync.py 참고) 별도로 이어서
+    # 실행할 캐시 채우기 단계가 필요 없다.
     background_tasks.add_task(
-        match_sync.sync_team_match_history, team_info["id"], payload.teamName, payload.teamTag
+        match_sync.sync_team_match_history, payload.teamName, payload.teamTag
     )
 
     return {"success": True}
