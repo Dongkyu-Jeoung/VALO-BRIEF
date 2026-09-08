@@ -4,10 +4,7 @@ import FeatureRow from './FeatureRow';
 import QuickAnalysisModal from '../QuickAnalysisModal';
 import { quickAnalysisMock } from '../../mocks/team.mock';
 import { ROUTES } from '../../constants/routes';
-
-// 데모용 팀(목업 데이터의 teamProfileMock과 동일한 팀)으로 연결합니다.
-const DEMO_TEAM_NAME = 'team-ascend';
-const DEMO_TEAM_TAG = 'ASC';
+import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
 
 export default function HomePage() {
   const [quickAnalysisTeam, setQuickAnalysisTeam] = useState(null);

@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
 import { ROUTES } from '../../constants/routes';
+import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
 import { useAuth } from '../../context/AuthContext';
-
-const DEMO_TEAM_NAME = 'team-ascend';
-const DEMO_TEAM_TAG = 'ASC';
 
 const MENU_LINKS = [
   { label: '개인 검색', to: '/players/example/0000' },
