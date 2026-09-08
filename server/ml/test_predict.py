@@ -1,4 +1,4 @@
-from ml.predictor import predict_blue_win
+from predictor import predict_blue_win
 
 blue = [
     {"name":"LLLM","tag":"TrayB"},

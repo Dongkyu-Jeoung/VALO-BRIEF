@@ -21,4 +21,4 @@ export const MOCK_DELAY_MS = 250;
 // 아예 안 타고 mock으로 처리한다 - api/prediction.js, api/teams.js의 fetchTeamAnalysis,
 // pages/MatchPredictionPage/index.jsx가 이 값을 참고한다. 다른 페이지(팀 검색/프로필 등)는
 // 그대로 실제 백엔드를 쓴다. 백엔드가 빨라지면 이 값을 false로 되돌리면 된다.
-export const FORCE_MOCK_PREDICTION = true;
+export const FORCE_MOCK_PREDICTION = false;
