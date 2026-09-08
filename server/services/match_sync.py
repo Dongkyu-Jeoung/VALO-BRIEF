@@ -49,6 +49,19 @@ def _parse_game_start(value) -> datetime | None:
     return None
 
 
+def _parse_started_at(value: str | None) -> datetime | None:
+    """프리미어 히스토리 API(league_matches[].started_at)의 ISO 문자열("...Z")을 KST
+    datetime으로. matches.game_start(v2/match metadata.game_start, epoch)와는 소스가
+    다른 별도 값이라 파싱도 따로 한다."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.astimezone(_KST).replace(tzinfo=None)
+
+
 def _load_agent_meta_by_name(db: Session) -> dict:
     """요원 영문명(소문자) -> {"uuid": ref_agents.uuid, "role_type": Duelist/Initiator/...}.
     match.players.all_players[].character가 uuid가 아니라 이름 문자열이라
@@ -226,6 +239,7 @@ def _insert_match(
     agent_meta: dict,
     weapon_uuids: set,
     map_uuids: dict,
+    started_at_raw: str | None,
 ) -> None:
     side = _match_our_side(match, team_name, team_tag)
     if side is None:
@@ -266,6 +280,7 @@ def _insert_match(
     all_players = (match.get("players") or {}).get("all_players") or []
     kills_by_round = _group_kills_by_round(match.get("kills") or [])
     rounds_played = len(match.get("rounds") or [])
+    started_at = _parse_started_at(started_at_raw)
 
     for player in all_players:
         puuid = player.get("puuid")
@@ -275,6 +290,7 @@ def _insert_match(
 
         stat_row = MatchPlayerStat(match_id=match_id, puuid=puuid)
         stat_row.team_id = our_team_id if puuid in our_puuids else opp_team_id
+        stat_row.started_at = started_at
 
         stats = player.get("stats") or {}
         heads = stats.get("headshots") or 0
@@ -312,6 +328,7 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
     match_ids = [m["id"] for m in league_matches if m.get("id")]
     if not match_ids:
         return
+    started_at_by_id = {m["id"]: m.get("started_at") for m in league_matches if m.get("id")}
 
     agent_meta = _load_agent_meta_by_name(db)
     weapon_uuids = _load_weapon_uuids(db)
@@ -333,7 +350,10 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
         if not match:
             continue
 
-        _insert_match(db, match, team_id, team_name, team_tag, agent_meta, weapon_uuids, map_uuids)
+        _insert_match(
+            db, match, team_id, team_name, team_tag, agent_meta, weapon_uuids, map_uuids,
+            started_at_by_id.get(match_id),
+        )
 
 
 async def sync_team_match_history(team_id: str, team_name: str, team_tag: str) -> None:

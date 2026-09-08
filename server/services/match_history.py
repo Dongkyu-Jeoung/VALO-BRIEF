@@ -10,23 +10,38 @@ matches/match_player_stats에 이미 조회한 Henrik 매치 상세(v2/match)를
 반드시 try/except로 감싸고 실패를 삼켜야 한다(아래 upsert_match_history 자체는 예외를
 던질 수 있음 - 의도적으로 조용히 삼키지 않는다, 호출부가 로그를 남길지/무시할지 결정).
 
+2026-09-08 재정리 - services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 matches/
+match_player_stats 테이블에 쓰면서 컨벤션이 서로 달라 충돌이 있었다(같은 match_id를
+두 파이프라인이 각자 다른 형식으로 덮어씀). match_sync.py 쪽 컨벤션으로 통일한다:
+  - matches.team_a_id/team_b_id는 "red=a/blue=b" 같은 고정 색상 의미가 아니다. 이미 DB에
+    있는 매치라면 기존에 어느 슬롯이 red/blue였는지 identity로 확인해서 그 배치를 그대로
+    유지하고(스왑 금지), 새 매치면 기존과 동일하게 red->a/blue->b를 기본값으로 쓴다.
+  - matches.round_detail_json은 이제 라운드 원본 배열 그대로 저장한다(기존 {"kills":[...]}
+    래핑 제거) - ml/engagement_training.py::_extract_kills()도 이 형식에 맞춰 같이 고쳤다.
+  - match_player_stats.side는 더 이상 채우지 않는다(match_sync.py와 동일) - 하프타임마다
+    공/수가 바뀌어서 매치당 값 1개로 표현이 안 되는 데이터였다. ml/engagement_training.py도
+    이제 side 대신 match_player_stats.team_id(위 team_a/b 배치와 무관하게 항상 실제 소속
+    팀을 가리킴)로 로스터를 가른다.
+  - match_player_stats.role_type은 이제 한글 라벨(services.player_profile.ROLE_LABELS)로
+    저장한다(기존 영문 원본 "Duelist" 등에서 변경) - match_sync.py와 동일.
+
 현재 채우는 컬럼: matches 전체 + match_player_stats의 team_id/is_mvp/agent_uuid/
-role_type/side/acs/kills/deaths/assists/headshot_pct/adr. kast/first_bloods/
+role_type/acs/kills/deaths/assists/headshot_pct/adr. kast/first_bloods/
 first_deaths/most_used_weapon_uuid/detail_json은 이번 범위(트레이드 성공률/듀얼리스트
-매치업 모델)에 필요 없어 NULL로 남겨둔다 - v2/match에서 이 값들을 정확히 뽑으려면
-ml/valorant_git.py::compute_advanced_player_stats(v4/match 대상)와 별개로 트레이드 판정
-+ 라운드별 그룹핑 로직을 v2/match 스키마에 맞게 다시 구현해야 하는데, 지금 모델엔
-필요하지 않아 범위 밖으로 남긴다.
+매치업 모델)에 필요 없어 NULL로 남겨둔다 - services/match_sync.py가 이미 그 값을 채워둔
+행이라면(회원가입 시 먼저 동기화된 경우) 여기서 손대지 않아 그대로 보존된다(아래 upsert가
+이 다섯 컬럼을 아예 할당하지 않기 때문).
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from models.match import Match
 from models.match_player_stat import MatchPlayerStat
 from models.riot_account import RiotAccount
 from models.team import Team
+from services.player_profile import ROLE_LABELS
 
 _ref_map_uuid_cache: dict | None = None
 _ref_agent_cache: dict | None = None
@@ -64,12 +79,14 @@ def _parse_game_start(value) -> datetime | None:
 
 def _find_team_id(db: Session, team_name: str, team_tag: str) -> str | None:
     """team_name/team_tag로 가입된 teams 행을 찾아 team_id(=Henrik 프리미어 팀 id)를 반환.
-    가입 안 된 팀이면 None(matches.team_a_id/team_b_id가 nullable인 이유 그대로)."""
+    가입 안 된 팀이면 None(matches.team_a_id/team_b_id가 nullable인 이유 그대로).
+    대소문자 무시 비교로 통일(services/match_sync.py::_find_registered_team과 동일) -
+    예전엔 exact match라 대소문자 차이만으로 두 파이프라인이 같은 팀을 다르게 판정할 수 있었다."""
     if not team_name or not team_tag:
         return None
     row = (
         db.query(Team.team_id)
-        .filter(Team.team_name == team_name, Team.team_tag == team_tag)
+        .filter(func.lower(Team.team_name) == team_name.strip().lower(), func.lower(Team.team_tag) == team_tag.strip().lower())
         .first()
     )
     return row[0] if row else None
@@ -86,7 +103,42 @@ def _ensure_riot_account_placeholder(db: Session, puuid: str, name: str, tag: st
     db.add(RiotAccount(puuid=puuid, riot_name=name or "-", riot_tag=tag or "-", region="kr", platform="pc"))
 
 
-def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
+def _resolve_a_is_red(existing: Match | None, red_team_id: str | None, blue_team_id: str | None) -> bool:
+    """matches.team_a_id가 이번 매치에서 red 로스터를 가리켜야 하는지 판정.
+
+    이미 DB에 있는 매치라면(services/match_sync.py가 먼저 채웠을 수 있음) 기존
+    team_a_id/team_b_id가 red_team_id/blue_team_id 중 어느 쪽과 identity가 같은지로
+    기존 배치를 그대로 유지한다(스왑하면 이미 저장된 rounds_won_a/b·winner_team_id와
+    안 맞게 됨). 새 매치거나 판단할 단서가 없으면 기존 기본값(red->a)을 쓴다."""
+    if existing is None:
+        return True
+    if existing.team_a_id is not None:
+        if red_team_id and existing.team_a_id == red_team_id:
+            return True
+        if blue_team_id and existing.team_a_id == blue_team_id:
+            return False
+    if existing.team_b_id is not None:
+        if red_team_id and existing.team_b_id == red_team_id:
+            return False
+        if blue_team_id and existing.team_b_id == blue_team_id:
+            return True
+    return True
+
+
+def _parse_started_at(value: str | None) -> datetime | None:
+    """프리미어 히스토리 API(league_matches[].started_at)의 ISO 문자열("...Z")을
+    datetime으로. _parse_game_start(metadata.game_start, epoch)와는 소스가 다른 별도
+    값이라 파싱도 따로 한다."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.astimezone().replace(tzinfo=None)
+
+
+def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw: str | None = None) -> None:
     """match(v2/match 응답 1건)를 matches/match_player_stats에 upsert.
 
     match_id는 호출부가 넘겨준다(match dict 내부에서 재추출하지 않음) - routers/teams.py는
@@ -108,32 +160,43 @@ def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
     red_puuids = set(red_roster.get("members") or [])
     blue_puuids = set(blue_roster.get("members") or [])
 
-    team_a_id = _find_team_id(db, red_roster.get("name", ""), red_roster.get("tag", ""))
-    team_b_id = _find_team_id(db, blue_roster.get("name", ""), blue_roster.get("tag", ""))
-    winner_team_id = team_a_id if red.get("has_won") else team_b_id if blue.get("has_won") else None
+    red_team_id = _find_team_id(db, red_roster.get("name", ""), red_roster.get("tag", ""))
+    blue_team_id = _find_team_id(db, blue_roster.get("name", ""), blue_roster.get("tag", ""))
+    winner_team_id = red_team_id if red.get("has_won") else blue_team_id if blue.get("has_won") else None
 
     map_uuid = _load_map_uuid_by_name(db).get(str(metadata.get("map") or "").lower())
     game_start = _parse_game_start(metadata.get("game_start"))
-    rounds_won_a = red.get("rounds_won")
-    rounds_won_b = blue.get("rounds_won")
-    rounds_played = (rounds_won_a or 0) + (rounds_won_b or 0)
+    started_at = _parse_started_at(started_at_raw)
+    red_rounds_won = red.get("rounds_won")
+    blue_rounds_won = blue.get("rounds_won")
+    rounds_played = (red_rounds_won or 0) + (blue_rounds_won or 0)
 
     match_row = db.get(Match, match_id)
+    a_is_red = _resolve_a_is_red(match_row, red_team_id, blue_team_id)
+    proposed_a = red_team_id if a_is_red else blue_team_id
+    proposed_b = blue_team_id if a_is_red else red_team_id
+    rounds_won_a = red_rounds_won if a_is_red else blue_rounds_won
+    rounds_won_b = blue_rounds_won if a_is_red else red_rounds_won
+
     if match_row is None:
         match_row = Match(match_id=match_id)
         db.add(match_row)
+    # 이미 알고 있던 팀 id를 이번 조회 결과(예: 조회 실패)로 덮어써서 None으로 되돌리지
+    # 않는다 - services/match_sync.py::_backfill_if_needed와 동일한 "채우기만 하고
+    # 후퇴시키지 않는다" 원칙.
+    match_row.team_a_id = proposed_a if proposed_a is not None else match_row.team_a_id
+    match_row.team_b_id = proposed_b if proposed_b is not None else match_row.team_b_id
+    match_row.winner_team_id = winner_team_id if winner_team_id is not None else match_row.winner_team_id
     match_row.map_uuid = map_uuid
     match_row.mode = metadata.get("mode") or metadata.get("queue")
     match_row.game_start = game_start
-    match_row.team_a_id = team_a_id
-    match_row.team_b_id = team_b_id
-    match_row.winner_team_id = winner_team_id
     match_row.rounds_won_a = rounds_won_a
     match_row.rounds_won_b = rounds_won_b
-    # kills(트레이드 판정용 원본)만 저장 - 로스터 소속은 match_player_stats.side로 이미
-    # 복원 가능해서 여기 중복 저장할 필요 없음(services/match_history.py 모듈 docstring).
-    match_row.round_detail_json = {"kills": match.get("kills") or []}
-    match_row.api_source = "v2_match"
+    # 라운드 원본 배열 그대로 저장(services/match_sync.py와 동일 형식) - 트레이드 판정에
+    # 필요한 킬 이벤트는 rounds[i].player_stats[].kill_events에 이미 들어있어 따로
+    # {"kills":[...]}로 안 감싸도 된다(ml/engagement_training.py::_extract_kills 참고).
+    match_row.round_detail_json = match.get("rounds") or []
+    match_row.api_source = "henrik"
 
     all_players = (match.get("players") or {}).get("all_players") or []
     agent_info = _load_agent_info_by_name(db)
@@ -151,7 +214,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
             _ensure_riot_account_placeholder(db, puuid, player.get("name"), player.get("tag"))
     db.flush()
 
-    # ACS를 먼저 전부 계산해두고, 같은 팀(side) 안에서 최고 ACS 선수를 MVP로 표시한다.
+    # ACS를 먼저 전부 계산해두고, 같은 로스터(red/blue) 안에서 최고 ACS 선수를 MVP로 표시한다.
     acs_by_puuid: dict[str, int] = {}
     for player in all_players:
         puuid = player.get("puuid")
@@ -173,11 +236,11 @@ def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
             continue
 
         if puuid in red_puuids:
-            side, team_id, mvp_puuid = "red", team_a_id, mvp_red
+            team_id, mvp_puuid = red_team_id, mvp_red
         elif puuid in blue_puuids:
-            side, team_id, mvp_puuid = "blue", team_b_id, mvp_blue
+            team_id, mvp_puuid = blue_team_id, mvp_blue
         else:
-            side, team_id, mvp_puuid = None, None, None
+            team_id, mvp_puuid = None, None
 
         character = player.get("character") or ""
         agent_meta = agent_info.get(character.lower())
@@ -199,8 +262,8 @@ def upsert_match_history(db: Session, match_id: str, match: dict) -> None:
         stat_row.team_id = team_id
         stat_row.is_mvp = puuid == mvp_puuid
         stat_row.agent_uuid = (agent_meta or {}).get("uuid")
-        stat_row.role_type = (agent_meta or {}).get("role_type")
-        stat_row.side = side
+        stat_row.role_type = ROLE_LABELS.get((agent_meta or {}).get("role_type"))
+        stat_row.started_at = started_at
         stat_row.acs = acs_by_puuid.get(puuid, 0)
         stat_row.kills = stats.get("kills")
         stat_row.deaths = stats.get("deaths")

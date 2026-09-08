@@ -11,6 +11,14 @@ server/승부예측_성능_분석.md 7-2/7-3번 참고.
 - 라벨(label_trade_rate/label_duelist_acs)은 ml/engagement_predictor.py와 완전히 같은
   계산 함수(trade_success_from_kills)로 만든다 - 학습 라벨과 라이브 추론 피처의 정의가
   어긋나지 않게 하기 위함(engagement_predictor.py 모듈 docstring 참고).
+
+2026-09-08 재정리 - services/match_sync.py(회원가입 시 팀 이력 선동기화)와 컨벤션을
+맞췄다(services/match_history.py 모듈 doc스트링 참고):
+  - matches.team_a_id가 항상 "red 팀"이라는 보장이 없어졌다(이미 DB에 있는 매치는 어느
+    쪽이 red/blue였는지 identity로 유지되기 때문). 그래서 로스터를 team_a_id/team_b_id와
+    직접 비교해서 가른다 - side 컬럼(red/blue)이나 "team_a=red" 가정에 더 이상 의존하지 않는다.
+  - match_player_stats.role_type이 이제 한글 라벨("타격대" 등)로 저장되므로 듀얼리스트
+    판정도 한글 라벨(services.player_profile.ROLE_LABELS)로 비교한다.
 """
 import json as json_module
 from collections import defaultdict
@@ -20,6 +28,9 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from ml.engagement_predictor import RECENT_MATCHES, trade_success_from_kills
+from services.player_profile import ROLE_LABELS
+
+_DUELIST_LABEL = ROLE_LABELS["Duelist"]
 
 FEATURE_COLUMNS = [
     "team_recent_trade_rate",
@@ -33,22 +44,41 @@ LABEL_COLUMNS = ["label_trade_rate", "label_duelist_acs"]
 
 
 def _load_registered_matches(db: Session) -> list[dict]:
-    """team_a_id/team_b_id가 둘 다 채워진(=양쪽 다 가입된 팀) 매치를 시간순으로 로드."""
+    """team_a_id/team_b_id가 둘 다 채워진(=양쪽 다 가입된 팀) 매치를 시간순으로 로드.
+
+    round_detail_json(매치당 용량이 큰 JSON)을 ORDER BY와 한 쿼리에 넣으면 MySQL이 그
+    값까지 정렬 버퍼에 올려서 "Out of sort memory"가 난다(services/my_team_stats.py가
+    먼저 겪고 고친 것과 동일한 문제, 실측 확인). 가벼운 컬럼으로 먼저 정렬하고
+    round_detail_json은 정렬이 필요 없는 IN 조회로 따로 채운다."""
     rows = db.execute(text(
-        "SELECT match_id, team_a_id, team_b_id, game_start, round_detail_json "
+        "SELECT match_id, team_a_id, team_b_id, game_start "
         "FROM matches "
         "WHERE team_a_id IS NOT NULL AND team_b_id IS NOT NULL "
         "ORDER BY game_start ASC"
     )).mappings().all()
-    return [dict(r) for r in rows]
+    matches = [dict(r) for r in rows]
+    if not matches:
+        return matches
+
+    stmt = text(
+        "SELECT match_id, round_detail_json FROM matches WHERE match_id IN :ids"
+    ).bindparams(bindparam("ids", expanding=True))
+    detail_by_id = {
+        r["match_id"]: r["round_detail_json"]
+        for r in db.execute(stmt, {"ids": [m["match_id"] for m in matches]}).mappings().all()
+    }
+    for m in matches:
+        m["round_detail_json"] = detail_by_id.get(m["match_id"])
+    return matches
 
 
 def _load_player_stats_by_match(db: Session, match_ids: list[str]) -> dict[str, list[dict]]:
-    """match_id -> [match_player_stats 행들] 매핑."""
+    """match_id -> [match_player_stats 행들] 매핑. side 대신 team_id로 로스터를 가른다
+    (모듈 docstring 참고 - team_a_id/team_b_id에 고정 색상 의미가 없어졌기 때문)."""
     if not match_ids:
         return {}
     stmt = text(
-        "SELECT match_id, puuid, side, acs, role_type FROM match_player_stats WHERE match_id IN :ids"
+        "SELECT match_id, puuid, team_id, acs, role_type FROM match_player_stats WHERE match_id IN :ids"
     ).bindparams(bindparam("ids", expanding=True))
     rows = db.execute(stmt, {"ids": match_ids}).mappings().all()
     by_match: dict[str, list[dict]] = defaultdict(list)
@@ -58,16 +88,30 @@ def _load_player_stats_by_match(db: Session, match_ids: list[str]) -> dict[str, 
 
 
 def _extract_kills(round_detail_json) -> list[dict]:
-    """matches.round_detail_json(JSON 컬럼 - 드라이버에 따라 dict로 이미 역직렬화됐거나
-    문자열로 올 수 있어 방어적으로 둘 다 처리)에서 kills 배열만 꺼낸다."""
+    """matches.round_detail_json(JSON 컬럼 - 드라이버에 따라 리스트로 이미 역직렬화됐거나
+    문자열로 올 수 있어 방어적으로 둘 다 처리)에서 트레이드 판정에 필요한 평면 킬 이벤트
+    목록을 복원한다. services/match_sync.py/match_history.py가 저장하는 형식(라운드 원본
+    배열, 각 라운드의 player_stats[].kill_events)을 라운드 인덱스를 붙여 평탄화한다 -
+    round_detail_json 자체에는 라운드 번호가 없고 배열 위치가 곧 라운드 번호다."""
     if isinstance(round_detail_json, str):
         try:
             round_detail_json = json_module.loads(round_detail_json)
         except (TypeError, ValueError):
             return []
-    if isinstance(round_detail_json, dict):
-        return round_detail_json.get("kills") or []
-    return []
+    if not isinstance(round_detail_json, list):
+        return []
+
+    kills: list[dict] = []
+    for round_idx, rnd in enumerate(round_detail_json):
+        for player_stat in (rnd.get("player_stats") or []):
+            for ke in (player_stat.get("kill_events") or []):
+                kills.append({
+                    "round": round_idx,
+                    "kill_time_in_round": ke.get("kill_time_in_round"),
+                    "killer_puuid": ke.get("killer_puuid"),
+                    "victim_puuid": ke.get("victim_puuid"),
+                })
+    return kills
 
 
 def _match_trade_rate(round_detail_json, puuids: set[str]) -> float | None:
@@ -81,10 +125,11 @@ def _match_trade_rate(round_detail_json, puuids: set[str]) -> float | None:
     return round(traded / deaths * 100, 1)
 
 
-def _match_duelist_acs(side_rows: list[dict]) -> float | None:
-    """이 매치에서 role_type='Duelist'인 선수들의 평균 ACS(이미 match_player_stats.acs로
-    저장돼 있어 다시 계산할 필요 없음 - services/match_history.py가 upsert 시점에 계산)."""
-    acs_values = [r["acs"] for r in side_rows if r.get("role_type") == "Duelist" and r.get("acs") is not None]
+def _match_duelist_acs(team_rows: list[dict]) -> float | None:
+    """이 매치에서 role_type=타격대(Duelist)인 선수들의 평균 ACS(이미 match_player_stats.acs로
+    저장돼 있어 다시 계산할 필요 없음 - services/match_history.py가 upsert 시점에 계산).
+    role_type은 이제 한글 라벨로 저장되므로 ROLE_LABELS["Duelist"]와 비교한다."""
+    acs_values = [r["acs"] for r in team_rows if r.get("role_type") == _DUELIST_LABEL and r.get("acs") is not None]
     if not acs_values:
         return None
     return sum(acs_values) / len(acs_values)
@@ -116,15 +161,17 @@ def build_training_dataframe(db: Session) -> pd.DataFrame:
     for m in matches:
         team_a, team_b = m["team_a_id"], m["team_b_id"]
         player_rows = stats_by_match.get(m["match_id"], [])
-        red_rows = [r for r in player_rows if r["side"] == "red"]
-        blue_rows = [r for r in player_rows if r["side"] == "blue"]
-        red_puuids = {r["puuid"] for r in red_rows}
-        blue_puuids = {r["puuid"] for r in blue_rows}
+        # side(red/blue) 대신 team_id로 직접 가른다 - matches.team_a_id/team_b_id에 더
+        # 이상 고정 색상 의미가 없어서(모듈 docstring 참고) team_id 비교가 유일하게 안전하다.
+        a_rows = [r for r in player_rows if r["team_id"] == team_a]
+        b_rows = [r for r in player_rows if r["team_id"] == team_b]
+        a_puuids = {r["puuid"] for r in a_rows}
+        b_puuids = {r["puuid"] for r in b_rows}
 
-        label_a_trade = _match_trade_rate(m["round_detail_json"], red_puuids)
-        label_b_trade = _match_trade_rate(m["round_detail_json"], blue_puuids)
-        label_a_duelist = _match_duelist_acs(red_rows)
-        label_b_duelist = _match_duelist_acs(blue_rows)
+        label_a_trade = _match_trade_rate(m["round_detail_json"], a_puuids)
+        label_b_trade = _match_trade_rate(m["round_detail_json"], b_puuids)
+        label_a_duelist = _match_duelist_acs(a_rows)
+        label_b_duelist = _match_duelist_acs(b_rows)
 
         team_a_hist = history_by_team[team_a]
         team_b_hist = history_by_team[team_b]
