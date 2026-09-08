@@ -24,7 +24,7 @@
 }
 
 .mh-box-info h5 {
-  font-size: var(--fs-md, 16px);
+  font-size: 22px;
   font-weight: 700;
   margin-bottom: var(--sp-2, 6px);
   letter-spacing: -0.01em;

@@ -119,8 +119,8 @@ export default function MyPage() {
               {team.teamName} <span className="tagline">#{team.teamTag}</span>
             </div>
             <div className="profile-meta">
-              <span>아이디 <b>{team.loginId}</b></span>
-              <span>가입일 <b>{(team.createdAt || '').slice(0, 10) || '-'}</b></span>
+              <span>아이디 : <b>{team.loginId}</b></span>
+              <span>가입일 : <b>{(team.createdAt || '').slice(0, 10) || '-'}</b></span>
             </div>
           </div>
         </div>
