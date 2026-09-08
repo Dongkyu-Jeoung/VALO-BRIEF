@@ -7,6 +7,7 @@ match_player_stats 테이블 ORM 모델 (매치별 선수 집계 스탯 캐시).
 from sqlalchemy import (
     Boolean,
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -35,7 +36,10 @@ class MatchPlayerStat(Base):
     # 같은 이유로 ForeignKey()를 걸지 않는다 (DB 자체 FK 제약은 valo_brief.sql에 이미 있음).
     agent_uuid = Column(String(64), nullable=True)
     role_type = Column(String(20), nullable=True)
-    side = Column(String(10), nullable=True)
+    # started_at: Henrik 프리미어 히스토리 API(GET /valorant/v1/premier/{team}/{tag}/history)의
+    # league_matches[].started_at(ISO 문자열)에서 가져온다 - matches.game_start(v2/match
+    # metadata.game_start)와 소스가 다른 별도 값이라 컬럼도 분리했다.
+    started_at = Column(DateTime, nullable=True)
     acs = Column(Integer, nullable=True)
     kills = Column(Integer, nullable=True)
     deaths = Column(Integer, nullable=True)

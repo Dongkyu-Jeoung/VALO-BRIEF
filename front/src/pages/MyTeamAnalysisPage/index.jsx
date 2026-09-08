@@ -46,19 +46,24 @@ export default function MyTeamAnalysisPage() {
 
   return (
     <div className="page-container">
-      <ProfileHeader
-        type="team"
-        name={myTeamProfileMock.name}
-        tag={myTeamProfileMock.tag}
-        division={myTeamProfileMock.division}
-        showSeasonSelect
-        season={season}
-        onSeasonChange={setSeason}
-        act={act}
-        onActChange={setAct}
-      />
+      {stats ? (
+        <ProfileHeader
+          type="team"
+          name={stats.name}
+          tag={stats.tag}
+          division={stats.division}
+          avatarUrl={stats.ratingIconUrl}
+          showSeasonSelect
+          season={season}
+          onSeasonChange={setSeason}
+          act={act}
+          onActChange={setAct}
+        />
+      ) : (
+        <LoadingText />
+      )}
 
-      {stats ? <RecentSummaryBox recentSummary={stats.recentSummary} /> : <LoadingText />}
+      {stats ? <RecentSummaryBox recentSummary={stats.recentSummary} /> : null}
 
       <FilterTabs tabs={TABS} activeTab={activeTab} onChange={(tab) => setSearchParams({ tab })} />
 

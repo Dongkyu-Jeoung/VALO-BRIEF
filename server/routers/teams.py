@@ -24,17 +24,21 @@ from services.team_profile import (
 )
 
 
-def _accumulate_match_history(db: Session, match_ids: list[str], match_details: list) -> None:
-    """조회하는 김에 team_engagement_cache에 write-through로 쌓는다(opportunistic 캐싱,
-    server/승부예측_성능_분석.md 7-2-1/11번) - 승부예측 분석 탭 ③번 모델 학습용 데이터
-    축적이 목적.
+def _accumulate_match_history(
+    db: Session, match_ids: list[str], match_details: list, started_at_by_id: dict[str, str] | None = None
+) -> None:
+    """조회하는 김에 matches/match_player_stats에 쌓는다(opportunistic 캐싱, server/
+    승부예측_성능_분석.md 7-2-1번) - 승부예측 분석 탭 ③번 모델 학습용 데이터 축적이 목적.
     응답 생성에 영향을 주면 안 되므로 실패해도 조용히 넘어가고(단, 세션은 롤백해서 이후
-    쿼리가 깨지지 않게 함), 화면 응답 자체는 이 함수의 성공 여부와 무관하다."""
+    쿼리가 깨지지 않게 함), 화면 응답 자체는 이 함수의 성공 여부와 무관하다.
+    started_at_by_id: 프리미어 히스토리(league_matches)의 started_at - match_player_stats.
+    started_at 채우는 용도(services/match_history.py 참고)."""
+    started_at_by_id = started_at_by_id or {}
     for match_id, detail in zip(match_ids, match_details):
         if not detail:
             continue
         try:
-            match_history.upsert_match_history(db, match_id, detail)
+            match_history.upsert_match_history(db, match_id, detail, started_at_by_id.get(match_id))
         except Exception as e:
             db.rollback()
             print(f"  [match_history] upsert 실패(match_id={match_id}): {e}")
@@ -59,9 +63,10 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
     league_matches = (history or {}).get("league_matches") or []
     recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
     match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
+    started_at_by_id = {m["id"]: m.get("started_at") for m in recent if m.get("id")}
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
-    _accumulate_match_history(db, match_ids, match_details)
+    _accumulate_match_history(db, match_ids, match_details, started_at_by_id)
 
     return build_team_profile(
         db,
@@ -151,11 +156,12 @@ async def get_team_analysis(
     league_matches = (history or {}).get("league_matches") or []
     recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
     match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
+    started_at_by_id = {m["id"]: m.get("started_at") for m in recent if m.get("id")}
 
     # print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
-    _accumulate_match_history(db, match_ids, match_details)
+    _accumulate_match_history(db, match_ids, match_details, started_at_by_id)
 
     # print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
 

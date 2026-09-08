@@ -21,4 +21,4 @@ export const MOCK_DELAY_MS = 250;
 // 작업 중인 동안 이 엔드포인트만 mock으로 대체한다 - api/prediction.js의 fetchPrediction만
 // 이 값을 참고한다. recentOpponent/teamAnalysis/teamProfile을 포함한 나머지는 전부 실제
 // 백엔드를 그대로 쓴다. 백엔드 작업이 끝나면 이 값을 false로 되돌리면 된다.
-export const FORCE_MOCK_PREDICTION = true;
+export const FORCE_MOCK_PREDICTION = false;

@@ -394,7 +394,7 @@ CREATE TABLE match_player_stats (
     is_mvp                  BOOLEAN         NOT NULL DEFAULT FALSE COMMENT '그 매치에서 team_id 로스터 내 MVP였는지',
     agent_uuid              VARCHAR(64)     NULL COMMENT 'REF_AGENTS.uuid 참조',
     role_type               VARCHAR(20)     NULL COMMENT '타격대/척후대/감시자/전략가',
-    side                    VARCHAR(10)     NULL COMMENT 'Attack/Defense 등',
+    started_at              DATETIME        NULL COMMENT 'Henrik 프리미어 히스토리 API(GET /valorant/v1/premier/{team}/{tag}/history) league_matches[].started_at',
     acs                     INT             NULL,
     kills                   INT             NULL,
     deaths                  INT             NULL,
@@ -700,6 +700,19 @@ ALTER TABLE predictions
     ADD COLUMN opponent_team_tag VARCHAR(10) NOT NULL AFTER opponent_team_name,
     ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
         ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 11) match_player_stats.side(Attack/Defense 등 - 실제로는 services/match_history.py가
+--     red/blue 색상으로 채우고 있었음) 제거. 하프타임마다 공/수가 바뀌어서 매치당 값
+--     1개로는 의미가 없는 컬럼이었고, side를 읽던 유일한 소비처(ml/engagement_training.py)도
+--     이제 match_player_stats.team_id로 로스터를 가르도록 바뀌었다(services/match_sync.py/
+--     match_history.py 모듈 docstring 참고). 대신 started_at을 추가 - Henrik 프리미어
+--     히스토리 API(league_matches[].started_at)에서 가져오는 매치 시각으로,
+--     matches.game_start(v2/match metadata.game_start)와는 소스가 다른 별도 값이다.
+ALTER TABLE match_player_stats
+    DROP COLUMN side,
+    ADD COLUMN started_at DATETIME NULL
+        COMMENT 'Henrik 프리미어 히스토리 API(GET /valorant/v1/premier/{team}/{tag}/history) league_matches[].started_at'
+        AFTER role_type;
 
 -- 11) 승부예측 Rolling Feature 캐싱(ml/predictor.py, ml/rolling.py) - 신규 테이블이라
 --     기존 데이터/FK에 영향 없음.
