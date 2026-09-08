@@ -37,10 +37,11 @@ from datetime import datetime, timezone
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from ml import engagement_predictor
+from models.match import Match
+from models.match_player_stat import MatchPlayerStat
+from models.riot_account import RiotAccount
 from models.team import Team
 from services.player_profile import ROLE_LABELS
-from services import team_engagement_cache
 
 _ref_map_uuid_cache: dict | None = None
 _ref_agent_cache: dict | None = None
@@ -65,7 +66,6 @@ def _load_agent_info_by_name(db: Session) -> dict:
             r["display_name"].lower(): {"uuid": r["uuid"], "role_type": r["role_type"]} for r in rows
         }
     return _ref_agent_cache
-
 
 
 def _parse_game_start(value) -> datetime | None:
@@ -155,8 +155,10 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
 
     metadata = match.get("metadata") or {}
     teams = match.get("teams") or {}
-    red_roster = (teams.get("red") or {}).get("roster") or {}
-    blue_roster = (teams.get("blue") or {}).get("roster") or {}
+    red = teams.get("red") or {}
+    blue = teams.get("blue") or {}
+    red_roster = red.get("roster") or {}
+    blue_roster = blue.get("roster") or {}
 
     red_team_id = _find_team_id(db, red_roster.get("name", ""), red_roster.get("tag", ""))
     blue_team_id = _find_team_id(db, blue_roster.get("name", ""), blue_roster.get("tag", ""))
@@ -168,6 +170,11 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     blue_rounds_won = blue.get("rounds_won")
     rounds_played = (red_rounds_won or 0) + (blue_rounds_won or 0)
 
+    # 맵 UUID 캐시 로드 및 파싱
+    map_name = metadata.get("map") or ""
+    map_uuid_map = _load_map_uuid_by_name(db)
+    map_uuid = map_uuid_map.get(map_name.lower())
+
     match_row = db.get(Match, match_id)
     a_is_red = _resolve_a_is_red(match_row, red_team_id, blue_team_id)
     proposed_a = red_team_id if a_is_red else blue_team_id
@@ -178,9 +185,8 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     if match_row is None:
         match_row = Match(match_id=match_id)
         db.add(match_row)
-    # 이미 알고 있던 팀 id를 이번 조회 결과(예: 조회 실패)로 덮어써서 None으로 되돌리지
-    # 않는다 - services/match_sync.py::_backfill_if_needed와 동일한 "채우기만 하고
-    # 후퇴시키지 않는다" 원칙.
+
+    # 이미 알고 있던 팀 id를 이번 조회 결과(예: 조회 실패)로 덮어써서 None으로 되돌리지 않는다
     match_row.team_a_id = proposed_a if proposed_a is not None else match_row.team_a_id
     match_row.team_b_id = proposed_b if proposed_b is not None else match_row.team_b_id
     match_row.winner_team_id = winner_team_id if winner_team_id is not None else match_row.winner_team_id
@@ -189,29 +195,31 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     match_row.game_start = game_start
     match_row.rounds_won_a = rounds_won_a
     match_row.rounds_won_b = rounds_won_b
-    # 라운드 원본 배열 그대로 저장(services/match_sync.py와 동일 형식) - 트레이드 판정에
-    # 필요한 킬 이벤트는 rounds[i].player_stats[].kill_events에 이미 들어있어 따로
-    # {"kills":[...]}로 안 감싸도 된다(ml/engagement_training.py::_extract_kills 참고).
     match_row.round_detail_json = match.get("rounds") or []
     match_row.api_source = "henrik"
 
     all_players = (match.get("players") or {}).get("all_players") or []
     agent_info = _load_agent_info_by_name(db)
 
-    # riot_accounts placeholder를 먼저 다 만들고 명시적으로 flush - models/match_player_
-    # stat.py는 puuid에 ForeignKey("riot_accounts.puuid")를 걸어뒀으니 SQLAlchemy가 같은
-    # flush 안에서도 riot_accounts INSERT를 먼저 내보내야 정상이지만, 초기 구현(FK 선언이
-    # 없던 버전)에서 이 순서가 안 지켜져 FK 위반이 실제로 났었다(match_history.py가 그
-    # 시점엔 models/match_player_stats.py라는 별도 모델을 썼음 - 이후 models/match_player_
-    # stat.py로 통합). 지금은 자동 정렬로도 될 가능성이 높지만, 이미 검증된 안전장치라
-    # 굳이 제거하지 않고 명시적 flush를 유지한다.
+    # Red/Blue 플레이어 PUUID 집합 추출
+    red_puuids = set()
+    blue_puuids = set()
+    for p in all_players:
+        p_team = (p.get("team") or "").lower()
+        p_puuid = p.get("puuid")
+        if p_puuid:
+            if p_team == "red":
+                red_puuids.add(p_puuid)
+            elif p_team == "blue":
+                blue_puuids.add(p_puuid)
+
     for player in all_players:
         puuid = player.get("puuid")
         if puuid:
             _ensure_riot_account_placeholder(db, puuid, player.get("name"), player.get("tag"))
     db.flush()
 
-    # ACS를 먼저 전부 계산해두고, 같은 로스터(red/blue) 안에서 최고 ACS 선수를 MVP로 표시한다.
+    # ACS 및 MVP 계산
     acs_by_puuid: dict[str, int] = {}
     for player in all_players:
         puuid = player.get("puuid")
@@ -257,7 +265,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             db.add(stat_row)
 
         stat_row.team_id = team_id
-        stat_row.is_mvp = puuid == mvp_puuid
+        stat_row.is_mvp = (puuid == mvp_puuid) if mvp_puuid else False
         stat_row.agent_uuid = (agent_meta or {}).get("uuid")
         stat_row.role_type = ROLE_LABELS.get((agent_meta or {}).get("role_type"))
         stat_row.started_at = started_at
