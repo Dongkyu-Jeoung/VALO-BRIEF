@@ -100,10 +100,13 @@ def trade_success_from_kills(kills: list[dict], our_puuids: set[str]) -> tuple[i
     return traded, deaths
 
 
-def _trade_success_rate(matches: list[dict], team_name: str, team_tag: str) -> float | None:
-    """team_name/team_tag 로스터의 트레이드 성공률(%) - 여러 매치에 걸쳐 trade_success_
-    from_kills를 누적한다. 데이터가 하나도 없으면(로스터를 못 찾음/킬 이벤트 없음) None -
-    호출부가 "값을 못 냈다"와 "0%다"를 구분할 수 있게 한다."""
+def trade_rate_from_matches(matches: list[dict], team_name: str, team_tag: str) -> float | None:
+    """team_name/team_tag 로스터의 트레이드 성공률(%) - 여러 매치(raw v2/match dict 리스트,
+    Henrik에서 갓 조회한 것)에 걸쳐 trade_success_from_kills를 누적한다. 데이터가 하나도
+    없으면(로스터를 못 찾음/킬 이벤트 없음) None - 호출부가 "값을 못 냈다"와 "0%다"를
+    구분할 수 있게 한다. routers/teams.py가 (아직 DB에 캐싱 안 된) 상대팀처럼 라이브
+    match_details만 갖고 있을 때 직접 부른다 - build_engagement_prediction_from_features와
+    짝을 이룸."""
     total_traded = 0
     total_deaths = 0
     for match in matches:
@@ -121,7 +124,7 @@ def _trade_success_rate(matches: list[dict], team_name: str, team_tag: str) -> f
     return round(total_traded / total_deaths * 100, 1)
 
 
-def _duelist_avg_acs(matches: list[dict], team_name: str, team_tag: str) -> float | None:
+def duelist_acs_from_matches(matches: list[dict], team_name: str, team_tag: str) -> float | None:
     """team_name/team_tag 로스터 중 듀얼리스트 요원을 플레이한 선수들의 매치당 평균 ACS
     (score / rounds_played, services/team_profile.py의 acs_of()와 동일한 계산 방식을
     독립적으로 재구현). 듀얼리스트 매치업 "유불리"의 원재료 - 절대값보다 상대 팀과의
@@ -211,6 +214,40 @@ def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs,
     }
 
 
+def build_engagement_prediction_from_features(
+    *,
+    team_trade_rate: float | None,
+    opponent_trade_rate: float | None,
+    team_duelist_acs: float | None,
+    opponent_duelist_acs: float | None,
+) -> dict | None:
+    """이미 계산된 트레이드 성공률/듀얼리스트 ACS 4개로 engagementPrediction shape을
+    조립한다(server/승부예측_성능_분석.md 7-5번 API 계약, 9-4번 참고). 이 4개 값을 어디서
+    구했는지는 이 함수가 신경 안 쓴다 - routers/teams.py가 우리팀은
+    services/team_engagement_cache.py(DB 캐시, Henrik 호출 없음), 상대팀은 그 순간
+    라이브로 받은 match_details(trade_rate_from_matches/duelist_acs_from_matches)처럼
+    서로 다른 소스에서 얻어 여기로 넘긴다 - 두 소스 다 결국 같은 trade_success_from_kills
+    계산식을 쓰므로 값 자체는 어긋나지 않는다."""
+    if team_trade_rate is None and opponent_trade_rate is None and team_duelist_acs is None and opponent_duelist_acs is None:
+        # 넷 다 없으면 굳이 50:50 가짜 값을 내려 "예측"인 척하지 않는다 - None을 반환해
+        # 프론트(EngagementPredictionBlock)가 "모델 학습 전" 안내를 보여주게 한다.
+        return None
+
+    artifact = _get_artifact()
+    if artifact is not None:
+        return _predict_with_model(artifact, team_trade_rate, opponent_trade_rate, team_duelist_acs, opponent_duelist_acs)
+
+    duelist_matchup = _duelist_matchup_from_acs(team_duelist_acs or 0.0, opponent_duelist_acs or 0.0)
+    return {
+        "trade": {
+            "ourWinRate": team_trade_rate if team_trade_rate is not None else 50.0,
+            "theirWinRate": opponent_trade_rate if opponent_trade_rate is not None else 50.0,
+        },
+        "duelistMatchup": duelist_matchup,
+        "modelVersion": "heuristic-v0",
+    }
+
+
 def build_engagement_prediction(
     *,
     team_name: str,
@@ -220,37 +257,13 @@ def build_engagement_prediction(
     opponent_tag: str,
     opponent_matches: list[dict],
 ) -> dict | None:
-    """routers/teams.py::get_team_analysis가 응답의 engagementPrediction 필드에 그대로
-    넣을 수 있는 shape을 만든다(server/승부예측_성능_분석.md 7-5번 API 계약과 동일 -
-    front/src/components/analysis/EngagementPredictionBlock.jsx가 이 shape을 기대함).
-
-    주의: 이 함수를 실제로 쓰려면 호출부가 "우리팀"과 "상대팀" 양쪽의 match_details를
-    다 갖고 있어야 한다. 지금 routers/teams.py::get_team_analysis는 URL의 팀(상대팀) 것만
-    조회하고 "우리팀"이 누군지 모른다(JWT 인증 의존성이 없음) - routers/predict.py::
-    predict_match()처럼 Depends(get_current_team) + services/predict_service를 참고해
-    우리팀 매치도 같이 불러오는 확장이 먼저 필요하다(7-4-1번의 통합 가이드 참고).
-    """
-    our_trade = _trade_success_rate(team_matches, team_name, team_tag)
-    their_trade = _trade_success_rate(opponent_matches, opponent_name, opponent_tag)
-    our_duelist_acs = _duelist_avg_acs(team_matches, team_name, team_tag)
-    their_duelist_acs = _duelist_avg_acs(opponent_matches, opponent_name, opponent_tag)
-
-    # 트레이드/듀얼리스트 둘 다 양쪽 팀 전부 데이터가 없으면 굳이 50:50 가짜 값을 내려
-    # "예측"인 척하지 않는다 - None을 반환해 프론트(EngagementPredictionBlock)가 "모델
-    # 학습 전" 안내를 보여주게 한다.
-    if our_trade is None and their_trade is None and our_duelist_acs is None and their_duelist_acs is None:
-        return None
-
-    artifact = _get_artifact()
-    if artifact is not None:
-        return _predict_with_model(artifact, our_trade, their_trade, our_duelist_acs, their_duelist_acs)
-
-    duelist_matchup = _duelist_matchup_from_acs(our_duelist_acs or 0.0, their_duelist_acs or 0.0)
-    return {
-        "trade": {
-            "ourWinRate": our_trade if our_trade is not None else 50.0,
-            "theirWinRate": their_trade if their_trade is not None else 50.0,
-        },
-        "duelistMatchup": duelist_matchup,
-        "modelVersion": "heuristic-v0",
-    }
+    """build_engagement_prediction_from_features의 얇은 래퍼 - 양쪽 다 라이브
+    match_details(raw v2/match dict 리스트)를 갖고 있을 때 쓴다(예: 스크래치 테스트,
+    두 팀 다 지금 막 조회한 경우). 실제 서비스 경로(routers/teams.py)는 우리팀은 DB
+    캐시를 쓰므로 이 함수 대신 build_engagement_prediction_from_features를 직접 부른다."""
+    return build_engagement_prediction_from_features(
+        team_trade_rate=trade_rate_from_matches(team_matches, team_name, team_tag),
+        opponent_trade_rate=trade_rate_from_matches(opponent_matches, opponent_name, opponent_tag),
+        team_duelist_acs=duelist_acs_from_matches(team_matches, team_name, team_tag),
+        opponent_duelist_acs=duelist_acs_from_matches(opponent_matches, opponent_name, opponent_tag),
+    )

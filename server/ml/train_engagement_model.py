@@ -5,18 +5,27 @@ server/승부예측_성능_분석.md 7-4번 참고 - 메인 승률 모델(models
 스크립트가 아예 없어서 검증도 재학습도 불가능"한 상황을 반복하지 않기 위해 처음부터
 train/test 분리 + 베이스라인 비교를 포함해서 만듦).
 
-실행: python -m ml.train_engagement_model (server/ 디렉터리에서)
+실행(direct DB - 서버와 같은 환경/DB 접근 권한이 있을 때):
+    python -m ml.train_engagement_model
 
-주의: matches/match_player_stats에 실제로 쌓인 데이터가 MIN_SAMPLES 미만이면 학습을
+실행(API 경유 - DB에 직접 못 붙는 환경, 예: 다른 머신/노트북. server/승부예측_성능_분석.md
+"학습은 데이터를 api를 통해 가져와야 할거같아" 요청 반영):
+    python -m ml.train_engagement_model --api-url http://localhost:8000
+    (routers/ml.py::GET /api/ml/engagement-training-data를 호출해서 학습 데이터를 받아온다)
+
+주의: team_engagement_cache에 실제로 쌓인 데이터가 MIN_SAMPLES 미만이면 학습을
 거부하고 아무 파일도 안 남긴다 - 표본이 너무 적은 상태로 학습하면 과적합된 모델을
 "진짜 학습된 모델"인 것처럼 배포하게 되는데, 이게 결정론적 통계(heuristic-v0)보다
 못한 결과를 낼 수 있어 더 위험하다(server/승부예측_성능_분석.md 7-2번 - 애초에 데이터가
 쌓여야 하는 이유).
 """
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 import joblib
+import pandas as pd
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor
@@ -34,20 +43,35 @@ MODEL_VERSION = "engagement-v1"
 MIN_SAMPLES = 60
 
 
-def train_engagement_model(db=None, min_samples: int = MIN_SAMPLES) -> dict | None:
+def _fetch_training_dataframe_via_api(api_url: str) -> pd.DataFrame:
+    """routers/ml.py::GET /api/ml/engagement-training-data 호출로 학습 데이터를 받아온다.
+    build_training_dataframe(db)를 직접 부르는 것과 결과가 같다(같은 함수를 서버가
+    호출해서 그대로 반환) - DB 세션을 못 여는 환경에서 쓰는 대체 경로."""
+    res = httpx.get(f"{api_url.rstrip('/')}/api/ml/engagement-training-data", timeout=30.0)
+    res.raise_for_status()
+    payload = res.json()
+    return pd.DataFrame(payload["rows"], columns=FEATURE_COLUMNS + LABEL_COLUMNS)
+
+
+def train_engagement_model(db=None, min_samples: int = MIN_SAMPLES, api_url: str | None = None) -> dict | None:
     """학습 후 저장한 아티팩트(dict)를 반환. 표본 부족 등으로 학습을 안 했으면 None -
     이 경우 models/engagement_model.pkl은 건드리지 않는다(기존 파일이 있으면 그대로 둠).
-    db를 안 넘기면 이 함수가 직접 세션을 열고 닫는다(CLI 실행용) - 테스트 코드는 스크래치
-    세션을 직접 넘겨서 커밋 시점을 제어할 수 있다."""
-    owns_session = db is None
-    if owns_session:
-        db = SessionLocal()
 
-    try:
-        df = build_training_dataframe(db)
-    finally:
+    api_url이 주어지면 DB에 직접 안 붙고 HTTP로 학습 데이터를 받아온다(위 모듈 docstring
+    참고). 안 주면 기존처럼 direct DB 경로 - db를 안 넘기면 이 함수가 직접 세션을 열고
+    닫는다(CLI 실행용), 테스트 코드는 스크래치 세션을 직접 넘겨서 커밋 시점을 제어할 수
+    있다."""
+    if api_url:
+        df = _fetch_training_dataframe_via_api(api_url)
+    else:
+        owns_session = db is None
         if owns_session:
-            db.close()
+            db = SessionLocal()
+        try:
+            df = build_training_dataframe(db)
+        finally:
+            if owns_session:
+                db.close()
 
     if len(df) < min_samples:
         print(
@@ -104,4 +128,10 @@ def train_engagement_model(db=None, min_samples: int = MIN_SAMPLES) -> dict | No
 
 
 if __name__ == "__main__":
-    train_engagement_model()
+    parser = argparse.ArgumentParser(description="교전 매치업 예측 모델 학습")
+    parser.add_argument(
+        "--api-url", default=None,
+        help="지정하면 DB에 직접 안 붙고 이 주소의 /api/ml/engagement-training-data로 학습 데이터를 받아온다(예: http://localhost:8000)",
+    )
+    args = parser.parse_args()
+    train_engagement_model(api_url=args.api_url)

@@ -1,12 +1,17 @@
 """
-matches/match_player_stats DB(services/match_history.py가 opportunistic하게 축적)에서
-교전 매치업 예측 모델(ml/train_engagement_model.py) 학습용 DataFrame을 만든다.
-server/승부예측_성능_분석.md 7-2/7-3번 참고.
+team_engagement_cache(services/match_history.py가 write-through로 채우는 팀×매치당
+로그, services/team_engagement_cache.py 모듈 docstring 참고)에서 교전 매치업 예측 모델
+(ml/train_engagement_model.py) 학습용 DataFrame을 만든다. server/승부예측_성능_분석.md
+7-2/7-3/11번 참고.
 
-- teams에 둘 다 가입된(team_a_id/team_b_id가 NOT NULL인) 매치만 쓴다 - 미가입 팀은
-  매치마다 신원을 이어붙일 방법이 없어(팀명/태그를 매치 행에 저장하지 않음) 시간순
-  rolling feature를 계산할 수 없다.
-- 각 매치의 피처(team_recent_*)는 반드시 "그 매치 이전"의 매치들만으로 계산한다(누수
+2026-09-08 재설계: matches/match_player_stats에서 직접 집계하던 이전 버전과 달리, 이제
+team_engagement_cache 표 하나만으로 재구성한다 - 그 표의 각 행이 곧 "그 팀이 그 매치에서
+기록한 실제 값"(라벨 후보)이면서, 그 팀의 다음 매치들에 대해서는 "이전 이력"(피처 후보)
+으로도 쓰인다.
+
+- 상대도 가입 팀이라 같은 match_id로 2행(양쪽 관점)이 다 있는 매치만 학습 샘플로 쓴다 -
+  한쪽만 가입돼 있으면 opponent_recent_* 피처를 만들 방법이 없다.
+- 각 매치의 피처(team_recent_*)는 반드시 "그 매치 이전"의 행들만으로 계산한다(누수
   방지) - 그래서 팀마다 최초 몇 경기는 피처를 못 만들어 자동으로 학습 샘플에서 빠진다.
 - 라벨(label_trade_rate/label_duelist_acs)은 ml/engagement_predictor.py와 완전히 같은
   계산 함수(trade_success_from_kills)로 만든다 - 학습 라벨과 라이브 추론 피처의 정의가
@@ -19,16 +24,20 @@ server/승부예측_성능_분석.md 7-2/7-3번 참고.
     직접 비교해서 가른다 - side 컬럼(red/blue)이나 "team_a=red" 가정에 더 이상 의존하지 않는다.
   - match_player_stats.role_type이 이제 한글 라벨("타격대" 등)로 저장되므로 듀얼리스트
     판정도 한글 라벨(services.player_profile.ROLE_LABELS)로 비교한다.
+- 라벨(label_trade_rate/label_duelist_acs)은 write-through 시점에 이미 ml/
+  engagement_predictor.py와 같은 계산 함수로 만들어져 이 표에 저장돼 있으므로 여기서
+  다시 계산하지 않고 그대로 읽는다 - 학습 라벨과 라이브 추론 피처의 정의가 어긋나지
+  않는다는 보장은 그 write-through 경로(services/match_history.py)가 이미 갖고 있다.
 """
-import json as json_module
 from collections import defaultdict
+from datetime import datetime
 
 import pandas as pd
-from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from ml.engagement_predictor import RECENT_MATCHES, trade_success_from_kills
 from services.player_profile import ROLE_LABELS
+from models.team_engagement_cache import TeamEngagementCache
 
 _DUELIST_LABEL = ROLE_LABELS["Duelist"]
 
@@ -143,16 +152,21 @@ def _recent_avg(values: list[float | None], n: int = RECENT_MATCHES) -> float | 
 
 def build_training_dataframe(db: Session) -> pd.DataFrame:
     """ml/train_engagement_model.py가 바로 학습에 쓸 수 있는 DataFrame(FEATURE_COLUMNS +
-    LABEL_COLUMNS)을 만든다. 매치 하나당 최대 2개 샘플(team_a 관점 1개, team_b 관점 1개,
-    서로 대칭)을 만든다 - 단, 그 팀의 이전 이력이 하나도 없거나(RECENT_MATCHES 미만도
-    포함해서 평균 자체는 계산 가능하지만 이력 자체가 0건이면 제외) 이 매치의 라벨을
-    계산할 수 없으면(로스터 데이터 누락 등) 그 방향의 샘플은 건너뛴다."""
-    matches = _load_registered_matches(db)
-    if not matches:
+    LABEL_COLUMNS)을 만든다. 매치 하나당 최대 2개 샘플(각 팀 관점 1개씩, 서로 대칭)을
+    만든다 - 단, 상대가 미가입 팀이거나(같은 match_id에 행이 하나뿐) 그 팀의 이전 이력이
+    하나도 없으면 그 방향의 샘플은 건너뛴다."""
+    all_rows = db.query(TeamEngagementCache).order_by(TeamEngagementCache.game_start.asc()).all()
+    if not all_rows:
         return pd.DataFrame(columns=FEATURE_COLUMNS + LABEL_COLUMNS)
 
-    match_ids = [m["match_id"] for m in matches]
-    stats_by_match = _load_player_stats_by_match(db, match_ids)
+    by_match: dict[str, list[TeamEngagementCache]] = defaultdict(list)
+    for r in all_rows:
+        by_match[r.match_id].append(r)
+
+    match_order = sorted(
+        by_match.keys(),
+        key=lambda mid: min((r.game_start or _MIN_DATETIME) for r in by_match[mid]),
+    )
 
     # team_id -> [(trade_rate, duelist_acs), ...] 시간순 관측 이력(현재 매치는 아직 안 들어감)
     history_by_team: dict[str, list[tuple]] = defaultdict(list)
@@ -197,17 +211,17 @@ def build_training_dataframe(db: Session) -> pd.DataFrame:
             }
 
         row_a = _make_row(a_trade_feat, b_trade_feat, a_duelist_feat, b_duelist_feat,
-                           label_a_trade, label_a_duelist)
+                           a.trade_rate, a.duelist_acs)
         if row_a:
             rows.append(row_a)
         row_b = _make_row(b_trade_feat, a_trade_feat, b_duelist_feat, a_duelist_feat,
-                           label_b_trade, label_b_duelist)
+                           b.trade_rate, b.duelist_acs)
         if row_b:
             rows.append(row_b)
 
         # 이 매치의 실제 결과는 "다음" 매치부터 이력에 반영되도록 마지막에 추가한다
         # (누수 방지 - 위 피처 계산이 끝난 뒤에만 append).
-        history_by_team[team_a].append((label_a_trade, label_a_duelist))
-        history_by_team[team_b].append((label_b_trade, label_b_duelist))
+        history_by_team[a.team_id].append((a.trade_rate, a.duelist_acs))
+        history_by_team[b.team_id].append((b.trade_rate, b.duelist_acs))
 
     return pd.DataFrame(rows, columns=FEATURE_COLUMNS + LABEL_COLUMNS)

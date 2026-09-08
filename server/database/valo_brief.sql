@@ -308,6 +308,30 @@ CREATE TABLE player_rolling_cache (
   COMMENT='선수별 Rolling Feature(최근 N경기 평균) 캐시 - TTL은 애플리케이션에서 관리';
 
 -- ---------------------------------------------------------------------
+-- 3-2. TEAM_ENGAGEMENT_CACHE  (팀×매치당 교전 매치업 Rolling Feature 로그)
+--
+-- 2026-09-08 신규, 같은 날 재설계: 처음엔 팀당 한 행(덮어쓰기)짜리 캐시였지만,
+-- matches/match_player_stats에 원본을 저장하지 않기로 하면서(server/승부예측_성능_
+-- 분석.md 11번) 이 표가 "지금 이 팀의 최근 폼" 캐시와 "모델 재학습용 원본" 두 역할을
+-- 겸하도록 팀×매치당 한 행(append-only 로그)으로 바꿨다. services/match_history.py가
+-- 매치 상세를 받는 즉시(write-through) 그 매치 하나만의 트레이드 성공률/듀얼리스트
+-- ACS를 계산해서 upsert한다 - Team에 FK는 걸지 않음(미가입 팀은 애초에 캐싱 대상이
+-- 아님, matches.team_a_id/team_b_id도 FK 없던 기존 관례와 동일).
+-- ---------------------------------------------------------------------
+CREATE TABLE team_engagement_cache (
+    team_id                 VARCHAR(64)     NOT NULL COMMENT 'teams.team_id (Henrik 프리미어 팀 id)',
+    match_id                VARCHAR(64)     NOT NULL COMMENT '이 팀이 이 매치에서 기록한 값',
+    opponent_team_id        VARCHAR(64)     NULL     COMMENT '상대도 가입 팀이면 그 team_id (학습 데이터 페어링용)',
+    game_start               DATETIME        NULL     COMMENT '정렬/최근 N경기 선정 기준',
+    trade_rate              FLOAT           NULL     COMMENT '이 매치에서의 트레이드 성공률(%) - 계산 불가 시 NULL',
+    duelist_acs             FLOAT           NULL     COMMENT '이 매치에서의 듀얼리스트 로스터 평균 ACS - 계산 불가 시 NULL',
+    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                            ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id, match_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='팀x매치당 교전 매치업(트레이드 성공률/듀얼리스트 ACS) 값 - 캐시 + 학습 데이터 겸용';
+
+-- ---------------------------------------------------------------------
 -- 4. MATCHES  (매치 메타데이터 캐시)
 --    ※ map_name(varchar) 대신 map_uuid(FK → ref_maps)로 구성
 --
@@ -706,9 +730,44 @@ CREATE TABLE IF NOT EXISTS player_rolling_cache (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='선수별 Rolling Feature(최근 N경기 평균) 캐시 - TTL은 애플리케이션에서 관리';
 
--- 참고: insights, ref_weapons, matches, match_player_stats, team_stats_summary,
--- player_stats_summary는 현재 코드에서 아직 안 쓰지만 이미 스캐폴딩되었거나(AI 리포트
--- 프론트 컴포넌트) mock 데이터 구조가 그대로 대응되거나(무기별 스탯, 3초 상대분석/우리팀
--- 분석/전략 제안) 성능상 라이브 조회 대신 캐싱이 필요한(매치 원본) 기능과 바로
--- 연결되므로 남겨둡니다. predictions는 routers/predict.py가 실제로 저장하기 시작했습니다.
+-- 12) 팀별 교전 매치업 Rolling Feature 캐싱(ml/engagement_predictor.py, ml/
+--     engagement_training.py) - 신규 테이블이라 기존 데이터/FK에 영향 없음. 3-2번과
+--     동일 정의.
+CREATE TABLE IF NOT EXISTS team_engagement_cache (
+    team_id                 VARCHAR(64)     NOT NULL COMMENT 'teams.team_id (Henrik 프리미어 팀 id)',
+    recent_trade_rate       FLOAT           NOT NULL COMMENT '최근 N경기 트레이드 성공률(%) 평균',
+    recent_duelist_acs      FLOAT           NOT NULL COMMENT '최근 N경기 듀얼리스트 로스터 평균 ACS',
+    sample_matches          INT             NOT NULL DEFAULT 0 COMMENT '평균 계산에 실제로 반영된 매치 수',
+    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                            ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='팀별 교전 매치업(트레이드 성공률/듀얼리스트 ACS) Rolling Feature 캐시 - TTL은 애플리케이션에서 관리';
+
+-- 13) 2026-09-08 재설계: team_engagement_cache를 "팀당 한 행(덮어쓰기)"에서 "팀×매치당
+--     한 행(append-only 로그)"으로 바꾼다 - matches/match_player_stats에 원본을 더 이상
+--     저장하지 않기로 하면서, 이 표 하나가 캐시 + 학습 데이터 원본을 겸하도록 하기 위함
+--     (server/승부예측_성능_분석.md 11번). 위 12)에서 만든 구버전 정의를 그대로 대체.
+--     주의: 이미 저장된 행이 있다면 새 컬럼(match_id 등)이 없어 전부 버려진다 - 운영에서
+--     이 값은 다시 write-through로 채워지므로(팀 페이지 조회/회원가입 때마다) 데이터
+--     유실이 아니라 재계산일 뿐이지만, 실행 전 필요하면 백업하세요.
+DROP TABLE IF EXISTS team_engagement_cache;
+CREATE TABLE team_engagement_cache (
+    team_id                 VARCHAR(64)     NOT NULL COMMENT 'teams.team_id (Henrik 프리미어 팀 id)',
+    match_id                VARCHAR(64)     NOT NULL COMMENT '이 팀이 이 매치에서 기록한 값',
+    opponent_team_id        VARCHAR(64)     NULL     COMMENT '상대도 가입 팀이면 그 team_id (학습 데이터 페어링용)',
+    game_start               DATETIME        NULL     COMMENT '정렬/최근 N경기 선정 기준',
+    trade_rate              FLOAT           NULL     COMMENT '이 매치에서의 트레이드 성공률(%) - 계산 불가 시 NULL',
+    duelist_acs             FLOAT           NULL     COMMENT '이 매치에서의 듀얼리스트 로스터 평균 ACS - 계산 불가 시 NULL',
+    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                            ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id, match_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='팀x매치당 교전 매치업(트레이드 성공률/듀얼리스트 ACS) 값 - 캐시 + 학습 데이터 겸용';
+
+-- 참고: insights, ref_weapons, team_stats_summary, player_stats_summary는 현재
+-- 코드에서 아직 안 쓰지만 이미 스캐폴딩되었거나(AI 리포트 프론트 컴포넌트) mock 데이터
+-- 구조가 그대로 대응되는(무기별 스탯, 3초 상대분석/우리팀 분석/전략 제안) 기능과 바로
+-- 연결되므로 남겨둡니다. predictions는 routers/predict.py가, matches/match_player_stats는
+-- services/match_history.py·services/match_sync.py가 실제로 저장하기 시작했습니다.
 -- 각 테이블이 실제로 어느 화면에 연결될지는 우리팀_기능_구현_가이드.md 1번 항목 참고.

@@ -1,20 +1,3 @@
-"""
-회원가입 시 팀 프리미어 매치 이력을 선동기화(Pre-fill)하는 파이프라인.
-
-routers/auth.py의 signup()이 팀 계정 생성 직후 BackgroundTasks로 이 모듈의
-sync_team_match_history()를 실행한다 - 매치 상세를 여러 건 순차 호출해야 해서(Henrik
-레이트리밋 안에서) 회원가입 응답을 그만큼 기다리게 할 수 없기 때문이다.
-
-파싱 대상 스키마(Henrik v2/match)는 services/team_profile.py가 이미 실사용 중인 필드
-(teams.red/blue.roster, players.all_players, 최상위 kills 배열의 killer_puuid/
-victim_puuid/round/kill_time_in_round)를 그대로 따른다 - 별도로 문서화된 스키마가
-없어서 이미 검증된 소스에 맞춘다. first_bloods/first_deaths/kast의 라운드별 계산과
-트레이드 판정(5초 윈도)은 ml/valorant_git.py(compute_advanced_player_stats)의 방식을
-그대로 옮긴 것 - 앱 전체에서 "KAST"의 정의를 하나로 맞추기 위함.
-"""
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from database.connection import SessionLocal
@@ -175,8 +158,6 @@ def _compute_player_round_stats(kills_by_round: dict[int, list], puuid: str, rou
                         traded = True
                         break
 
-        if my_kills or got_assist or survived or traded:
-            kast_rounds += 1
 
         for k in my_kills:
             weapon_id = str(k.get("damage_weapon_id") or "").lower()
@@ -335,17 +316,10 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
     map_uuids = _load_map_uuid_by_name(db)
 
     for match_id in match_ids:
-        existing = db.get(Match, match_id)
-        if existing is not None:
-            # 이미 캐싱된 매치 - Henrik을 다시 부르지 않고 필요하면 상대팀 쪽만 백필.
-            _backfill_if_needed(db, existing, team_id)
-            continue
-
         try:
             match = await henrik_api.get_match_detail(match_id)
         except henrik_api.HenrikRateLimitError:
-            # 남은 매치는 이 팀이 다음에 다시 동기화될 때 이어서 채워진다(이미 저장된
-            # match_id는 위에서 건너뛰므로 재실행해도 중복 저장되지 않음).
+            # 남은 매치는 이 팀이 다음에 페이지 조회로 자연스럽게 이어서 채워진다.
             break
         if not match:
             continue
@@ -356,12 +330,12 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
         )
 
 
-async def sync_team_match_history(team_id: str, team_name: str, team_tag: str) -> None:
+async def sync_team_match_history(team_name: str, team_tag: str) -> None:
     """회원가입 직후 routers/auth.py가 BackgroundTasks로 실행하는 진입점.
     Depends(get_db) 세션은 요청 생명주기에 묶여 있어 백그라운드 태스크에서 재사용할 수
     없으므로 여기서 별도 세션을 열고 닫는다."""
     db = SessionLocal()
     try:
-        await _sync(db, team_id, team_name, team_tag)
+        await _sync(db, team_name, team_tag)
     finally:
         db.close()
