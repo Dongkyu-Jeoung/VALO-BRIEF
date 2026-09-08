@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { fetchTeamAnalysis, fetchTeamProfile } from '../../api/teams';
 import { fetchPrediction, fetchRecentOpponent } from '../../api/prediction';
+import { FORCE_MOCK_PREDICTION } from '../../api/config';
+import { teamProfileMock } from '../../mocks/team.mock';
 import { useAuth } from '../../context/AuthContext';
 import PredictBox from '../../components/predict/PredictBox';
 import FilterTabs from '../../components/common/FilterTabs';
@@ -57,7 +59,14 @@ export default function MatchPredictionPage() {
           setAnalysisData(normalizedData);
         }
       });
-      fetchTeamProfile(name, tag).then((data) => { if (active) setOpponentTeam(data); });
+      // FORCE_MOCK_PREDICTION(api/config.js) - 승부예측 페이지 전체를 백엔드 성능 개선
+      // 전까지 임시로 mock만 쓰게 한다(fetchTeamProfile은 TeamProfilePage와 공유하는
+      // 함수라 여기서 직접 건드리지 않고, 이 페이지에서만 호출을 건너뛴다).
+      if (FORCE_MOCK_PREDICTION) {
+        if (active) setOpponentTeam(teamProfileMock);
+      } else {
+        fetchTeamProfile(name, tag).then((data) => { if (active) setOpponentTeam(data); });
+      }
       fetchPrediction(name, tag).then((data) => { if (active) setPrediction(data); });
     });
 
