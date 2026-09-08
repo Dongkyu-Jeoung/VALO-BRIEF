@@ -1,46 +1,48 @@
 """
-Henrik 매치 상세(v2/match) 하나를 받아서 그 매치 하나만의 트레이드 성공률/듀얼리스트
-ACS를 계산해 team_engagement_cache에 (team_id, match_id) 행으로 upsert - 승부예측 분석
-탭 ③번(교전 매치업 예측) 모델 학습용 데이터 + "지금 폼" 캐시를 겸한다(server/승부예측_
-성능_분석.md 11번, services/team_engagement_cache.py 모듈 docstring 참고).
+Henrik 매치 상세(v2/match) 하나를 matches/match_player_stats에 upsert(우리팀 분석 페이지
+등 다른 화면이 원본 통계를 그대로 읽을 수 있도록)하고, 동시에 그 매치 하나만의 트레이드
+성공률/듀얼리스트 ACS를 계산해 team_engagement_cache에 (team_id, match_id) 행으로도
+upsert한다 - 승부예측 분석 탭 ③번(교전 매치업 예측) 모델 학습용 데이터 + "지금 폼" 캐시를
+겸한다(server/승부예측_성능_분석.md 11번, services/team_engagement_cache.py 모듈 docstring
+참고).
 
-2026-09-08 재설계: 이전에는 matches/match_player_stats에 매치 원본(로스터별 ACS/킬/
-데스 등)을 통째로 저장해두고 그걸 다시 집계해서 team_engagement_cache를 채웠지만,
-지금은 원본을 아예 저장하지 않고 받은 자리에서 바로 계산한 값(이 모델에 필요한 두
-숫자)만 남긴다 - matches/match_player_stats는 더 이상 이 파이프라인에서 쓰지 않는다
-(테이블/모델 정의 자체는 그대로 둠).
-
-2026-09-08 재정리 - services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 matches/
-match_player_stats 테이블에 쓰면서 컨벤션이 서로 달라 충돌이 있었다(같은 match_id를
-두 파이프라인이 각자 다른 형식으로 덮어씀). match_sync.py 쪽 컨벤션으로 통일한다:
+services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 matches/match_player_stats
+테이블에 쓰므로 컨벤션을 맞춘다:
   - matches.team_a_id/team_b_id는 "red=a/blue=b" 같은 고정 색상 의미가 아니다. 이미 DB에
     있는 매치라면 기존에 어느 슬롯이 red/blue였는지 identity로 확인해서 그 배치를 그대로
-    유지하고(스왑 금지), 새 매치면 기존과 동일하게 red->a/blue->b를 기본값으로 쓴다.
-  - matches.round_detail_json은 이제 라운드 원본 배열 그대로 저장한다(기존 {"kills":[...]}
-    래핑 제거) - ml/engagement_training.py::_extract_kills()도 이 형식에 맞춰 같이 고쳤다.
-  - match_player_stats.side는 더 이상 채우지 않는다(match_sync.py와 동일) - 하프타임마다
-    공/수가 바뀌어서 매치당 값 1개로 표현이 안 되는 데이터였다. ml/engagement_training.py도
-    이제 side 대신 match_player_stats.team_id(위 team_a/b 배치와 무관하게 항상 실제 소속
-    팀을 가리킴)로 로스터를 가른다.
-  - match_player_stats.role_type은 이제 한글 라벨(services.player_profile.ROLE_LABELS)로
-    저장한다(기존 영문 원본 "Duelist" 등에서 변경) - match_sync.py와 동일.
+    유지하고(스왑 금지), 새 매치면 red->a/blue->b를 기본값으로 쓴다.
+  - matches.round_detail_json은 라운드 원본 배열 그대로 저장한다(v2/match의 `rounds`
+    필드) - ml/engagement_training.py는 이제 이 테이블을 안 읽으므로 이 필드는 우리팀
+    분석 페이지 등 다른 소비처를 위한 것.
+  - match_player_stats.side는 더 이상 없다(하프타임마다 공/수가 바뀌어 매치당 값 1개로
+    표현이 안 되는 데이터였음) - team_id로만 로스터를 가른다.
+  - match_player_stats.role_type은 한글 라벨(services.player_profile.ROLE_LABELS)로
+    저장한다(match_sync.py와 동일).
 
 현재 채우는 컬럼: matches 전체 + match_player_stats의 team_id/is_mvp/agent_uuid/
-role_type/acs/kills/deaths/assists/headshot_pct/adr. kast/first_bloods/
+role_type/started_at/acs/kills/deaths/assists/headshot_pct/adr. kast/first_bloods/
 first_deaths/most_used_weapon_uuid/detail_json은 이번 범위(트레이드 성공률/듀얼리스트
 매치업 모델)에 필요 없어 NULL로 남겨둔다 - services/match_sync.py가 이미 그 값을 채워둔
 행이라면(회원가입 시 먼저 동기화된 경우) 여기서 손대지 않아 그대로 보존된다(아래 upsert가
 이 다섯 컬럼을 아예 할당하지 않기 때문).
+
+"조회하는 김에 항상 쌓기"(opportunistic 캐싱) 전략은 그대로 - 별도 배치 작업 없이
+routers/teams.py가 이미 받아온 match_details를 그 자리에서 넘기면 된다. 이 함수가
+실패해도 화면 응답 자체는 깨지면 안 되므로, 호출부가 반드시 try/except로 감싸고 실패를
+삼켜야 한다(이 함수 자체는 예외를 던질 수 있음 - 의도적으로 조용히 삼키지 않는다,
+호출부가 로그를 남길지/무시할지 결정).
 """
 from datetime import datetime, timezone
 
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from ml import engagement_predictor
 from models.match import Match
 from models.match_player_stat import MatchPlayerStat
 from models.riot_account import RiotAccount
 from models.team import Team
+from services import team_engagement_cache
 from services.player_profile import ROLE_LABELS
 
 _ref_map_uuid_cache: dict | None = None
@@ -77,13 +79,24 @@ def _parse_game_start(value) -> datetime | None:
     return None
 
 
+def _parse_started_at(value: str | None) -> datetime | None:
+    """프리미어 히스토리 API(league_matches[].started_at)의 ISO 문자열("...Z")을
+    datetime으로. _parse_game_start(metadata.game_start, epoch)와는 소스가 다른 별도
+    값이라 파싱도 따로 한다."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.astimezone().replace(tzinfo=None)
+
+
 def _find_team_id(db: Session, team_name: str, team_tag: str) -> str | None:
     """team_name/team_tag로 가입된 teams 행을 찾아 team_id(=Henrik 프리미어 팀 id)를 반환.
-    가입 안 된 팀이면 None(matches.team_a_id/team_b_id가 nullable인 이유 그대로).
-    대소문자 무시 비교로 통일(services/match_sync.py::_find_registered_team과 동일) -
-    예전엔 exact match라 대소문자 차이만으로 두 파이프라인이 같은 팀을 다르게 판정할 수 있었다.
-    
-    가입 안 된 팀이면 None(team_engagement_cache가 가입 팀만 캐싱하는 이유 그대로)."""
+    가입 안 된 팀이면 None. 대소문자 무시 비교(services/match_sync.py::
+    _find_registered_team과 동일) - exact match면 대소문자 차이만으로 두 파이프라인이
+    같은 팀을 다르게 판정할 수 있었다."""
     if not team_name or not team_tag:
         return None
     row = (
@@ -127,21 +140,9 @@ def _resolve_a_is_red(existing: Match | None, red_team_id: str | None, blue_team
     return True
 
 
-def _parse_started_at(value: str | None) -> datetime | None:
-    """프리미어 히스토리 API(league_matches[].started_at)의 ISO 문자열("...Z")을
-    datetime으로. _parse_game_start(metadata.game_start, epoch)와는 소스가 다른 별도
-    값이라 파싱도 따로 한다."""
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone().replace(tzinfo=None)
-
-
 def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw: str | None = None) -> None:
-    """match(v2/match 응답 1건)를 matches/match_player_stats에 upsert.
+    """match(v2/match 응답 1건)를 matches/match_player_stats에 upsert하고,
+    team_engagement_cache에도 (team_id, match_id) 행으로 write-through한다.
 
     match_id는 호출부가 넘겨준다(match dict 내부에서 재추출하지 않음) - routers/teams.py는
     이미 history 조회 단계에서 각 매치의 id를 알고 있고(`get_match_detail(mid)` 호출에
@@ -159,11 +160,14 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     blue = teams.get("blue") or {}
     red_roster = red.get("roster") or {}
     blue_roster = blue.get("roster") or {}
+    red_puuids = set(red_roster.get("members") or [])
+    blue_puuids = set(blue_roster.get("members") or [])
 
     red_team_id = _find_team_id(db, red_roster.get("name", ""), red_roster.get("tag", ""))
     blue_team_id = _find_team_id(db, blue_roster.get("name", ""), blue_roster.get("tag", ""))
     winner_team_id = red_team_id if red.get("has_won") else blue_team_id if blue.get("has_won") else None
 
+    map_uuid = _load_map_uuid_by_name(db).get(str(metadata.get("map") or "").lower())
     game_start = _parse_game_start(metadata.get("game_start"))
     started_at = _parse_started_at(started_at_raw)
     red_rounds_won = red.get("rounds_won")
@@ -195,24 +199,18 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     match_row.game_start = game_start
     match_row.rounds_won_a = rounds_won_a
     match_row.rounds_won_b = rounds_won_b
+    # 라운드 원본 배열 그대로 저장(services/match_sync.py와 동일 형식).
     match_row.round_detail_json = match.get("rounds") or []
     match_row.api_source = "henrik"
 
     all_players = (match.get("players") or {}).get("all_players") or []
     agent_info = _load_agent_info_by_name(db)
 
-    # Red/Blue 플레이어 PUUID 집합 추출
-    red_puuids = set()
-    blue_puuids = set()
-    for p in all_players:
-        p_team = (p.get("team") or "").lower()
-        p_puuid = p.get("puuid")
-        if p_puuid:
-            if p_team == "red":
-                red_puuids.add(p_puuid)
-            elif p_team == "blue":
-                blue_puuids.add(p_puuid)
-
+    # riot_accounts placeholder를 먼저 다 만들고 명시적으로 flush - models/match_player_
+    # stat.py는 puuid에 ForeignKey("riot_accounts.puuid")를 걸어뒀으니 SQLAlchemy가 같은
+    # flush 안에서도 riot_accounts INSERT를 먼저 내보내야 정상이지만, 초기 구현(FK 선언이
+    # 없던 버전)에서 이 순서가 안 지켜져 FK 위반이 실제로 났었다. 지금은 자동 정렬로도 될
+    # 가능성이 높지만, 이미 검증된 안전장치라 굳이 제거하지 않고 명시적 flush를 유지한다.
     for player in all_players:
         puuid = player.get("puuid")
         if puuid:
@@ -277,3 +275,32 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         stat_row.adr = round((player.get("damage_made") or 0) / rounds_played) if rounds_played else None
 
     db.commit()
+
+    # write-through - 이 매치에 가입 팀이 껴 있으면(red_team_id/blue_team_id) 그 팀의
+    # team_engagement_cache를 바로 이 매치 값으로 upsert한다(services/team_engagement_
+    # cache.py 모듈 docstring 참고). ENGAGEMENT_CACHE_ENABLED가 False면 내부에서 조용히
+    # 스킵된다.
+    if red_team_id:
+        team_engagement_cache.upsert_match_engagement(
+            db, red_team_id, match_id,
+            opponent_team_id=blue_team_id,
+            game_start=game_start,
+            trade_rate=engagement_predictor.trade_rate_from_matches(
+                [match], red_roster.get("name", ""), red_roster.get("tag", "")
+            ),
+            duelist_acs=engagement_predictor.duelist_acs_from_matches(
+                [match], red_roster.get("name", ""), red_roster.get("tag", "")
+            ),
+        )
+    if blue_team_id:
+        team_engagement_cache.upsert_match_engagement(
+            db, blue_team_id, match_id,
+            opponent_team_id=red_team_id,
+            game_start=game_start,
+            trade_rate=engagement_predictor.trade_rate_from_matches(
+                [match], blue_roster.get("name", ""), blue_roster.get("tag", "")
+            ),
+            duelist_acs=engagement_predictor.duelist_acs_from_matches(
+                [match], blue_roster.get("name", ""), blue_roster.get("tag", "")
+            ),
+        )
