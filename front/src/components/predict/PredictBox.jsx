@@ -38,7 +38,7 @@ export default function PredictBox({ ourTeam, opponentTeam, ourWinChance }) {
         </div>
 
         <div className="pv-recent20">
-          최근 20게임 · 우리팀 승률 {ourTeam.avgWinRate20}% / 상대팀 승률 {opponentTeam.avgWinRate20}%
+          최근 5 게임 · 우리팀 승률 {ourTeam.avgWinRate20}% / 상대팀 승률 {opponentTeam.avgWinRate20}%
         </div>
       </div>
 
