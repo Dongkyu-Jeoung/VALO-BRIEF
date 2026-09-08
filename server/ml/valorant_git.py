@@ -8,6 +8,9 @@ from threading import Semaphore
 from pathlib import Path
 from dotenv import load_dotenv
 
+from services.henrik_api import HenrikRateLimitError
+from services.rate_limiter import throttle_sync
+
 # services/henrik_api.py와 같은 .env(HENRIK_API_KEY)를 공유해서 쓴다 - 키를 소스에
 # 하드코딩하지 않기 위함(예전엔 여기 평문으로 박혀 있었음, git 이력엔 남아있으니 키를
 # 재발급하는 걸 권장).
@@ -35,6 +38,12 @@ MAX_CONCURRENT_REQUEST = 6
 API_SEMAPHORE = Semaphore(MAX_CONCURRENT_REQUEST)
 MAX_RETRIES_ON_429 = 5
 
+# 레이트리밋 카운터는 services/rate_limiter.py로 통합했다 - services/henrik_api.py(일반
+# 검색/프로필 트래픽)도 같은 Henrik 키의 같은 버킷을 쓰는데, 예전엔 이 파일이 따로 카운터를
+# 갖고 있어서 두 클라이언트가 각자 "나는 28/분 이하"라고 안심해도 합치면 실제 한도(30/분)를
+# 넘겨 429를 받을 수 있었다(승부예측_성능_분석.md 3번 참고). 이제 throttle_sync() 하나가
+# 두 클라이언트가 보낸 요청을 모두 같이 센다.
+
 PLAYER_FEATURES = [
     "rr",
     "acs",
@@ -57,9 +66,15 @@ def api_get(url: str) -> dict:
     """
     모든 HenrikDev API 호출을 통과시키는 공통 함수.
     - 매 호출 사이 REQUEST_INTERVAL_SEC만큼 대기해 분당 요청 한도(Basic Key: 30/min)를 넘지 않도록 한다.
-    - 429(Rate Limited)를 받으면 지수 백오프로 재시도한다.
+    - 429(Rate Limited)를 받으면 지수 백오프로 재시도하고, 그래도 안 되면 HenrikRateLimitError를
+      던진다(services/henrik_api.py와 동일한 예외 - main.py의 전역 핸들러가 503으로 응답).
+      예전엔 재시도를 다 쓰고도 마지막 429 응답을 그냥 반환했는데, 호출부(get_puuid_by_riot_id
+      등)가 status_code != 200을 전부 "존재하지 않음"으로 처리해서 실제로는 레이트리밋일 때도
+      "PUUID 조회 실패"처럼 보였다(승부예측_성능_분석.md 3번 참고).
     """
+    res = None
     for attempt in range(MAX_RETRIES_ON_429 + 1):
+        throttle_sync()
         with API_SEMAPHORE:
 
             res = requests.get(url, headers=HEADERS)
@@ -73,7 +88,7 @@ def api_get(url: str) -> dict:
         return res
 
     print(f"  ❌ 429 재시도 한도 초과, 요청 포기: {url}")
-    return res  # 마지막 응답(여전히 429)을 그대로 반환
+    raise HenrikRateLimitError(url)
 
 
 def get_puuid_by_riot_id(name: str, tag: str) -> str:

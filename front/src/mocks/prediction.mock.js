@@ -1,6 +1,6 @@
 export const predictionMock = {
-  ourTeam: { name: 'Team Phoenix', tag: 'PHX', avgWinRate20: 58 },
-  opponentTeam: { name: 'Team Ascend', tag: 'ASC', avgWinRate20: 45 },
+  ourTeam: { name: 'Team Phoenix', tag: 'PHX', avgWinRate20: 58, logoUrl: null },
+  opponentTeam: { name: 'Team Ascend', tag: 'ASC', avgWinRate20: 45, logoUrl: null },
   ourWinChance: 64,
   analysis: {
     roundInfo: {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchTeamProfile } from '../../api/teams';
+import { fetchTeamHeader, fetchTeamProfile } from '../../api/teams';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import MiniRankTable from '../../components/common/MiniRankTable';
 import MapWinrateList from './MapWinrateList';
@@ -13,22 +13,34 @@ import { useListFilter } from '../../hooks/useListFilter';
 /**
  * 이 페이지의 바디는 승부예측 페이지의 '통계' 탭에서도 그대로 재사용됩니다.
  * (MatchPredictionPage/StatsTab.jsx, MyTeamAnalysisPage/StatsTab.jsx 참고)
+ *
+ * 성능 개선(2026-09-07): 팀 로고가 늦게 뜬다는 문제 - fetchTeamProfile 하나가 매치 이력+
+ * 상세 10건까지 다 기다려야 응답이 와서(~2.5~3.1s) 로고도 그만큼 늦게 나왔다. fetchTeamHeader
+ * (팀 로고/이름/디비전만, ~0.3~0.6s)를 동시에 호출해서 먼저 도착하는 대로 헤더부터 그리고,
+ * matchHistory/playerRanking 등 무거운 나머지는 fetchTeamProfile이 채운다(services/
+ * team_profile.py의 build_team_header/build_team_profile 참고).
  */
 export default function TeamProfilePage() {
   const { teamName, teamTag } = useParams();
+  const [header, setHeader] = useState(null);
   const [team, setTeam] = useState(null);
 
   useEffect(() => {
     let active = true;
+    setHeader(null);
+    setTeam(null);
+    fetchTeamHeader(teamName, teamTag).then((data) => { if (active) setHeader(data); });
     fetchTeamProfile(teamName, teamTag).then((data) => { if (active) setTeam(data); });
     return () => { active = false; };
   }, [teamName, teamTag]);
 
-  if (!team) return <LoadingText full />;
+  // team(전체)이 오면 그걸 우선 쓰고, 아직이면 header(로고 등)만으로라도 먼저 그린다.
+  const displayTeam = team ?? header;
+  if (!displayTeam) return <LoadingText full />;
 
   return (
     <div className="page-container">
-      <TeamProfileBody team={team} />
+      <TeamProfileBody team={displayTeam} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Hero from './Hero';
 import FeatureRow from './FeatureRow';
 import QuickAnalysisModal from '../QuickAnalysisModal';
+import { quickAnalysisMock } from '../../mocks/team.mock';
 import { ROUTES } from '../../constants/routes';
 
 // 데모용 팀(목업 데이터의 teamProfileMock과 동일한 팀)으로 연결합니다.
@@ -55,6 +56,10 @@ export default function HomePage() {
         <QuickAnalysisModal
           teamName={quickAnalysisTeam.name}
           teamTag={quickAnalysisTeam.tag}
+          // team-ascend/ASC는 실제로 존재하지 않는 데모용 팀명이라, 실제 백엔드가 붙어있으면
+          // 열 때마다 Henrik 조회 2건이 404로 끝난 뒤에야 mock으로 폴백해서 느려 보이고
+          // 레이트리밋 예산도 낭비했다 - mock을 바로 넘겨 첫 fetch를 건너뛴다.
+          initialData={quickAnalysisMock}
           onClose={closeQuickAnalysis}
         />
       ) : null}

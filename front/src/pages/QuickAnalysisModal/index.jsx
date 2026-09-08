@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchQuickAnalysis } from '../../api/teams';
 import EmptyImageBox from '../../components/common/EmptyImageBox';
@@ -11,12 +11,24 @@ import { ROUTES } from '../../constants/routes';
 /**
  * 통합검색에서 '팀명#태그'로 검색했을 때 뜨는 팝업.
  * 사용법: <QuickAnalysisModal teamName="team-ascend" teamTag="ASC" onClose={...} />
+ *
+ * initialData: 이미 갖고 있는 데이터로 바로 렌더링하고 첫 fetch를 건너뛴다(HomePage 데모
+ * 카드처럼 애초에 존재하지 않는 팀명으로 여는 경우 - 실제 백엔드가 붙어있으면 매번 Henrik
+ * 조회 2건(team_info+history)이 404로 끝난 뒤에야 mock로 폴백해서 그만큼 느려 보이고,
+ * Henrik 레이트리밋(분당 30건) 예산도 그냥 날아갔었다). ModalTeamSearchBar로 실제 팀을
+ * 검색하면(activeTeamName/Tag 변경) 그때는 정상적으로 fetchQuickAnalysis를 부른다.
  */
-export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
+export default function QuickAnalysisModal({ teamName, teamTag, initialData, onClose }) {
   const [activeTeamName, setActiveTeamName] = useState(teamName);
   const [activeTeamTag, setActiveTeamTag] = useState(teamTag);
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(initialData ?? null);
   const [loading, setLoading] = useState(false);
+  const skipNextFetch = useRef(Boolean(initialData));
+
+  // initialData(데모용)만 있고 아직 실제로 팀을 검색한 적 없으면, "상세 정보 보기"가
+  // 존재하지 않는 데모 팀 페이지로 넘어가지 않도록 막는다.
+  const [hasSearched, setHasSearched] = useState(!initialData);
+  const [showCtaToast, setShowCtaToast] = useState(false);
 
   useEffect(() => {
     setActiveTeamName(teamName);
@@ -24,6 +36,10 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
   }, [teamName, teamTag]);
 
   useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
     let active = true;
     setLoading(true);
     fetchQuickAnalysis(activeTeamName, activeTeamTag).then((res) => {
@@ -80,6 +96,7 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
 
         <ModalTeamSearchBar
           onTeamFound={(name, tag) => {
+            setHasSearched(true);
             setActiveTeamName(name);
             setActiveTeamTag(tag);
           }}
@@ -138,13 +155,26 @@ export default function QuickAnalysisModal({ teamName, teamTag, onClose }) {
           </div>
         </div>
 
-        <Link
-          to={ROUTES.team(data.teamName, data.teamTag)}
-          className="popup-cta"
-          onClick={onClose}
-        >
-          상세 정보 보기 →
-        </Link>
+        <div className="popup-cta-wrap">
+          {showCtaToast && (
+            <div className="popup-cta-toast">먼저 팀을 검색해 주세요.</div>
+          )}
+          <Link
+            to={ROUTES.team(data.teamName, data.teamTag)}
+            className="popup-cta"
+            onClick={(e) => {
+              if (!hasSearched) {
+                e.preventDefault();
+                setShowCtaToast(true);
+                setTimeout(() => setShowCtaToast(false), 3000);
+                return;
+              }
+              onClose();
+            }}
+          >
+            상세 정보 보기 →
+          </Link>
+        </div>
       </div>
     </div>
   );

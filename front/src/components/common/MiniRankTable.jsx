@@ -2,7 +2,7 @@
  * players: [{ rank, name, acs, hs, position, kd, adr? }]
  * showAdr: ADR 컬럼 표시 여부
  */
-export default function MiniRankTable({ players, showAdr = false }) {
+export default function MiniRankTable({ players = [], showAdr = false }) {
   return (
     //줄바꿈 현상 조정
     <div className="mini-table-wrap">

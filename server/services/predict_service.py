@@ -53,6 +53,45 @@ async def resolve_recent_roster(team_name: str, team_tag: str) -> tuple[dict | N
     return team_info, []
 
 
+async def resolve_recent_opponent(team_name: str, team_tag: str) -> dict | None:
+    """team_name/team_tag의 가장 최근 매치 1건에서 상대팀(name/tag)을 찾는다.
+    매치 이력이 없거나, 그 매치 상세에서 우리 팀 로스터를 못 찾으면 None
+    (팀 자체가 없는 경우도 team_info가 None이라 여기서 None)."""
+    team_info, history = await asyncio.gather(
+        henrik_api.get_premier_team(team_name, team_tag),
+        henrik_api.get_premier_team_history(team_name, team_tag),
+    )
+    if not team_info:
+        return None
+
+    league_matches = (history or {}).get("league_matches") or []
+    recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
+    if not recent or not recent[0].get("id"):
+        return None
+
+    match = await henrik_api.get_match_detail(recent[0]["id"])
+    if not match:
+        return None
+
+    teams = match.get("teams") or {}
+    name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
+    our_side = next(
+        (
+            side for side in ("red", "blue")
+            if str((teams.get(side) or {}).get("roster", {}).get("name", "")).lower() == name_l
+            and str((teams.get(side) or {}).get("roster", {}).get("tag", "")).lower() == tag_l
+        ),
+        None,
+    )
+    if our_side is None:
+        return None
+
+    opp_side = "blue" if our_side == "red" else "red"
+    opp_roster = (teams.get(opp_side) or {}).get("roster") or {}
+    opp_name, opp_tag = opp_roster.get("name"), opp_roster.get("tag")
+    return {"teamName": opp_name, "teamTag": opp_tag} if opp_name and opp_tag else None
+
+
 def save_prediction(
     db: Session,
     *,
