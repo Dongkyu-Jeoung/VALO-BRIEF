@@ -20,6 +20,7 @@ server/승부예측_성능_분석.md 11번 참고), 이 표 하나가 "지금 �
 """
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
 from ml.engagement_predictor import RECENT_MATCHES
@@ -50,21 +51,34 @@ def upsert_match_engagement(
 ) -> None:
     """write-through 진입점 - 매치 상세를 받은 그 자리에서 바로 호출한다(services/
     match_history.py). (team_id, match_id) 한 행을 upsert. ENGAGEMENT_CACHE_ENABLED가
-    False면 조용히 스킵."""
+    False면 조용히 스킵.
+
+    "확인 후 삽입"(db.get으로 있는지 보고 없으면 add) 대신 MySQL 네이티브 INSERT ...
+    ON DUPLICATE KEY UPDATE를 문장 하나로 실행한다 - 같은 팀의 같은 매치를 서로 다른
+    세션(예: 팀 페이지를 거의 동시에 두 번 조회, 또는 회원가입 백필과 페이지 조회가
+    겹침)이 동시에 upsert하면 "확인"과 "삽입" 사이에 경합이 생겨 PRIMARY KEY 중복
+    IntegrityError가 났었다(2026-09-08 실측) - 이 방식은 MySQL이 행 잠금으로 원자적으로
+    처리해줘서 그 경합 자체가 생기지 않는다."""
     if not ENGAGEMENT_CACHE_ENABLED:
         return
 
-    row = db.get(TeamEngagementCache, (team_id, match_id))
-    if row is None:
-        row = TeamEngagementCache(team_id=team_id, match_id=match_id)
-        db.add(row)
-
-    row.opponent_team_id = opponent_team_id
-    row.game_start = game_start
-    row.trade_rate = trade_rate
-    row.duelist_acs = duelist_acs
-    row.computed_at = _now_kst()
-
+    stmt = mysql_insert(TeamEngagementCache).values(
+        team_id=team_id,
+        match_id=match_id,
+        opponent_team_id=opponent_team_id,
+        game_start=game_start,
+        trade_rate=trade_rate,
+        duelist_acs=duelist_acs,
+        computed_at=_now_kst(),
+    )
+    stmt = stmt.on_duplicate_key_update(
+        opponent_team_id=stmt.inserted.opponent_team_id,
+        game_start=stmt.inserted.game_start,
+        trade_rate=stmt.inserted.trade_rate,
+        duelist_acs=stmt.inserted.duelist_acs,
+        computed_at=stmt.inserted.computed_at,
+    )
+    db.execute(stmt)
     db.commit()
 
 
