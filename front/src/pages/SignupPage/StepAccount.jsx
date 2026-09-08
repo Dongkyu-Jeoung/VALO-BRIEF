@@ -146,7 +146,7 @@ export default function StepAccount({ form, onChange, onNext }) {
 
       {/* 약관 동의 */}
       <div className="field-block" style={{ marginBottom: '24px' }}>
-        <div className="checkbox-row" style={{ marginBottom: '4px' }}>
+        <label className="checkbox-row" style={{ marginBottom: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <input
             type="checkbox"
             checked={form.agree}
@@ -156,7 +156,7 @@ export default function StepAccount({ form, onChange, onNext }) {
             }}
           />
           <span>[필수] 이용약관 및 개인정보 수집·이용에 동의합니다.</span>
-        </div>
+        </label>
         {errors.agree && <span className="field-error-msg">{errors.agree}</span>}
       </div>
 

@@ -42,6 +42,9 @@ export default function MyPage() {
     return () => { active = false; };
   }, []);
 
+  const emailDirty = team && email.trim() !== '' && email.trim() !== team.email;
+  const passwordFilled = currentPassword && newPassword && confirmNewPassword;
+
   async function handleEmailSave(e) {
     e.preventDefault();
     setEmailMsg('');
@@ -106,95 +109,120 @@ export default function MyPage() {
 
   if (loading || !team) return <LoadingText full />;
 
-  return (
+    return (
     <div className="page-container my-page">
-      <div className="profile-card">
-        <EmptyImageBox src={team.teamImage} label={`TEAM\nIMAGE`} className="avatar-frame" />
-        <div>
-          <div className="profile-name display">
-            {team.teamName} <span className="tagline">#{team.teamTag}</span>
-          </div>
-          <div className="profile-meta">
-            <span>아이디 <b>{team.loginId}</b></span>
-            <span>가입일 <b>{(team.createdAt || '').slice(0, 10) || '-'}</b></span>
+      <div className="my-page-inner">
+        <div className="profile-card">
+          <EmptyImageBox src={team.teamImage} label={`TEAM\nIMAGE`} className="avatar-frame" />
+          <div>
+            <div className="profile-name display">
+              {team.teamName} <span className="tagline">#{team.teamTag}</span>
+            </div>
+            <div className="profile-meta">
+              <span>아이디 : <b>{team.loginId}</b></span>
+              <span>가입일 : <b>{(team.createdAt || '').slice(0, 10) || '-'}</b></span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="mh-box">
-        <h5>이메일</h5>
-        <form onSubmit={handleEmailSave} className="login-form my-page-form">
-          <div className="field-block">
-            <div className="field">
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e-mail" />
-            </div>
-            {emailMsg && <span className="field-error-msg">{emailMsg}</span>}
+        <div className="mh-box">
+          <div className="mh-box-info">
+            <h5>이메일</h5>
+            <p className="mh-box-desc">계정에 연결된 이메일<br />주소를 변경합니다.</p>
           </div>
-          <button type="submit" className="btn btn-solid" disabled={savingEmail}>
-            {savingEmail ? '저장 중...' : '이메일 저장'}
-          </button>
-        </form>
-      </div>
+          <form onSubmit={handleEmailSave} className="my-page-form">
+            <div className="field-block">
+              <label className="field-label" htmlFor="email">EMAIL ADDRESS</label>
+              <div className="field">
+                <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e-mail" />
+              </div>
+              {emailMsg && <span className="field-error-msg">{emailMsg}</span>}
+            </div>
+            <div className="my-page-form-actions">
+              <button type="submit" className="btn btn-solid" disabled={savingEmail || !emailDirty}>
+                {savingEmail ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </form>
+        </div>
 
-      <div className="mh-box">
-        <h5>비밀번호 변경</h5>
-        <form onSubmit={handlePasswordSave} className="login-form my-page-form">
-          <div className="field-block">
-            <div className="field">
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="현재 비밀번호"
-              />
-            </div>
+        <div className="mh-box">
+          <div className="mh-box-info">
+            <h5>비밀번호 변경</h5>
+            <p className="mh-box-desc">계정 보안을 위해 주기적으로<br />비밀번호를 변경해 주세요.</p>
           </div>
-          <div className="field-block">
-            <div className="field">
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="새 비밀번호"
-              />
+          <form onSubmit={handlePasswordSave} className="my-page-form">
+            <div className="field-block">
+              <label className="field-label" htmlFor="currentPw">CURRENT PASSWORD</label>
+              <div className="field">
+                <input
+                  id="currentPw"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
-          <div className="field-block">
-            <div className="field">
-              <input
-                type="password"
-                value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
-                placeholder="새 비밀번호 확인"
-              />
+            <div className="field-block">
+              <label className="field-label" htmlFor="newPw">NEW PASSWORD</label>
+              <div className="field">
+                <input
+                  id="newPw"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
             </div>
-            {passwordMsg && <span className="field-error-msg">{passwordMsg}</span>}
-          </div>
-          <button type="submit" className="btn btn-solid" disabled={savingPassword}>
-            {savingPassword ? '저장 중...' : '비밀번호 변경'}
-          </button>
-        </form>
-      </div>
+            <div className="field-block">
+              <label className="field-label" htmlFor="confirmPw">CONFIRM NEW PASSWORD</label>
+              <div className="field">
+                <input
+                  id="confirmPw"
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                />
+              </div>
+              {passwordMsg && <span className="field-error-msg">{passwordMsg}</span>}
+            </div>
+            <div className="my-page-form-actions">
+              <button type="submit" className="btn btn-solid" disabled={savingPassword || !passwordFilled}>
+                {savingPassword ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </form>
+        </div>
 
-      <div className="mh-box my-page-danger">
-        <h5>회원 탈퇴</h5>
-        <p className="my-page-danger-desc">탈퇴하면 계정 정보가 즉시 삭제되며 되돌릴 수 없습니다.</p>
-        <form onSubmit={handleDelete} className="login-form my-page-form">
-          <div className="field-block">
-            <div className="field">
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                placeholder="비밀번호 확인"
-              />
-            </div>
-            {deleteMsg && <span className="field-error-msg">{deleteMsg}</span>}
+        <div className="mh-box my-page-danger">
+          <div className="mh-box-info">
+            <h5>회원 탈퇴</h5>
+            <p className="mh-box-desc">탈퇴하면 계정 정보가 즉시 삭제되며<br />되돌릴 수 없습니다.</p>
           </div>
-          <button type="submit" className="btn btn-solid my-page-delete-btn" disabled={deleting}>
-            {deleting ? '처리 중...' : '회원 탈퇴'}
-          </button>
-        </form>
+          <form onSubmit={handleDelete} className="my-page-form">
+            <div className="field-block">
+              <label className="field-label" htmlFor="deletePw">PASSWORD</label>
+              <div className="field">
+                <input
+                  id="deletePw"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                />
+              </div>
+              {deleteMsg && <span className="field-error-msg">{deleteMsg}</span>}
+            </div>
+            <div className="my-page-form-actions">
+              <button
+                type="submit"
+                className="btn btn-solid my-page-delete-btn"
+                disabled={deleting || !deletePassword}
+              >
+                {deleting ? '처리 중...' : '회원 탈퇴'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
