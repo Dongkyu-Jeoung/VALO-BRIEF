@@ -1,10 +1,32 @@
+"""
+회원가입 시 팀 프리미어 매치 이력을 선동기화(Pre-fill)하는 파이프라인.
+
+routers/auth.py의 signup()이 팀 계정 생성 직후 BackgroundTasks로 이 모듈의
+sync_team_match_history()를 실행한다 - 매치 상세를 여러 건 순차 호출해야 해서(Henrik
+레이트리밋 안에서) 회원가입 응답을 그만큼 기다리게 할 수 없기 때문이다.
+
+파싱 대상 스키마(Henrik v2/match)는 services/team_profile.py가 이미 실사용 중인 필드
+(teams.red/blue.roster, players.all_players, 최상위 kills 배열의 killer_puuid/
+victim_puuid/round/kill_time_in_round)를 그대로 따른다. first_bloods/first_deaths/kast의
+라운드별 계산과 트레이드 판정(5초 윈도)은 ml/valorant_git.py(compute_advanced_player_
+stats)의 방식을 그대로 옮긴 것 - 앱 전체에서 "KAST"의 정의를 하나로 맞추기 위함.
+
+matches/match_player_stats에 원본을 저장하는 것과 별개로, services/match_history.py와
+같은 컨벤션으로 team_engagement_cache에도 write-through한다(services/team_engagement_
+cache.py 모듈 docstring 참고) - 회원가입 직후 첫 승부예측 조회부터 바로 "우리 팀" 값이
+채워져 있도록 하기 위함.
+"""
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from database.connection import SessionLocal
+from ml import engagement_predictor
 from models.match import Match
 from models.match_player_stat import MatchPlayerStat
 from models.team import Team
-from services import henrik_api
+from services import henrik_api, team_engagement_cache
 from services.player_profile import ROLE_LABELS
 from services.riot_accounts import upsert_riot_account
 
@@ -158,6 +180,8 @@ def _compute_player_round_stats(kills_by_round: dict[int, list], puuid: str, rou
                         traded = True
                         break
 
+        if my_kills or got_assist or survived or traded:
+            kast_rounds += 1
 
         for k in my_kills:
             weapon_id = str(k.get("damage_weapon_id") or "").lower()
@@ -238,15 +262,18 @@ def _insert_match(
     our_info = teams.get(side) or {}
     opp_info = teams.get(opp_side) or {}
 
+    our_roster = our_info.get("roster") or {}
     opp_roster = opp_info.get("roster") or {}
     opp_team = _find_registered_team(db, opp_roster.get("name"), opp_roster.get("tag"))
     opp_team_id = opp_team.team_id if opp_team else None
     winner_team_id = our_team_id if our_info.get("has_won") else opp_team_id
 
+    game_start = _parse_game_start(metadata.get("game_start"))
+
     match_row = Match(match_id=match_id)
     match_row.map_uuid = map_uuids.get(str(metadata.get("map") or "").lower())
     match_row.mode = metadata.get("mode")
-    match_row.game_start = _parse_game_start(metadata.get("game_start"))
+    match_row.game_start = game_start
     match_row.team_a_id = our_team_id
     match_row.team_b_id = opp_team_id
     match_row.winner_team_id = winner_team_id
@@ -257,7 +284,7 @@ def _insert_match(
     match_row.collected_at = _now_kst()
     db.add(match_row)
 
-    our_puuids = set((our_info.get("roster") or {}).get("members") or [])
+    our_puuids = set(our_roster.get("members") or [])
     all_players = (match.get("players") or {}).get("all_players") or []
     kills_by_round = _group_kills_by_round(match.get("kills") or [])
     rounds_played = len(match.get("rounds") or [])
@@ -302,6 +329,28 @@ def _insert_match(
 
     db.commit()
 
+    # write-through - services/match_history.py와 동일한 컨벤션으로 team_engagement_cache도
+    # 바로 채운다(services/team_engagement_cache.py 모듈 docstring 참고).
+    team_engagement_cache.upsert_match_engagement(
+        db, our_team_id, match_id,
+        opponent_team_id=opp_team_id,
+        game_start=game_start,
+        trade_rate=engagement_predictor.trade_rate_from_matches([match], team_name, team_tag),
+        duelist_acs=engagement_predictor.duelist_acs_from_matches([match], team_name, team_tag),
+    )
+    if opp_team_id:
+        team_engagement_cache.upsert_match_engagement(
+            db, opp_team_id, match_id,
+            opponent_team_id=our_team_id,
+            game_start=game_start,
+            trade_rate=engagement_predictor.trade_rate_from_matches(
+                [match], opp_roster.get("name", ""), opp_roster.get("tag", "")
+            ),
+            duelist_acs=engagement_predictor.duelist_acs_from_matches(
+                [match], opp_roster.get("name", ""), opp_roster.get("tag", "")
+            ),
+        )
+
 
 async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> None:
     history = await henrik_api.get_premier_team_history(team_name, team_tag)
@@ -316,6 +365,12 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
     map_uuids = _load_map_uuid_by_name(db)
 
     for match_id in match_ids:
+        existing = db.get(Match, match_id)
+        if existing is not None:
+            # 이미 캐싱된 매치 - Henrik을 다시 부르지 않고 필요하면 상대팀 쪽만 백필.
+            _backfill_if_needed(db, existing, team_id)
+            continue
+
         try:
             match = await henrik_api.get_match_detail(match_id)
         except henrik_api.HenrikRateLimitError:
@@ -330,12 +385,31 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
         )
 
 
+def _find_team_id(db: Session, team_name: str, team_tag: str) -> str | None:
+    """team_name/team_tag로 가입된 teams 행을 찾아 team_id를 반환(services/match_history.py::
+    _find_team_id와 동일 로직) - sync_team_match_history가 받는 건 team_name/team_tag뿐이라
+    (routers/auth.py::signup이 팀 계정을 막 만든 직후라 team_info["id"]를 그대로 넘길 수도
+    있지만, 이 팀이 실제로 커밋됐는지 여기서 다시 한번 확인하는 편이 더 안전하다) 여기서
+    직접 조회해 our_team_id를 확정한다."""
+    if not team_name or not team_tag:
+        return None
+    row = (
+        db.query(Team.team_id)
+        .filter(func.lower(Team.team_name) == team_name.strip().lower(), func.lower(Team.team_tag) == team_tag.strip().lower())
+        .first()
+    )
+    return row[0] if row else None
+
+
 async def sync_team_match_history(team_name: str, team_tag: str) -> None:
     """회원가입 직후 routers/auth.py가 BackgroundTasks로 실행하는 진입점.
     Depends(get_db) 세션은 요청 생명주기에 묶여 있어 백그라운드 태스크에서 재사용할 수
     없으므로 여기서 별도 세션을 열고 닫는다."""
     db = SessionLocal()
     try:
-        await _sync(db, team_name, team_tag)
+        team_id = _find_team_id(db, team_name, team_tag)
+        if team_id is None:
+            return  # 방어적 스킵 - 정상 흐름에선 signup()이 이미 커밋한 뒤라 항상 찾아짐
+        await _sync(db, team_id, team_name, team_tag)
     finally:
         db.close()
