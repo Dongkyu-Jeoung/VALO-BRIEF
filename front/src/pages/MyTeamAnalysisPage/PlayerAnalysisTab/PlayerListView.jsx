@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import EmptyImageBox from '../../../components/common/EmptyImageBox';
 import { gameData } from '../../../constants/gameData';
+import { tierKey } from '../../../utils/gameDataKey';
 
 const SORTABLE_COLUMNS = [
   { key: 'kd', label: 'K/D' },
@@ -36,15 +37,10 @@ export default function PlayerListView({ players, selectedId, onSelect }) {
     return found ? found.id : val.toLowerCase();
   }
 
-  // gameData.tiers.personal 기반 티어 ID 안전 추출
+  // 다른 페이지(PlayerProfilePage/ModeStatCards)와 동일하게 utils/gameDataKey.js의
+  // tierKey()로 한글 티어명("플래티넘 2")을 에셋 키로 변환한다.
   function getTierId(player) {
-    const rawVal = player.tier || player.rank || player.tierName || '';
-    if (!rawVal) return 'unrated';
-
-    const found = gameData.tiers.personal.find(
-      (t) => t.id === rawVal || t.name === rawVal || t.id.toLowerCase() === rawVal.toLowerCase()
-    );
-    return found ? found.id : rawVal.toLowerCase();
+    return tierKey(player.tier) ?? 'unrated';
   }
 
   return (
@@ -79,8 +75,13 @@ export default function PlayerListView({ players, selectedId, onSelect }) {
             key={p.id}
             onClick={() => onSelect(p.id)}
           >
-            {/* 선수 이름 및 태그 */}
+            {/* 프로필 사진 + 선수 이름/태그 */}
             <div className="player-id-cell">
+              <EmptyImageBox
+                className="player-avatar-thumb"
+                src={p.avatarUrl}
+                label=""
+              />
               <div>
                 <div className="pid">{p.name}</div>
                 <div className="ptag">#{p.tag}</div>

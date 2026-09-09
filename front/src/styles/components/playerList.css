@@ -62,7 +62,18 @@
 .player-id-cell {
   display: flex;
   align-items: center;
+  gap: 12px;
   padding-left: 36px;
+}
+
+/* 리스트 맨 앞 프로필 사진 */
+.player-avatar-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--bg-panel-3);
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .player-id-cell .pid {

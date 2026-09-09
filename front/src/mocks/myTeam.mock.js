@@ -55,39 +55,42 @@ export const myTeamPlayerDetailMock = {
         fbPct: 21, fdPct: 9,
         pistolKd: 1.8, pistolAcs: 241, ecoKd: 1.1, ecoAcs: 195,
       },
-      'ascent': {
+      // 실제 백엔드(services/my_team_player_detail.py)는 REF_MAPS.name_ko(한글 맵 이름)를
+      // roundInfoByMap의 키로 준다 - PlayerDetailView.jsx가 gameData.maps[].name(한글)으로
+      // 조회하므로 mock도 영문 id 대신 한글 이름을 키로 맞춘다.
+      '어센트': {
         atkKd: 1.6, atkAcs: 261, defKd: 1.4, defAcs: 233,
         fbPct: 23, fdPct: 8,
         pistolKd: 1.9, pistolAcs: 248, ecoKd: 1.2, ecoAcs: 201,
       },
-      'bind': {
+      '바인드': {
         atkKd: 1.3, atkAcs: 239, defKd: 1.2, defAcs: 214,
         fbPct: 18, fdPct: 11,
         pistolKd: 1.6, pistolAcs: 222, ecoKd: 1.0, ecoAcs: 180,
       },
-      'haven': {
+      '헤이븐': {
         atkKd: 1.4, atkAcs: 248, defKd: 1.3, defAcs: 221,
         fbPct: 20, fdPct: 10,
         pistolKd: 1.7, pistolAcs: 235, ecoKd: 1.1, ecoAcs: 190,
       },
-      'split': {
+      '스플릿': {
         atkKd: 1.7, atkAcs: 270, defKd: 1.5, defAcs: 242,
         fbPct: 25, fdPct: 7,
         pistolKd: 2.0, pistolAcs: 256, ecoKd: 1.3, ecoAcs: 210,
       },
-      'lotus': {
+      '로터스': {
         atkKd: 1.2, atkAcs: 231, defKd: 1.1, defAcs: 206,
         fbPct: 16, fdPct: 13,
         pistolKd: 1.5, pistolAcs: 215, ecoKd: 0.9, ecoAcs: 172,
       },
-      'abyss': { atkKd: 1.4, atkAcs: 245, defKd: 1.2, defAcs: 215, fbPct: 19, fdPct: 10, pistolKd: 1.7, pistolAcs: 230, ecoKd: 1.0, ecoAcs: 185 },
-      'breeze': { atkKd: 1.3, atkAcs: 240, defKd: 1.2, defAcs: 210, fbPct: 18, fdPct: 11, pistolKd: 1.6, pistolAcs: 225, ecoKd: 1.0, ecoAcs: 180 },
-      'corrode': { atkKd: 1.3, atkAcs: 238, defKd: 1.2, defAcs: 208, fbPct: 17, fdPct: 12, pistolKd: 1.5, pistolAcs: 220, ecoKd: 0.9, ecoAcs: 175 },
-      'fracture': { atkKd: 1.5, atkAcs: 250, defKd: 1.3, defAcs: 225, fbPct: 22, fdPct: 9, pistolKd: 1.8, pistolAcs: 238, ecoKd: 1.1, ecoAcs: 192 },
-      'icebox': { atkKd: 1.4, atkAcs: 246, defKd: 1.3, defAcs: 220, fbPct: 20, fdPct: 10, pistolKd: 1.7, pistolAcs: 232, ecoKd: 1.0, ecoAcs: 188 },
-      'pearl': { atkKd: 1.2, atkAcs: 230, defKd: 1.1, defAcs: 205, fbPct: 15, fdPct: 14, pistolKd: 1.4, pistolAcs: 210, ecoKd: 0.9, ecoAcs: 170 },
-      'summit': { atkKd: 1.4, atkAcs: 244, defKd: 1.2, defAcs: 218, fbPct: 19, fdPct: 10, pistolKd: 1.6, pistolAcs: 228, ecoKd: 1.0, ecoAcs: 185 },
-      'sunset': { atkKd: 1.3, atkAcs: 242, defKd: 1.2, defAcs: 212, fbPct: 18, fdPct: 11, pistolKd: 1.6, pistolAcs: 226, ecoKd: 1.0, ecoAcs: 182 },
+      '어비스': { atkKd: 1.4, atkAcs: 245, defKd: 1.2, defAcs: 215, fbPct: 19, fdPct: 10, pistolKd: 1.7, pistolAcs: 230, ecoKd: 1.0, ecoAcs: 185 },
+      '브리즈': { atkKd: 1.3, atkAcs: 240, defKd: 1.2, defAcs: 210, fbPct: 18, fdPct: 11, pistolKd: 1.6, pistolAcs: 225, ecoKd: 1.0, ecoAcs: 180 },
+      '코로드': { atkKd: 1.3, atkAcs: 238, defKd: 1.2, defAcs: 208, fbPct: 17, fdPct: 12, pistolKd: 1.5, pistolAcs: 220, ecoKd: 0.9, ecoAcs: 175 },
+      '프랙처': { atkKd: 1.5, atkAcs: 250, defKd: 1.3, defAcs: 225, fbPct: 22, fdPct: 9, pistolKd: 1.8, pistolAcs: 238, ecoKd: 1.1, ecoAcs: 192 },
+      '아이스박스': { atkKd: 1.4, atkAcs: 246, defKd: 1.3, defAcs: 220, fbPct: 20, fdPct: 10, pistolKd: 1.7, pistolAcs: 232, ecoKd: 1.0, ecoAcs: 188 },
+      '펄': { atkKd: 1.2, atkAcs: 230, defKd: 1.1, defAcs: 205, fbPct: 15, fdPct: 14, pistolKd: 1.4, pistolAcs: 210, ecoKd: 0.9, ecoAcs: 170 },
+      '서밋': { atkKd: 1.4, atkAcs: 244, defKd: 1.2, defAcs: 218, fbPct: 19, fdPct: 10, pistolKd: 1.6, pistolAcs: 228, ecoKd: 1.0, ecoAcs: 185 },
+      '선셋': { atkKd: 1.3, atkAcs: 242, defKd: 1.2, defAcs: 212, fbPct: 18, fdPct: 11, pistolKd: 1.6, pistolAcs: 226, ecoKd: 1.0, ecoAcs: 182 },
     },
     aim: {
       hitzones: [

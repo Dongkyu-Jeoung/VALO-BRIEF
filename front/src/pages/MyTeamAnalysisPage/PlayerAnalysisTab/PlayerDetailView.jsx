@@ -4,14 +4,13 @@ import EmptyImageBox from '../../../components/common/EmptyImageBox';
 import DuelCompareBar from '../../../components/common/DuelCompareBar';
 import DropdownSelect from '../../../components/common/DropdownSelect';
 import LineChart from '../../../components/common/LineChart';
+import ProfileHeader from '../../../components/profile/ProfileHeader';
 import { gameData } from '../../../constants/gameData';
 
 // assets 경로에서 히트박스 이미지 import
 import headImg from '@/assets/images/aim/head.png';
 import bodyImg from '@/assets/images/aim/body.png';
 import legImg from '@/assets/images/aim/leg.png';
-
-const MAP_OPTIONS = ['전체 맵', ...gameData.maps.map((m) => m.name)];
 
 /** 가장 높은 타격 비율의 부위를 찾아 해당 이미지 객체를 반환하는 헬퍼 함수 */
 const getHighestHitzoneImage = (hitzones) => {
@@ -41,8 +40,21 @@ const getHighestHitzoneImage = (hitzones) => {
 /** Frame 11 — 선수 상세 (라운드 정보 / 에임 정보 / 교전 정보) */
 export default function PlayerDetailView({ player, onBack }) {
   const { aim, engagement } = player;
+
+  // 드롭다운에는 이 선수가 실제로 뛴 맵만 표시한다(TeamAnalysisTab.jsx와 동일한 방식) -
+  // 목데이터처럼 13개 맵이 항상 다 있는 게 아니라, 실제로는 player.roundInfoByMap에
+  // 이 선수가 뛴 맵만 키로 들어있다.
+  const playedMapNames = Object.keys(player.roundInfoByMap).filter((name) => name !== '전체 맵');
+  const mapOptions = [
+    '전체 맵',
+    ...gameData.maps.filter((m) => playedMapNames.includes(m.name)).map((m) => m.name),
+  ];
+
   const [selectedMap, setSelectedMap] = useState('전체 맵');
-  const roundInfo = player.roundInfoByMap[selectedMap];
+  // 방어적 기본값 - selectedMap에 해당하는 데이터가 없으면(이론상 발생하지 않아야 하지만) 0으로 채운다.
+  const roundInfo = player.roundInfoByMap[selectedMap] ?? {
+    atkKd: 0, atkAcs: 0, defKd: 0, defAcs: 0, fbPct: 0, fdPct: 0, pistolKd: 0, pistolAcs: 0, ecoKd: 0, ecoAcs: 0,
+  };
 
   // 타격 비율 중 가장 높은 부위에 맞는 이미지 모듈 산출
   const activeHitboxImg = getHighestHitzoneImage(aim.hitzones);
@@ -53,11 +65,22 @@ export default function PlayerDetailView({ player, onBack }) {
         👤 <b className="player-name">{player.name} #{player.tag}</b> 선택됨 — <span className="user-select-link" onClick={onBack}>다른 선수 보기 ▾</span>
       </div>
 
+      {/* 어떤 선수가 선택됐는지 개인 검색 페이지와 동일한 프로필 카드로 표시 */}
+      <ProfileHeader
+        type="player"
+        name={player.name}
+        tag={player.tag}
+        level={player.level}
+        title={player.title}
+        avatarUrl={player.avatarUrl}
+        showSeasonSelect={false}
+      />
+
       {/* 라운드 정보 */}
       <div className="analysis-row">
         <div className="analysis-row-head">
           <h5>① 라운드 정보</h5>
-          <DropdownSelect icon="🗺" label={selectedMap} options={MAP_OPTIONS} value={selectedMap} onChange={setSelectedMap} />
+          <DropdownSelect icon="🗺" label={selectedMap} options={mapOptions} value={selectedMap} onChange={setSelectedMap} />
         </div>
         <div className="subsection-title">공격 / 수비</div>
         <StatInlineGrid
