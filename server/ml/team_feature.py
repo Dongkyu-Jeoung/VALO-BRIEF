@@ -1,3 +1,5 @@
+from math import isfinite
+
 import pandas as pd
 from ml.model_loader import get_feature_columns
 
@@ -22,10 +24,31 @@ NUMERIC_FEATURES = [
 ]
 
 
+def validate_player_feature(feature):
+    """DB/API/캐시가 동일한 수치 계약을 만족하는지 검사한다."""
+    if not isinstance(feature, dict) or not isinstance(feature.get("agent"), str):
+        raise ValueError("선수 피처 또는 요원 정보가 없습니다.")
+    if not feature["agent"].strip() or feature["agent"] == "Unknown":
+        raise ValueError("요원 정보가 없습니다.")
+    for col in NUMERIC_FEATURES:
+        try:
+            value = float(feature[col])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"유효하지 않은 선수 피처: {col}") from exc
+        maximum = 1 if col == "recent_winrate" else 100 if col in (
+            "recent_kast", "recent_headshot_pct"
+        ) else float("inf")
+        if not isfinite(value) or not 0 <= value <= maximum:
+            raise ValueError(f"선수 피처 범위 오류: {col}={value}")
+
+
 def build_team_feature(blue_players, red_players):
 
     if len(blue_players) != 5 or len(red_players) != 5:
         raise ValueError("양 팀은 반드시 5명이어야 합니다.")
+
+    for feature in [*blue_players, *red_players]:
+        validate_player_feature(feature)
 
     row = {}
 

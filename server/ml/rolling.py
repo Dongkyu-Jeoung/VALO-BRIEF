@@ -12,6 +12,7 @@ from ml.valorant_git import (
 )
 from services.player_rolling_cache import find_fresh_player_feature, upsert_player_feature
 from services.riot_accounts import find_riot_account
+from ml.team_feature import validate_player_feature
 
 REGION = "kr"
 PLATFORM = "pc"
@@ -47,7 +48,12 @@ def get_cached_player_feature(db: Session | None, puuid: str) -> dict | None:
     if db is None:
         return None
 
-    return find_fresh_player_feature(db, puuid, ROLLING_CACHE_TTL)
+    feature = find_fresh_player_feature(db, puuid, ROLLING_CACHE_TTL)
+    try:
+        validate_player_feature(feature)
+    except ValueError:
+        return None
+    return feature
 
 
 def save_player_feature_cache(db: Session | None, feature: dict) -> None:
@@ -56,7 +62,29 @@ def save_player_feature_cache(db: Session | None, feature: dict) -> None:
     if db is None:
         return
 
+    validate_player_feature(feature)
     upsert_player_feature(db, feature)
+
+
+def aggregate_player_rows(rows, puuid):
+    """동일한 경기 집합으로 모든 지표를 평균낸다. 결측 지표는 허용하지 않는다."""
+    if not rows:
+        raise ValueError(f"{puuid}: 유효한 최근 경기 없음")
+    columns = ("acs", "kd", "kast", "headshot_pct", "win")
+    features = ("recent_acs", "recent_kd", "recent_kast", "recent_headshot_pct", "recent_winrate")
+    for row in rows:
+        if row.get("puuid") != puuid:
+            raise ValueError("PUUID mismatch")
+        validate_player_feature({
+            # 요원 조합 피처는 가장 최근 경기의 요원만 사용한다.
+            "agent": rows[0].get("agent"),
+            **{feature: row.get(col) for col, feature in zip(columns, features)},
+        })
+    result = {"puuid": puuid, "agent": rows[0]["agent"]}
+    for col, feature in zip(columns, features):
+        result[feature] = round(sum(float(row[col]) for row in rows) / len(rows), 2)
+    validate_player_feature(result)
+    return result
 
 
 def build_player_feature(name: str, tag: str, db: Session | None = None, puuid: str | None = None):
@@ -71,6 +99,13 @@ def build_player_feature(name: str, tag: str, db: Session | None = None, puuid: 
     if puuid is None:
         raise ValueError(f"{name}#{tag} PUUID 조회 실패")
 
+    # 디버그
+    # print(
+    #     f"\n[TARGET PLAYER] "
+    #     f"{name}#{tag} "
+    #     f"puuid={puuid}"
+    # )
+
     # 2. 최근 5경기
     matches = get_matches_v4(
         REGION,
@@ -78,6 +113,12 @@ def build_player_feature(name: str, tag: str, db: Session | None = None, puuid: 
         puuid,
         RECENT_MATCHES
     )
+
+    # 디버그
+    # print(
+    #     f"[PLAYER FEATURE DEBUG] "
+    #     f"target_puuid={puuid}"
+    # )
 
     rows = []
 
@@ -98,25 +139,39 @@ def build_player_feature(name: str, tag: str, db: Session | None = None, puuid: 
             puuid
         )
 
-        if len(player_rows):
-            rows.append(player_rows[0])
+        target_row = next(
+            (
+                row
+                for row in player_rows
+                if row.get("puuid") == puuid
+            ),
+            None
+        )
+
+        if target_row is not None:
+            rows.append(target_row)
 
     if len(rows) == 0:
         raise ValueError(f"{name} 최근 경기 없음")
 
-    # 평균 계산
-    acs = sum(r["acs"] for r in rows) / len(rows)
-    kd = sum(r["kd"] for r in rows) / len(rows)
-    kast = sum(r["kast"] for r in rows) / len(rows)
-    hs = sum(r["headshot_pct"] for r in rows) / len(rows)
-    winrate = sum(r["win"] for r in rows) / len(rows)
+    for row in rows:
+        if row.get("puuid") != puuid:
+            raise ValueError(
+                f"PUUID mismatch: "
+                f"target={puuid}, "
+                f"actual={row.get('puuid')}, "
+                f"match={row.get('match_id')}"
+            )
 
-    return {
-        "puuid": puuid,
-        "agent": rows[0]["agent"],
-        "recent_acs": round(acs, 2),
-        "recent_kd": round(kd, 2),
-        "recent_kast": round(kast, 2),
-        "recent_headshot_pct": round(hs, 2),
-        "recent_winrate": round(winrate, 2)
-    }
+    # 디버그
+    # print("[RECENT ROWS]")
+
+    # for row in rows:
+    #     print(
+    #         f"match={row.get('match_id')} "
+    #         f"puuid={row.get('puuid')} "
+    #         f"agent={row.get('agent')} "
+    #         f"acs={row.get('acs')}"
+    #     )
+
+    return aggregate_player_rows(rows, puuid)

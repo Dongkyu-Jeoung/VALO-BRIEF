@@ -236,6 +236,50 @@ def _backfill_if_needed(db: Session, match_row: Match, our_team_id: str) -> None
     db.commit()
 
 
+def calculate_match_kast(match: dict) -> dict[str, float]:
+    """완전한 v2 이벤트가 있는 경우에만 KAST를 계산한다. 없으면 보간하지 않는다."""
+    rounds = match.get("rounds")
+    kills = match.get("kills")
+    players = (match.get("players") or {}).get("all_players") or []
+    if not isinstance(rounds, list) or not rounds or not isinstance(kills, list) or not players:
+        return {}
+    teams = match.get("teams") or {}
+    scores = [(teams.get(side) or {}).get("rounds_won") for side in ("red", "blue")]
+    if any(not isinstance(score, int) or score < 0 for score in scores) or sum(scores) != len(rounds):
+        return {}
+    for event in kills:
+        if not isinstance(event, dict):
+            return {}
+        rnd, when = event.get("round"), event.get("kill_time_in_round")
+        if not isinstance(rnd, int) or not 0 <= rnd < len(rounds):
+            return {}
+        if not isinstance(when, (int, float)) or not 0 <= when < float("inf"):
+            return {}
+        if not event.get("killer_puuid") or not event.get("victim_puuid"):
+            return {}
+        if not isinstance(event.get("assistants"), list) or any(
+            not isinstance(a, dict) or not a.get("assistant_puuid") for a in event["assistants"]
+        ):
+            return {}
+    # 빈 배열/일부 이벤트 누락을 '전 라운드 생존'으로 오인하지 않도록 집계와 대조한다.
+    for player in players:
+        puuid, stats = player.get("puuid"), player.get("stats") or {}
+        if not puuid:
+            return {}
+        actual = {
+            "kills": sum(k["killer_puuid"] == puuid for k in kills),
+            "deaths": sum(k["victim_puuid"] == puuid for k in kills),
+            "assists": sum(any(a["assistant_puuid"] == puuid for a in k["assistants"]) for k in kills),
+        }
+        if any(stats.get(key) != value for key, value in actual.items()):
+            return {}
+    grouped = _group_kills_by_round(kills)
+    return {
+        p["puuid"]: round(_compute_player_round_stats(grouped, p["puuid"], len(rounds))["kast_rounds"] / len(rounds) * 100, 1)
+        for p in players
+    }
+
+
 def _insert_match(
     db: Session,
     match: dict,
@@ -288,6 +332,7 @@ def _insert_match(
     our_puuids = set(our_roster.get("members") or [])
     all_players = (match.get("players") or {}).get("all_players") or []
     kills_by_round = _group_kills_by_round(match.get("kills") or [])
+    kast_by_puuid = calculate_match_kast(match)
     rounds_played = len(match.get("rounds") or [])
     started_at = _parse_started_at(started_at_raw)
 
@@ -321,7 +366,7 @@ def _insert_match(
         advanced = _compute_player_round_stats(kills_by_round, puuid, rounds_played)
         stat_row.first_bloods = advanced["first_bloods"]
         stat_row.first_deaths = advanced["first_deaths"]
-        stat_row.kast = round(advanced["kast_rounds"] / rounds_played * 100, 1) if rounds_played else None
+        stat_row.kast = kast_by_puuid.get(puuid)
         weapon_uuid = advanced["most_used_weapon_uuid"]
         stat_row.most_used_weapon_uuid = weapon_uuid if weapon_uuid in weapon_uuids else None
         stat_row.detail_json = advanced["round_events"]
