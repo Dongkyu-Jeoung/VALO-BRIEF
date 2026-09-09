@@ -77,7 +77,7 @@ def api_get(url: str) -> dict:
         throttle_sync()
         with API_SEMAPHORE:
 
-            res = requests.get(url, headers=HEADERS)
+            res = requests.get(url, headers=HEADERS, timeout=(5, 30))
 
         if res.status_code == 429:
 
@@ -178,7 +178,6 @@ def get_match_detail_v4(region: str, match_id: str) -> dict:
 
     if res.status_code != 200:
         print(f"  ⚠️ Match {match_id} 상세 정보 호출 실패 (Status Code: {res.status_code})")
-        _MATCH_DETAIL_CACHE[match_id] = None
         return None
 
     detail = res.json().get("data", {})
@@ -296,7 +295,12 @@ def compute_advanced_player_stats(match_detail: dict, target_puuid: str) -> dict
     first_bloods = 0
     first_deaths = 0
 
-    for round_id, round_kills in kills_by_round.items():
+    # 킬이 없는 라운드도 생존으로 집계한다(DB 저장 계산과 동일).
+    for round_id in range(rounds_played):
+        round_kills = kills_by_round.get(round_id, [])
+        if not round_kills:
+            kast_rounds += 1
+            continue
         round_kills_sorted = sorted(round_kills, key=lambda k: k.get("time_in_round_in_ms", float("inf")))
 
         # 오프닝 킬/데스

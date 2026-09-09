@@ -5,25 +5,28 @@
   직접 입력받음) - 화면에서 선수 10명을 직접 타이핑하게 할 수 없어서 프론트는 이걸 쓰지
   않는다(ML 개발/디버깅용으로 남겨둠). DB 저장 없음.
 - GET /api/predict/{team_name}/{team_tag}: 프론트(MatchPredictionPage, api/prediction.js)가
-  실제로 호출하는 엔드포인트. 로그인한 팀(JWT) vs URL의 상대팀 로스터를 Henrik에서 자동으로
-  찾아 같은 파이프라인에 넣고, 결과를 predictions 테이블에 저장한다.
+  실제로 호출하는 엔드포인트. 우리 팀 DB 로스터를 우선 사용하고 부족하면 Henrik으로
+  보완한다. 상대 팀 로스터를 조회한 뒤 모델 예측 결과를 반환한다.
 """
 import asyncio
+import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
-from database.connection import get_db
-from ml.predictor import predict_blue_win
+from database.connection import SessionLocal
+from ml.predictor import predict_blue_win, create_prediction_checkpoint
+from ml.db_roster import resolve_recent_roster_from_db
 from models.team import Team
 from routers.auth import get_current_team
 from schema.predict import PredictRequest, PredictResponse
 from services import predict_service
+from services.prediction_refill import schedule_refill
 from services.henrik_api import HenrikRateLimitError
 
 router = APIRouter(prefix="/api/predict", tags=["Predict"])
 
-MODEL_VERSION = "xgboost-v1"
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=PredictResponse)
@@ -53,72 +56,64 @@ async def get_recent_opponent(current: Team = Depends(get_current_team)):
     return opponent
 
 
+def _load_our_roster(team_id):
+    # 작업자 안에서 열고 닫아 Session/connection이 스레드를 넘나들지 않게 한다.
+    with SessionLocal() as db:
+        return resolve_recent_roster_from_db(db, team_id)
+
+
+def _predict_with_db(our_roster, opp_roster, checkpoint=None, db_missing_players=None):
+    with SessionLocal() as db:
+        return predict_blue_win(our_roster, opp_roster, db=db, debug_checkpoint=checkpoint,
+                                db_missing_players=db_missing_players)
+
+
 @router.get("/{team_name}/{team_tag}")
 async def predict_match(
     team_name: str,
     team_tag: str,
     current: Team = Depends(get_current_team),
-    db: Session = Depends(get_db),
 ):
-    """로그인한 팀(우리팀) vs URL의 상대팀을 예측. 두 팀 각각 최근 매치의 5인 로스터를
-    Henrik에서 찾아(services/predict_service.resolve_recent_roster) 기존 XGBoost
-    파이프라인에 넣고, 결과를 predictions 테이블에 저장한 뒤 승률만 반환한다(맵별 상세
-    분석/AI 리포트는 모델이 아직 만들지 않는 데이터라 이 응답엔 없음 - 프론트가 그 부분은
-    당분간 mock으로 채운다, api/prediction.js 참고)."""
-    (our_info, our_roster), (opp_info, opp_roster) = await asyncio.gather(
-        predict_service.resolve_recent_roster(current.team_name, current.team_tag),
-        predict_service.resolve_recent_roster(team_name, team_tag),
-    )
-
-    if opp_info is None:
-        raise HTTPException(status_code=404, detail="존재하지 않는 프리미어 팀입니다.")
-    if len(our_roster) != 5 or len(opp_roster) != 5:
-        raise HTTPException(
-            status_code=422,
-            detail="최근 매치의 5인 로스터를 찾지 못해 예측할 수 없습니다.",
-        )
-
-    # ml/valorant_git.py가 동기 requests 기반이라(await 불가), 이벤트 루프를 막지 않도록
-    # 별도 스레드에서 돌린다 - 안 그러면 이 예측이 끝날 때까지 서버 전체가 멈춘다.
-    # db를 같이 넘기면 build_player_feature가 riot_accounts에 이미 캐싱된 puuid를 재사용해
-    # 선수당 Henrik 요청을 최대 1건 아낀다(이 시점엔 위 두 resolve_recent_roster 호출이
-    # 이미 끝나 db가 쓰이고 있지 않으니 스레드로 넘겨도 안전 - 아래 save_prediction에서만
-    # 다시 쓰인다).
+    started = time.perf_counter()
+    checkpoint = create_prediction_checkpoint()
+    db_missing_players = []
+    refill_team = (current.team_id, current.team_name, current.team_tag)
+    checkpoint("GET 예측 요청 처리 시작 (인증 이후)")
     try:
-        result = await asyncio.to_thread(predict_blue_win, our_roster, opp_roster, db=db)
-    except HenrikRateLimitError:
-        # main.py의 전역 핸들러가 503 + 안내 메시지로 응답하게 그대로 올려보낸다 -
-        # 아래 except Exception으로 잡으면 "존재하지 않음"과 구분 안 되는 500이 된다.
+        checkpoint("우리 팀 DB 로스터 조회 시작")
+        _, our_roster = await asyncio.to_thread(_load_our_roster, current.team_id)
+        checkpoint(f"우리 팀 DB 로스터 조회 완료: {len(our_roster)}명")
+        if len(our_roster) != 5:
+            checkpoint("우리 팀 API 로스터 조회 시작")
+            _, our_roster = await predict_service.resolve_recent_roster(
+                current.team_name, current.team_tag
+            )
+            checkpoint(f"우리 팀 API 로스터 조회 완료: {len(our_roster)}명")
+        if len(our_roster) != 5:
+            raise HTTPException(status_code=422, detail="우리 팀의 최근 5인 로스터를 찾지 못했습니다.")
+
+        checkpoint("상대 팀 API 로스터 조회 시작")
+        opp_info, opp_roster = await predict_service.resolve_recent_roster(team_name, team_tag)
+        checkpoint(f"상대 팀 API 로스터 조회 완료: {len(opp_roster)}명")
+        if opp_info is None:
+            raise HTTPException(status_code=404, detail="존재하지 않는 프리미어 팀입니다.")
+        if len(opp_roster) != 5:
+            raise HTTPException(status_code=422, detail="상대 팀의 최근 5인 로스터를 찾지 못했습니다.")
+
+        checkpoint("예측 작업 스레드 호출")
+        result = await asyncio.to_thread(_predict_with_db, our_roster, opp_roster, checkpoint, db_missing_players)
+        checkpoint("예측 결과 반환 준비 완료")
+        return result
+    except (HenrikRateLimitError, HTTPException) as exc:
+        checkpoint(f"요청 처리 실패: {type(exc).__name__}")
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    predict_service.save_prediction(
-        db,
-        team_a_id=current.team_id,
-        opponent_team_name=team_name,
-        opponent_team_tag=team_tag,
-        predicted_winrate_a=result["blue_win_probability"],
-        predicted_winrate_b=round(100 - result["blue_win_probability"], 1),
-        model_version=MODEL_VERSION,
-        feature_snapshot={"blue_summary": result["blue_summary"], "red_summary": result["red_summary"]},
-    )
-
-    our_logo = ((our_info or {}).get("customization") or {}).get("image")
-    opp_logo = (opp_info.get("customization") or {}).get("image")
-
-    return {
-        "ourTeam": {
-            "name": current.team_name,
-            "tag": current.team_tag,
-            "avgWinRate20": result["blue_summary"]["winrate"],
-            "logoUrl": our_logo,
-        },
-        "opponentTeam": {
-            "name": opp_info.get("name") or team_name,
-            "tag": opp_info.get("tag") or team_tag,
-            "avgWinRate20": result["red_summary"]["winrate"],
-            "logoUrl": opp_logo,
-        },
-        "ourWinChance": result["blue_win_probability"],
-    }
+    except ValueError as exc:
+        checkpoint("요청 처리 실패: ValueError")
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        checkpoint(f"요청 처리 실패: {type(exc).__name__}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        schedule_refill(*refill_team, db_missing_players, checkpoint)
+        checkpoint("GET 예측 요청 처리 종료")
+        logger.info("[PREDICTION REQUEST TIME] %.2fs", time.perf_counter() - started)

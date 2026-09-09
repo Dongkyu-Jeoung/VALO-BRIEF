@@ -19,12 +19,9 @@ services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 match
   - match_player_stats.role_type은 한글 라벨(services.player_profile.ROLE_LABELS)로
     저장한다(match_sync.py와 동일).
 
-현재 채우는 컬럼: matches 전체 + match_player_stats의 team_id/is_mvp/agent_uuid/
-role_type/started_at/acs/kills/deaths/assists/headshot_pct/adr. kast/first_bloods/
-first_deaths/most_used_weapon_uuid/detail_json은 이번 범위(트레이드 성공률/듀얼리스트
-매치업 모델)에 필요 없어 NULL로 남겨둔다 - services/match_sync.py가 이미 그 값을 채워둔
-행이라면(회원가입 시 먼저 동기화된 경우) 여기서 손대지 않아 그대로 보존된다(아래 upsert가
-이 다섯 컬럼을 아예 할당하지 않기 때문).
+KAST는 match_sync.calculate_match_kast로 원본 이벤트를 검증한 뒤 계산한다.
+불완전한 응답은 기존 KAST를 보존한다. first_bloods/first_deaths/
+most_used_weapon_uuid/detail_json은 이 저장 경로에서 변경하지 않는다.
 
 "조회하는 김에 항상 쌓기"(opportunistic 캐싱) 전략은 그대로 - 별도 배치 작업 없이
 routers/teams.py가 이미 받아온 match_details를 그 자리에서 넘기면 된다. 이 함수가
@@ -44,6 +41,7 @@ from models.riot_account import RiotAccount
 from models.team import Team
 from services import team_engagement_cache
 from services.player_profile import ROLE_LABELS
+from services.match_sync import calculate_match_kast
 
 _ref_map_uuid_cache: dict | None = None
 _ref_agent_cache: dict | None = None
@@ -204,6 +202,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     match_row.api_source = "henrik"
 
     all_players = (match.get("players") or {}).get("all_players") or []
+    kast_by_puuid = calculate_match_kast(match)
     agent_info = _load_agent_info_by_name(db)
 
     # riot_accounts placeholder를 먼저 다 만들고 명시적으로 flush - models/match_player_
@@ -273,6 +272,9 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         stat_row.assists = stats.get("assists")
         stat_row.headshot_pct = round(heads / total_shots * 100, 1) if total_shots else None
         stat_row.adr = round((player.get("damage_made") or 0) / rounds_played) if rounds_played else None
+        # 불완전한 응답으로 기존 KAST를 덮어쓰지 않는다.
+        if puuid in kast_by_puuid:
+            stat_row.kast = kast_by_puuid[puuid]
 
     db.commit()
 

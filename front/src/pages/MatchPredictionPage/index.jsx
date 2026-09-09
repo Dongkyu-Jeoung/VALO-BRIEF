@@ -76,15 +76,43 @@ export default function MatchPredictionPage() {
   // predictionMock으로 폴백하면 우리팀 이름까지 mock("Team Phoenix")으로 보일 수 있다 -
   // 그 경우에도 이름/태그만큼은 로그인한 팀 정보로 덮어써서 보여준다.
   const ourTeam = user
-    ? { ...prediction.ourTeam, name: user.teamName, tag: user.teamTag }
-    : prediction.ourTeam;
+    ? {
+        ...prediction.ourTeam,
+        name: user.teamName,
+        tag: user.teamTag,
+        avgWinRate20:
+          prediction.blue_summary?.winrate
+          ?? prediction.ourTeam?.avgWinRate20
+          ?? 0,
+      }
+    : {
+        ...prediction.ourTeam,
+        avgWinRate20:
+          prediction.blue_summary?.winrate
+          ?? prediction.ourTeam?.avgWinRate20
+          ?? 0,
+      };
+
+  const displayOpponentTeam = {
+    ...opponentTeam,
+
+    avgWinRate20:
+      prediction.red_summary?.winrate
+      ?? prediction.opponentTeam?.avgWinRate20
+      ?? opponentTeam?.avgWinRate20
+      ?? 0,
+  };
 
   return (
     <div className="page-container">
       <PredictBox
         ourTeam={ourTeam}
-        opponentTeam={prediction.opponentTeam}
-        ourWinChance={prediction.ourWinChance}
+        opponentTeam={displayOpponentTeam}
+        ourWinChance={
+          prediction.blue_win_probability
+          ?? prediction.ourWinChance
+          ?? 0
+        }
       />
 
       <FilterTabs tabs={TABS} activeTab={activeTab} onChange={(tab) => setSearchParams({ tab })} />
