@@ -476,10 +476,13 @@ CREATE TABLE team_stats_summary (
 CREATE TABLE player_stats_summary (
     summary_id          INT             NOT NULL AUTO_INCREMENT,
     puuid               VARCHAR(64)     NOT NULL,
-    stat_type           ENUM('weapon','hitbox','clutch','role_matchup','engagement')
-                                        NOT NULL,
+    stat_type           ENUM('weapon','hitbox','clutch','role_matchup','engagement','round_phase')
+                                        NOT NULL
+        COMMENT 'round_phase는 2026-09-10 선수 상세 페이지(①라운드 정보) 캐싱용으로 추가 -
+                 team_stats_summary.stat_type의 round_phase/map_side를 선수 개인 단위로 합친 것',
     dimension_key       VARCHAR(100)    NOT NULL
-        COMMENT 'stat_type=weapon일 때 REF_WEAPONS.uuid를 값으로 사용 (폴리모픽이라 강한 FK 없음). 예: Head, 1v1',
+        COMMENT 'stat_type=weapon일 때 REF_WEAPONS.uuid, round_phase일 때 REF_MAPS.uuid 또는
+                 "overall"을 값으로 사용 (폴리모픽이라 강한 FK 없음). 예: Head, 1v1',
     metrics_json        JSON            NULL,
     updated_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                         ON UPDATE CURRENT_TIMESTAMP,
@@ -764,6 +767,14 @@ CREATE TABLE team_engagement_cache (
     PRIMARY KEY (team_id, match_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='팀x매치당 교전 매치업(트레이드 성공률/듀얼리스트 ACS) 값 - 캐시 + 학습 데이터 겸용';
+
+-- 14) 2026-09-10: 개인 분석 > 선수 상세 페이지(①라운드 정보 - 맵별 공격/수비/피스톨/Eco
+--     K·D·ACS)를 player_stats_summary에 캐싱하기로 했는데, stat_type ENUM에 대응하는
+--     값이 없었다(team_stats_summary는 round_phase/map_side가 있지만 player 쪽엔 없음).
+--     선수 개인 단위로는 맵별/전체 구분을 dimension_key 하나로 합쳐도 되므로 round_phase
+--     하나만 추가한다(services/my_team_player_detail.py 참고).
+ALTER TABLE player_stats_summary
+    MODIFY COLUMN stat_type ENUM('weapon','hitbox','clutch','role_matchup','engagement','round_phase') NOT NULL;
 
 -- 참고: insights, ref_weapons, team_stats_summary, player_stats_summary는 현재
 -- 코드에서 아직 안 쓰지만 이미 스캐폴딩되었거나(AI 리포트 프론트 컴포넌트) mock 데이터
