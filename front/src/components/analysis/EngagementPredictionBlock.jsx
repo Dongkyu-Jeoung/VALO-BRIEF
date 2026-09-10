@@ -51,6 +51,7 @@ export default function EngagementPredictionBlock({
 
       <div className="duel-compare-block">
         <div className="duel-compare-title">트레이드 성공률 예측 (1대1 교전 기준)</div>
+        <div className="duel-compare-spacer" />
         <DuelCompareBar
           leftLabel={ourLabel}
           leftPct={trade.ourWinRate}
@@ -61,6 +62,7 @@ export default function EngagementPredictionBlock({
 
       <div className="duel-compare-block">
         <div className="duel-compare-title">듀얼리스트 매치업 유불리 예측</div>
+        <div className="duel-compare-spacer" />
         <DuelCompareBar
           leftLabel={ourLabel}
           leftPct={duel.ourScore}
@@ -68,7 +70,7 @@ export default function EngagementPredictionBlock({
           rightPct={duel.theirScore}
         />
         <div className={`matchup-favor-text ${favorClass}`.trim()}>
-          예측 결과: <span>{favorText}</span>
+          예상 결과: <span>{favorText}</span>
         </div>
       </div>
 

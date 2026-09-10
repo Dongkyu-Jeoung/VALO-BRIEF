@@ -14,6 +14,10 @@ export default function PredictBox({
   const isOurWinHigh =
     ourWinChance >= theirWinChance;
 
+  const total = ourWinChance + theirWinChance;
+  const ourBarWidth = total > 0 ? (ourWinChance / total) * 100 : 50;
+  const theirBarWidth = total > 0 ? (theirWinChance / total) * 100 : 50;
+
   return (
     <div className="predict-box">
 
@@ -63,7 +67,7 @@ export default function PredictBox({
               className="a"
               style={{
                 width:
-                  `${ourWinChance}%`
+                  `${ourBarWidth}%`
               }}
             />
 
@@ -71,7 +75,7 @@ export default function PredictBox({
               className="b"
               style={{
                 width:
-                  `${theirWinChance}%`
+                  `${theirBarWidth}%`
               }}
             />
 
