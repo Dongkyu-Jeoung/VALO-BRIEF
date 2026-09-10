@@ -122,7 +122,7 @@
 .refresh-btn .time {
   color: var(--text-3);
   font-weight: 400;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: inherit;
 }
 
 .refresh-btn.active {
