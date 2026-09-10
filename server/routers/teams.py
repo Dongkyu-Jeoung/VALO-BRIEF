@@ -8,9 +8,9 @@ prefix/파일명/함수명을 전부 팀 전용으로 분리했다 (players.py/p
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database.connection import get_db
+from database.connection import SessionLocal, get_db
 from ml import engagement_predictor
 from models.team import Team
 from routers.auth import get_current_team
@@ -27,10 +27,12 @@ from services.team_profile import (
 def _accumulate_match_history(
     db: Session, match_ids: list[str], match_details: list, started_at_by_id: dict[str, str] | None = None
 ) -> None:
-    """조회하는 김에 matches/match_player_stats에 쌓는다(opportunistic 캐싱, server/
-    승부예측_성능_분석.md 7-2-1번) - 승부예측 분석 탭 ③번 모델 학습용 데이터 축적이 목적.
-    응답 생성에 영향을 주면 안 되므로 실패해도 조용히 넘어가고(단, 세션은 롤백해서 이후
-    쿼리가 깨지지 않게 함), 화면 응답 자체는 이 함수의 성공 여부와 무관하다.
+    """조회하는 김에 matches/match_player_stats + team_engagement_cache에 쌓는다
+    (opportunistic 캐싱, server/승부예측_성능_분석.md 7-2-1번) - 승부예측 분석 탭 ③번
+    모델 학습용 데이터 축적이 목적. 화면 응답은 이미 받아온 match_details만으로 완성되고
+    이 함수의 성공 여부와는 무관하므로(BackgroundTasks로 응답 이후에 돈다,
+    _accumulate_match_history_task 참고), 실패해도 조용히 넘어가고(단, 세션은 롤백해서
+    이후 쿼리가 깨지지 않게 함) 로그만 남긴다.
     started_at_by_id: 프리미어 히스토리(league_matches)의 started_at - match_player_stats.
     started_at 채우는 용도(services/match_history.py 참고)."""
     started_at_by_id = started_at_by_id or {}
@@ -43,11 +45,33 @@ def _accumulate_match_history(
             db.rollback()
             print(f"  [match_history] upsert 실패(match_id={match_id}): {e}")
 
+
+def _accumulate_match_history_task(
+    match_ids: list[str], match_details: list, started_at_by_id: dict[str, str] | None = None
+) -> None:
+    """FastAPI BackgroundTasks 진입점 - 응답을 보낸 뒤에 실행되므로 요청 스코프 세션
+    (Depends(get_db))은 이미 닫혔을 수 있어 재사용하지 않고 직접 세션을 열고 닫는다
+    (services/match_sync.py::sync_team_match_history와 동일 패턴).
+
+    2026-09-10: 원래 get_team_profile/get_team_analysis가 응답을 만들기 전에 이 write-
+    through를 동기로 기다렸는데, 매치 10건 기준 실측 ~2.5초가 걸려(DB 왕복 다수 - 팀 조회/
+    선수별 upsert/team_engagement_cache 커밋 등) 응답 자체가 그만큼 늦어졌다(팀 전적 검색 시
+    ACT/매치 목록이 늦게 뜨는 원인). 이 write-through 결과는 응답 어디에도 안 쓰이므로
+    (build_team_profile은 이미 받아온 match_details만 씀) 백그라운드로 미뤄도 손해가 없다."""
+    db = SessionLocal()
+    try:
+        _accumulate_match_history(db, match_ids, match_details, started_at_by_id)
+    finally:
+        db.close()
+
+
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
 
 @router.get("/{team_name}/{team_tag}")
-async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(get_db)):
+async def get_team_profile(
+    team_name: str, team_tag: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
     """팀 프로필 전체 조회. 팀 기본 정보(get_premier_team)와 매치 이력(get_premier_team_history)을
     동시에 불러온 뒤, 이력에서 얻은 최근 매치 id들로 매치 상세(get_match_detail)를 다시 동시에
     불러온다 - 상세 없이는 맵/스코어/로스터 스탯을 알 수 없어 이력 조회가 먼저 끝나야 한다."""
@@ -66,7 +90,12 @@ async def get_team_profile(team_name: str, team_tag: str, db: Session = Depends(
     started_at_by_id = {m["id"]: m.get("started_at") for m in recent if m.get("id")}
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
-    _accumulate_match_history(db, match_ids, match_details, started_at_by_id)
+    # write-through는 응답 내용에 안 쓰이므로(build_team_profile은 match_details만 씀)
+    # 백그라운드로 미룬다 - 동기로 기다리면 매치 10건 기준 ~2.5초가 응답에 그대로 더해진다
+    # (_accumulate_match_history_task 참고).
+    background_tasks.add_task(
+        _accumulate_match_history_task, match_ids, list(match_details), started_at_by_id
+    )
 
     return build_team_profile(
         db,
@@ -125,6 +154,7 @@ async def get_team_header(team_name: str, team_tag: str):
 async def get_team_analysis(
     team_name: str,
     team_tag: str,
+    background_tasks: BackgroundTasks,
     current: Team = Depends(get_current_team),
     db: Session = Depends(get_db),
 ):
@@ -161,7 +191,12 @@ async def get_team_analysis(
     # print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
-    _accumulate_match_history(db, match_ids, match_details, started_at_by_id)
+    # write-through는 응답에 안 쓰이므로(engagementPrediction의 "우리팀" 몫은 이미 캐시된
+    # team_engagement_cache를 읽을 뿐, 이 요청에서 방금 upsert한 값을 기다리지 않음)
+    # 백그라운드로 미룬다 - get_team_profile과 동일 이유(_accumulate_match_history_task 참고).
+    background_tasks.add_task(
+        _accumulate_match_history_task, match_ids, list(match_details), started_at_by_id
+    )
 
     # print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
 

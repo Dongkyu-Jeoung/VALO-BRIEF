@@ -103,6 +103,11 @@ def build_my_team_stats(db: Session, team: Team) -> dict:
 
     match_history = []
     map_buckets: dict[str, dict] = {}
+    # front useSeasonActFilter가 "실제 전적이 있는 최신 시즌/Act"를 기본 선택값으로 쓰도록
+    # 내려주는 옵션 목록(services/team_profile.py::build_team_profile의 act_options와 동일
+    # 패턴) - matches가 이미 game_start 내림차순으로 정렬돼 있어(위 sorted 참고) 이 루프에서
+    # 처음 보는 season/act가 곧 그 시즌의 최신 Act가 된다.
+    act_index: dict[str, list] = {}
 
     for match in matches:
         roster = by_match.get(match.match_id) or []
@@ -158,6 +163,11 @@ def build_my_team_stats(db: Session, team: Team) -> dict:
             "act": act,
         })
 
+        if season != "-" and act != "-":
+            acts = act_index.setdefault(season, [])
+            if act not in acts:
+                acts.append(act)
+
         bucket = map_buckets.setdefault(map_name, {"map": map_name, "win": 0, "lose": 0})
         bucket["win" if result == "win" else "lose"] += 1
 
@@ -202,6 +212,8 @@ def build_my_team_stats(db: Session, team: Team) -> dict:
         "avgRoundLose": round(sum(recent_opp_rounds) / len(recent), 1) if recent else 0,
     }
 
+    act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
+
     return {
         "name": team.team_name,
         "tag": team.team_tag,
@@ -211,4 +223,5 @@ def build_my_team_stats(db: Session, team: Team) -> dict:
         "playerRanking": player_ranking,
         "mapWinrates": map_winrates,
         "matchHistory": match_history,
+        "actOptions": act_options,
     }

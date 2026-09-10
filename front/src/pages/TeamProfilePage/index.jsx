@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchTeamHeader, fetchTeamProfile } from '../../api/teams';
+import { fetchTeamProfile } from '../../api/teams';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import MiniRankTable from '../../components/common/MiniRankTable';
 import MapWinrateList from './MapWinrateList';
@@ -14,33 +14,30 @@ import { useListFilter } from '../../hooks/useListFilter';
  * 이 페이지의 바디는 승부예측 페이지의 '통계' 탭에서도 그대로 재사용됩니다.
  * (MatchPredictionPage/StatsTab.jsx, MyTeamAnalysisPage/StatsTab.jsx 참고)
  *
- * 성능 개선(2026-09-07): 팀 로고가 늦게 뜬다는 문제 - fetchTeamProfile 하나가 매치 이력+
- * 상세 10건까지 다 기다려야 응답이 와서(~2.5~3.1s) 로고도 그만큼 늦게 나왔다. fetchTeamHeader
- * (팀 로고/이름/디비전만, ~0.3~0.6s)를 동시에 호출해서 먼저 도착하는 대로 헤더부터 그리고,
- * matchHistory/playerRanking 등 무거운 나머지는 fetchTeamProfile이 채운다(services/
- * team_profile.py의 build_team_header/build_team_profile 참고).
+ * 2026-09-10: 한 번은 로고만 먼저 뜨게 하는 2단계 로딩(fetchTeamHeader 먼저, fetchTeamProfile
+ * 나중)을 시도했었는데, 로고/최근요약만 먼저 뜨고 ACT 선택·매치 목록은 몇 초 뒤에 따로
+ * 나타나는 게 부자연스럽다는 피드백을 받았다 - PlayerProfilePage(개인 전적 검색)는 애초에
+ * 데이터 전체가 준비된 뒤 한 번에 그리는 방식이라 그쪽과의 일관성을 맞추기로 했다. 그래서
+ * fetchTeamProfile 응답 하나만 기다렸다가 전체를 한 번에 그린다(PlayerProfilePage와 동일
+ * 패턴) - 응답 자체를 빠르게 만드는 쪽(services/search.py의 존재확인 프리페치, routers/
+ * teams.py의 write-through 백그라운드화)으로 성능을 개선한다.
  */
 export default function TeamProfilePage() {
   const { teamName, teamTag } = useParams();
-  const [header, setHeader] = useState(null);
   const [team, setTeam] = useState(null);
 
   useEffect(() => {
     let active = true;
-    setHeader(null);
     setTeam(null);
-    fetchTeamHeader(teamName, teamTag).then((data) => { if (active) setHeader(data); });
     fetchTeamProfile(teamName, teamTag).then((data) => { if (active) setTeam(data); });
     return () => { active = false; };
   }, [teamName, teamTag]);
 
-  // team(전체)이 오면 그걸 우선 쓰고, 아직이면 header(로고 등)만으로라도 먼저 그린다.
-  const displayTeam = team ?? header;
-  if (!displayTeam) return <LoadingText full />;
+  if (!team) return <LoadingText full />;
 
   return (
     <div className="page-container">
-      <TeamProfileBody team={displayTeam} />
+      <TeamProfileBody team={team} />
     </div>
   );
 }
