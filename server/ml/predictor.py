@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
-# 위 3개는 json 파일 저장할 때 쓰는 패키지
 import time
 from ml.model_loader import get_model
 from ml.rolling import (
@@ -24,7 +23,6 @@ model = get_model()
 
 
 def create_prediction_checkpoint():
-    """동시 요청을 구분하고, 로스터 조회부터 같은 기준으로 시간을 기록한다."""
     started = time.perf_counter()
     request_id = uuid4().hex[:8]
 
@@ -43,7 +41,6 @@ def _db_player_feature(db, puuid, checkpoint=None, player_label="BLUE"):
     if db is None:
         report("DB_UNAVAILABLE: DB 세션 없음")
         return None
-    # SQL/연결 장애는 숨기지 않는다. 데이터 불완전만 fallback한다.
     df = load_recent_matches(db, puuid)
     if df is None or df.empty:
         report("NO_VALID_MATCHES: DB에서 조건을 충족하는 경기 0개")
@@ -92,7 +89,6 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
     resolved = {}
 
     checkpoint("PUUID·DB·캐시 조회 시작")
-    # Session을 사용하는 작업은 이 스레드에서만 순차 실행한다.
     for side, team in enumerate(teams):
         seen = set()
         for i, player in enumerate(team):
@@ -127,11 +123,9 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
                 missing.setdefault(puuid, []).append((side, i, player))
 
     checkpoint("PUUID·DB·캐시 조회 완료")
-    # API가 끝나기 전에 예정된 데이터 소스를 표시한다.
     for label, count in zip(("BLUE", "RED"), counts):
         checkpoint(f"[{label} SOURCE SUMMARY] " + ", ".join(f"{k}={v}" for k, v in count.items()))
 
-    # 양 팀의 미스만 함께 조회한다. 작업자에는 DB Session을 넘기지 않는다.
     def fetch(puuid):
         side, index, player = missing[puuid][0]
         label = f"{'BLUE' if side == 0 else 'RED'} 선수 {index + 1}"
@@ -160,15 +154,11 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
             for side, i, _ in missing[puuid]:
                 players[side][i] = feature
             save_player_feature_cache(db, feature)
-        checkpoint("API 피처 검증·배정 완료; " + ("캐시 저장 완료" if db is not None else "DB 없음: 캐시 저장 생략"))
+        checkpoint("API 피처 검증·배정 완료; 캐시 저장 완료")
     else:
         checkpoint("API 조회 생략: 전체 DB·캐시 적중")
 
     blue_players, red_players = players
-
-    # =========================================================
-    # 3. TEAM FEATURE
-    # =========================================================
 
     checkpoint("팀 피처 생성 시작")
     X = build_team_feature(
@@ -176,41 +166,13 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
         red_players
     )
     checkpoint("팀 피처 생성 완료")
-    # 디버그
-    # print("\n[TEAM FEATURES]")
-    # print(X.to_string(index=False))
-
-
-    # =========================================================
-    # 4. XGBoost 추론
-    # =========================================================
-    # 디버그
-    # print("\n[MODEL INPUT]")
-    # print(X.to_string(index=False))
 
     checkpoint("모델 추론 시작")
     proba = model.predict_proba(X)
     checkpoint("모델 추론 완료")
 
-    checkpoint(f"[PREDICT PROBA] {proba}")
-    # ----
-
-    probability = float(
-        proba[0][1]
-    )
-
-    # 디버그
-    print(
-        f"\n[FINAL PREDICTION] "
-        f"Blue win probability = {probability:.4f}"
-    )
-
+    probability = float(proba[0][1])
     winner = "BLUE" if probability >= 0.5 else "RED"
-
-
-    # =========================================================
-    # 5. 결과 반환
-    # =========================================================
 
     result = {
         "blue_win_probability": round(probability * 100, 1),
@@ -220,50 +182,25 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
             "acs": round(X["blue_recent_acs"].iloc[0], 1),
             "kd": round(X["blue_recent_kd"].iloc[0], 2),
             "kast": round(X["blue_recent_kast"].iloc[0], 1),
-            "winrate": round(X["blue_recent_winrate"].iloc[0] * 100, 1)
+            "winrate": round(X["blue_recent_winrate"].iloc[0] * 100, 1),
+            "logoUrl": None
         },
 
         "red_summary": {
             "acs": round(X["red_recent_acs"].iloc[0], 1),
             "kd": round(X["red_recent_kd"].iloc[0], 2),
             "kast": round(X["red_recent_kast"].iloc[0], 1),
-            "winrate": round(X["red_recent_winrate"].iloc[0] * 100, 1)
+            "winrate": round(X["red_recent_winrate"].iloc[0] * 100, 1),
+            "logoUrl": None
         }
     }
-
-
-    # =========================================================
-    # 6. JSON 저장
-    # =========================================================
 
     if save_json:
         output_dir = Path("prediction_result")
         output_dir.mkdir(exist_ok=True)
-
         filename = datetime.now().strftime("%Y%m%d_%H%M%S_prediction.json")
-
-        with open(
-            output_dir / filename,
-            "w",
-            encoding="utf-8"
-        ) as f:
-            json.dump(
-                result,
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
-
-        print(f"JSON 저장 완료 : {output_dir / filename}")
-
-    elapsed = time.perf_counter() - start_time
-
-    print(
-        f"[PREDICTION TOTAL TIME] "
-        f"{elapsed:.2f}s"
-    )
-
-    print("========== PREDICTION END ==========\n")
+        with open(output_dir / filename, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=4)
 
     checkpoint("예측 파이프라인 완료")
     return result
