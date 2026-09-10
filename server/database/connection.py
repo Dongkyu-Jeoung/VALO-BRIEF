@@ -1,15 +1,15 @@
 from pathlib import Path
 from collections.abc import Generator
 import os
-from dotenv import load_dotenv
+from services.environment import load_environment
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # .env 경로 가져오기
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# .env 읽기
-load_dotenv(BASE_DIR / ".env")
+# 최상위 .env 우선, 기존 server/.env는 누락 설정 보완용.
+load_environment()
 
 DB_USER=os.getenv("DB_USER")
 DB_PASSWORD=os.getenv("DB_PASSWORD") 

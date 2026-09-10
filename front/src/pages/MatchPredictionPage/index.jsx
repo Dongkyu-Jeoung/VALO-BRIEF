@@ -29,6 +29,11 @@ export default function MatchPredictionPage() {
   useEffect(() => {
     let active = true;
 
+    // 상대가 바뀌면 이전 예측과 새 프로필이 함께 표시되지 않도록 초기화한다.
+    setPrediction(null);
+    setOpponentTeam(null);
+    setAnalysisData(null);
+
     // 로그인 전: URL의 팀(데모 링크는 실존하지 않는 team-ascend라 자동으로 mock 폴백된다).
     // 로그인 후 + URL이 기본 데모 링크(네비 메뉴/홈 카드가 항상 이 팀으로 연결)일 때만
     // 상대팀을 우리 팀의 "가장 최근에 매치했던 팀"으로 자동 설정한다 - 최근 상대를 못
@@ -70,7 +75,8 @@ export default function MatchPredictionPage() {
     return () => { active = false; };
   }, [teamName, teamTag, isAuthenticated]);
 
-  if (!analysisData || !opponentTeam || !prediction) return <LoadingText full />;
+  // 승률은 프로필·분석 요청의 완료를 기다리지 않고 먼저 표시한다.
+  if (!prediction) return <LoadingText full />;
 
   // 로그인 상태인데도 /api/predict가 실패(최근 매치 로스터 5인을 못 찾는 등)해서
   // predictionMock으로 폴백하면 우리팀 이름까지 mock("Team Phoenix")으로 보일 수 있다 -
@@ -94,6 +100,9 @@ export default function MatchPredictionPage() {
       };
 
   const displayOpponentTeam = {
+    name: teamName,
+    tag: teamTag,
+    ...prediction.opponentTeam,
     ...opponentTeam,
 
     avgWinRate20:
@@ -117,10 +126,14 @@ export default function MatchPredictionPage() {
 
       <FilterTabs tabs={TABS} activeTab={activeTab} onChange={(tab) => setSearchParams({ tab })} />
 
-      {activeTab === '통계' && opponentTeam ? <TeamProfileBody team={opponentTeam} /> : null}
-      {activeTab === '분석' ? <AnalysisTab analysis={analysisData} /> : null}
+      {activeTab === '통계' ? (
+        opponentTeam ? <TeamProfileBody team={opponentTeam} /> : <LoadingText />
+      ) : null}
+      {activeTab === '분석' ? (
+        analysisData ? <AnalysisTab analysis={analysisData} /> : <LoadingText />
+      ) : null}
       {activeTab === 'AI 리포트' ? (
-        <AiReportTab report={prediction.aiReport} opponentName={opponentTeam?.name || teamName} />
+        <AiReportTab report={prediction.aiReport} opponentName={displayOpponentTeam.name} />
       ) : null}
     </div>
   );
