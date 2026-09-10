@@ -45,7 +45,7 @@ export async function checkIdAvailable(id) {
 // 마이페이지 (routers/auth.py: GET/PATCH/DELETE /api/auth/me) - 로그인 상태에서만 호출됨.
 // mock 모드에서는 로그인 시 저장해둔 valo_auth_user를 그대로 흉내내서 돌려준다.
 function mockTeam() {
-  const user = JSON.parse(localStorage.getItem('valo_auth_user') || 'null');
+  const user = JSON.parse(sessionStorage.getItem('valo_auth_user') || 'null');
   return {
     teamId: 'mock-team-id',
     email: 'mock@valobrief.com',
