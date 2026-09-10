@@ -181,14 +181,16 @@
 
 /* ===== 각 분석 블록 간 상하 간격 보정 ===== */
 .duel-compare-block {
+  margin-top: 24px;
   margin-bottom: 32px;
 }
 
-.duel-compare-title {
+.duel-compare-block .duel-compare-title {
   font-size: 14px;
   color: var(--text-2);
-  margin-bottom: 22px;
+  margin-bottom: 38px; 
   font-weight: 700;
+  padding-left: 30px;
 }
 
 /* ===== 타격대 vs 타격대: 화면 비율 연동 가변 반응형 스타일 ===== */
@@ -198,7 +200,7 @@
   justify-content: center;
   gap: 18px;
   width: 70%;
-  margin: 0 auto;
+  margin: 32px auto; 
 }
 
 .duel-side-label {
@@ -239,6 +241,7 @@
   overflow: hidden;
   display: flex;
   background: var(--bg-panel-3);
+  margin: 14px 0;
 }
 
 .duel-bar .us {
@@ -302,7 +305,7 @@
   font-weight: 700;
   color: var(--text-1);
   text-align: center;
-  margin-top: 12px;
+  margin-top: 20px;
 }
 
 .matchup-favor-text.text-win {
@@ -314,13 +317,12 @@
 }
 
 .model-version-note {
-  margin-top: 10px;
+  margin-top: 18px;
   font-size: 12px;
   text-align: right;
 }
 
-/* 데이터/모델이 아직 없을 때 표시하는 안내 텍스트 (EngagementInfoBlock의 "스킬 데이터가
-   없습니다"도 같이 씀 - 원래 스타일이 없던 클래스라 여기서 같이 정의) */
+/* 데이터/모델이 아직 없을 때 표시하는 안내 텍스트 */
 .empty-text {
   font-size: 13.5px;
   color: var(--text-2);

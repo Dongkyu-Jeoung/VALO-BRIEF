@@ -9,7 +9,7 @@
   border-radius: var(--radius-lg);
   background: linear-gradient(90deg, rgba(76,126,255,0.08), rgba(20,22,29,0.4) 45%, rgba(20,22,29,0.4) 55%, rgba(255,70,85,0.08));
   border: 1px solid var(--border);
-  margin-top: var(--sp-6, 24px); /* [추가] 상단 헤더와의 여백 추가 (필요시 32px로 조정) */
+  margin-top: var(--sp-6, 24px);
   margin-bottom: var(--sp-6);
   width: 100%;
 }
@@ -56,7 +56,7 @@
   font-weight: 600;
   color: var(--text-1);
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
+  margin-bottom: 16px; /* [확장] 제목과 그래프 사이 간격 */
 }
 
 /* 가로 정렬 래퍼 */
@@ -65,7 +65,7 @@
   align-items: center;
   justify-content: center;
   gap: 20px;
-  margin: 8px 0 12px;
+  margin: 16px 0; /* [확장] 그래프 위아래 간격 */
   width: 100%;
 }
 
@@ -131,5 +131,5 @@
 .pv-recent20 {
   font-size: 11px;
   color: var(--text-2);
-  margin-top: 8px;
+  margin-top: 16px; 
 }
