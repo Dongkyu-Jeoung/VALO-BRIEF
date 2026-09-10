@@ -1,18 +1,18 @@
 export const gameData = {
   maps: [
-    { id: 'abyss', name: '어비스', image: '../assets/images/maps/abyss.png' },
-    { id: 'ascent', name: '어센트', image: '../assets/images/maps/ascent.jpg' },
-    { id: 'bind', name: '바인드', image: '../assets/images/maps/bind.jpg' },
-    { id: 'breeze', name: '브리즈', image: '../assets/images/maps/breeze.png' },
-    { id: 'corrode', name: '코로드', image: '../assets/images/maps/corrode.png' },
-    { id: 'fracture', name: '프랙처', image: '../assets/images/maps/fracture.png' },
-    { id: 'haven', name: '헤이븐', image: '../assets/images/maps/haven.jpg' },
-    { id: 'icebox', name: '아이스박스', image: '../assets/images/maps/icebox.png' },
-    { id: 'lotus', name: '로터스', image: '../assets/images/maps/lotus.png' },
-    { id: 'pearl', name: '펄', image: '../assets/images/maps/pearl.png' },
-    { id: 'split', name: '스플릿', image: '../assets/images/maps/split.png' },
-    { id: 'summit', name: '서밋', image: '../assets/images/maps/summit.png' },
-    { id: 'sunset', name: '선셋', image: '../assets/images/maps/sunset.png' }
+    { id: 'abyss', name: '어비스', image: '../assets/images/maps/abyss.png', sites: ['A', 'B'] },
+    { id: 'ascent', name: '어센트', image: '../assets/images/maps/ascent.jpg', sites: ['A', 'B'] },
+    { id: 'bind', name: '바인드', image: '../assets/images/maps/bind.jpg', sites: ['A', 'B'] },
+    { id: 'breeze', name: '브리즈', image: '../assets/images/maps/breeze.png', sites: ['A', 'B'] },
+    { id: 'corrode', name: '코로드', image: '../assets/images/maps/corrode.png', sites: ['A', 'B'] },
+    { id: 'fracture', name: '프랙처', image: '../assets/images/maps/fracture.png', sites: ['A', 'B'] },
+    { id: 'haven', name: '헤이븐', image: '../assets/images/maps/haven.jpg', sites: ['A', 'B', 'C'] },
+    { id: 'icebox', name: '아이스박스', image: '../assets/images/maps/icebox.png', sites: ['A', 'B'] },
+    { id: 'lotus', name: '로터스', image: '../assets/images/maps/lotus.png', sites: ['A', 'B', 'C'] },
+    { id: 'pearl', name: '펄', image: '../assets/images/maps/pearl.png', sites: ['A', 'B'] },
+    { id: 'split', name: '스플릿', image: '../assets/images/maps/split.png', sites: ['A', 'B'] },
+    { id: 'summit', name: '서밋', image: '../assets/images/maps/summit.png', sites: ['A', 'B'] },
+    { id: 'sunset', name: '선셋', image: '../assets/images/maps/sunset.png', sites: ['A', 'B'] }
   ],
   agents: [
     { id: 'astra', name: '아스트라', image: '../assets/images/agents/astra.png' },

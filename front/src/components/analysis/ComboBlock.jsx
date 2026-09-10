@@ -2,11 +2,11 @@ import React from 'react';
 import EmptyImageBox from '../common/EmptyImageBox';
 import { gameData } from '../../constants/gameData';
 
-export default function ComboBlock({ title = '선호 요원 조합', combos = [], ace = [], weakness = [] }) {
+export default function ComboBlock({ title = '요원 조합', combos = [], ace = [], weakness = [] }) {
   const getAgentId = (keyOrName) => {
     if (!keyOrName) return '';
-    const found = gameData.agents.find(a => 
-      a.id.toLowerCase() === keyOrName.toLowerCase() || 
+    const found = gameData.agents.find(a =>
+      a.id.toLowerCase() === keyOrName.toLowerCase() ||
       a.name === keyOrName
     );
     return found ? found.id : keyOrName.toLowerCase();
@@ -15,26 +15,28 @@ export default function ComboBlock({ title = '선호 요원 조합', combos = []
   return (
     <div className="combo-block">
       <div className="combo-block-title">{title}</div>
-      {/* 4개씩 뜨는 문제를 해결하기 위해 .slice(0, 2)를 추가하여 최대 2개만 렌더링 */}
-      {combos?.slice(0, 2).map((c, idx) => {
+      {/* 맵당 표본이 보통 1~2경기뿐이라 승률(0%/100%)로 묶지 않고, 실제 치른 경기(최신순)를
+          한 줄씩 그대로 보여준다 - 경기 수만큼 행이 생긴다(보통 2줄). */}
+      {combos?.map((c, idx) => {
         const agentList = c.agents || c.agentList || c.members || c.characters || c.agentNames || Object.values(c).find(val => Array.isArray(val)) || [];
+        const isWin = c.result === 'win' || c.won === true;
 
         return (
-          <div className="combo-row" key={c.label ? `${c.label}-${idx}` : idx}>
-            <span className="combo-label">{c.label ?? `조합 ${String.fromCharCode(65 + idx)}`}</span>
+          <div className="combo-row" key={idx}>
+            <span className="combo-label">{idx + 1}경기</span>
             <div className="combo-agents">
               {agentList.length > 0 ? agentList.map((agentKey, i) => (
-                <EmptyImageBox 
-                  className="combo-agent-icon" 
-                  folder="agents" 
-                  assetKey={getAgentId(agentKey)} 
-                  key={i} 
+                <EmptyImageBox
+                  className="combo-agent-icon"
+                  folder="agents"
+                  assetKey={getAgentId(agentKey)}
+                  key={i}
                 />
               )) : Array.from({ length: 5 }).map((_, i) => (
                 <div className="combo-agent-icon" key={i} />
               ))}
             </div>
-            <span className="combo-pct">{c.pct ?? c.winRate ?? 0}%</span>
+            <span className={`combo-result ${isWin ? 'text-win' : 'text-lose'}`}>{isWin ? '승' : '패'}</span>
           </div>
         );
       })}

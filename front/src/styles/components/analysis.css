@@ -269,13 +269,20 @@
   margin-top: 0;
 }
 
-.combo-pct {
+.combo-result {
   margin-left: auto;
-  margin-right: 70px; 
-  font-size: 18px;   
-  color: var(--accent);
+  margin-right: 70px;
+  font-size: 18px;
   font-family: var(--font-mono, 'JetBrains Mono', 'Pretendard', monospace);
   font-weight: 700;
+}
+
+.combo-result.text-win {
+  color: var(--win, #4c7eff);
+}
+
+.combo-result.text-lose {
+  color: var(--lose, #ff4655);
 }
 
 .duel-compare-block:last-child {

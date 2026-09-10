@@ -15,10 +15,12 @@ export default function MapInfoBlock({ data, selectedMapId, mapMeta, maps, onMap
   const currentMapMeta = mapMeta || availableMaps.find(m => m.id === selectedMapId) || availableMaps[0];
   const computedAssetKey = mapKey(currentMapMeta?.name) || currentMapMeta?.id?.toLowerCase();
 
+  // 맵마다 사이트 개수가 다르므로(헤이븐/로터스는 A·B·C, 나머지는 A·B) gameData의 sites 목록을 기준으로 표시.
   // 선호 사이트 데이터가 객체(집계 완료)인지 아닌지에 따라 표시.
   // 객체가 아니면(=백엔드가 아직 집계를 못한 경우) 임의의 수치를 지어내지 않고 '데이터 없음'으로 표시.
+  const mapSites = currentMapMeta?.sites || ['A', 'B'];
   const siteValue = typeof data?.preferredSite === 'object' && data?.preferredSite !== null
-    ? `A ${data.preferredSite.A ?? 0}% · B ${data.preferredSite.B ?? 0}%`
+    ? mapSites.map(site => `${site} ${data.preferredSite[site] ?? 0}%`).join(' · ')
     : '데이터 없음';
 
   const items = [
