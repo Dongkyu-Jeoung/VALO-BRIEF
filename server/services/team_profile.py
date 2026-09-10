@@ -308,22 +308,9 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         avg_plant_ms = round(sum(b["plantTimes"]) / len(b["plantTimes"])) if b["plantTimes"] else 0
         avg_plant_sec = round(avg_plant_ms / 1000) if avg_plant_ms else 0
 
-        # 요원 조합 통계 처리 (BEST / WORST 산출)
-        combo_stats = {}
-        for c in b["combos"]:
-            key = tuple(sorted(c["agents"])) # 5인 전체 조합 기준
-            if not key:
-                continue
-            stat = combo_stats.setdefault(key, {"wins": 0, "total": 0})
-            stat["total"] += 1
-            if c["won"]:
-                stat["wins"] += 1
-
-        sorted_combos = sorted(
-            [{"agents": list(k), "winRate": round(v["wins"] / v["total"] * 100), "games": v["total"]} for k, v in combo_stats.items()],
-            key=lambda x: (x["winRate"], x["games"]),
-            reverse=True
-        )
+        # 요원 조합: 맵당 표본이 보통 1~2경기뿐이라 승률로 집계하면 0%/100%만 나와 의미가 없다.
+        # 조합을 묶지 않고 실제 치른 경기(최신순, records와 동일한 정렬)를 그대로 한 줄씩 노출한다.
+        game_combos = [{"agents": c["agents"], "result": "win" if c["won"] else "lose"} for c in b["combos"]]
 
         # BEST(ACS 최고)/WORST(선사망률 최고, 동률이면 ACS 낮은 쪽) 선수 산출
         player_summaries = []
@@ -348,7 +335,7 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             "defenseWinRate": win_rate,  # 임시 매칭 승률 연동 방어
             "preferredSite": preferred_site,
             "avgSpikePlantTime": f"{avg_plant_sec}초" if avg_plant_sec else "-",
-            "combos": sorted_combos,       # "선호 요원 조합" 섹션(조합 A/B)에서 사용
+            "combos": game_combos,         # "요원 조합" 섹션에서 경기별 한 줄씩 사용
             "comboAce": best_players,      # BEST 섹션에서 사용 (선수 1명)
             "comboWeakness": worst_players, # WORST 섹션에서 사용 (선수 1명)
         }

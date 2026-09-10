@@ -45,9 +45,6 @@ ECO_THRESHOLD = 2000
 
 _DUELIST_LABEL = ROLE_LABELS["Duelist"]
 
-# 콤보(선호 요원 조합)는 맵당 최대 2개까지만 캐싱한다(ComboBlock이 화면에 2개만 표시).
-MAX_COMBOS = 2
-
 
 def _round_segments(round_count: int) -> list[tuple[int, int]]:
     """공격/수비가 바뀌지 않는 구간 경계. 정규시간은 12라운드씩(0-11, 12-23), 연장은
@@ -302,7 +299,7 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
             "win": 0, "lose": 0,
             "atk_w": 0, "atk_l": 0, "def_w": 0, "def_l": 0,
             "site_counts": {}, "plant_times": [],
-            "combos": {}, "players": {},
+            "combos": [], "players": {},
         })
 
         is_team_a = match.team_a_id == team_id
@@ -332,10 +329,7 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
             for r in our_rows
         ]
         if len(agent_names) == 5:
-            combo_key = tuple(sorted(agent_names))
-            combo = bucket["combos"].setdefault(combo_key, {"wins": 0, "total": 0})
-            combo["total"] += 1
-            combo["wins"] += result == "win"
+            bucket["combos"].append({"agents": agent_names, "result": result})
 
         for r in our_rows:
             pbucket = bucket["players"].setdefault(
@@ -385,14 +379,9 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
         )
         avg_plant_sec = round(sum(b["plant_times"]) / len(b["plant_times"]) / 1000) if b["plant_times"] else 0
 
-        combos_sorted = sorted(
-            (
-                {"agents": list(k), "winRate": round(v["wins"] / v["total"] * 100), "games": v["total"]}
-                for k, v in b["combos"].items()
-            ),
-            key=lambda x: (x["winRate"], x["games"]),
-            reverse=True,
-        )[:MAX_COMBOS]
+        # 요원 조합: 맵당 표본이 보통 1~2경기뿐이라 승률로 집계하면 0%/100%만 나와 의미가 없다.
+        # 조합을 묶지 않고 실제 치른 경기(최신순, matches와 동일한 정렬)를 그대로 한 줄씩 노출한다.
+        game_combos = b["combos"]
 
         player_summaries = []
         for puuid, pb in b["players"].items():
@@ -411,7 +400,7 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
             "preferredSite": preferred_site,
             "avgSpikePlantTime": avg_plant_sec,
             "matchSample": games,
-            "combos": combos_sorted,
+            "combos": game_combos,
             "comboAce": [{"name": best["name"], "acs": best["acs"]}] if best else [],
             "comboWeakness": [{"name": worst["name"], "fd": worst["fd"], "acs": worst["acs"]}] if worst else [],
         }
