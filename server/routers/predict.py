@@ -39,8 +39,6 @@ def predict(request: PredictRequest):
         )
         return result
     except HenrikRateLimitError:
-        # main.py의 전역 핸들러가 503 + 안내 메시지로 응답하게 그대로 올려보낸다 -
-        # 아래 except Exception으로 잡으면 "존재하지 않음"과 구분 안 되는 500이 된다.
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -48,8 +46,7 @@ def predict(request: PredictRequest):
 
 @router.get("/recent-opponent")
 async def get_recent_opponent(current: Team = Depends(get_current_team)):
-    """로그인한 팀의 가장 최근 프리미어 매치 상대팀을 찾는다. 승부예측 페이지가 로그인
-    상태일 때 데모용 상대팀(team-ascend) 대신 이 팀을 자동으로 상대팀으로 쓴다."""
+    """로그인한 팀의 가장 최근 프리미어 매치 상대팀을 찾는다."""
     opponent = await predict_service.resolve_recent_opponent(current.team_name, current.team_tag)
     if opponent is None:
         raise HTTPException(status_code=404, detail="최근 매치 상대팀을 찾을 수 없습니다.")
@@ -57,7 +54,6 @@ async def get_recent_opponent(current: Team = Depends(get_current_team)):
 
 
 def _load_our_roster(team_id):
-    # 작업자 안에서 열고 닫아 Session/connection이 스레드를 넘나들지 않게 한다.
     with SessionLocal() as db:
         return resolve_recent_roster_from_db(db, team_id)
 
@@ -79,13 +75,19 @@ async def predict_match(
     db_missing_players = []
     refill_team = (current.team_id, current.team_name, current.team_tag)
     checkpoint("GET 예측 요청 처리 시작 (인증 이후)")
+    
     try:
         checkpoint("우리 팀 DB 로스터 조회 시작")
-        _, our_roster = await asyncio.to_thread(_load_our_roster, current.team_id)
+        our_team_info, our_roster = await asyncio.to_thread(_load_our_roster, current.team_id)
         checkpoint(f"우리 팀 DB 로스터 조회 완료: {len(our_roster)}명")
+        
+        # 만약 DB 로스터가 부족해 API로 조회할 경우를 대비해 우리팀 정보(team_info)도 함께 확보
+        from services.henrik_api import get_premier_team
+        our_full_info = await get_premier_team(current.team_name, current.team_tag)
+        
         if len(our_roster) != 5:
             checkpoint("우리 팀 API 로스터 조회 시작")
-            _, our_roster = await predict_service.resolve_recent_roster(
+            our_full_info, our_roster = await predict_service.resolve_recent_roster(
                 current.team_name, current.team_tag
             )
             checkpoint(f"우리 팀 API 로스터 조회 완료: {len(our_roster)}명")
@@ -102,6 +104,27 @@ async def predict_match(
 
         checkpoint("예측 작업 스레드 호출")
         result = await asyncio.to_thread(_predict_with_db, our_roster, opp_roster, checkpoint, db_missing_players)
+        
+        # 양 팀 커스텀 로고 이미지 추출 후 결과 딕셔너리에 병합
+        our_customization = (our_full_info or {}).get("customization") or {}
+        opp_customization = (opp_info or {}).get("customization") or {}
+        
+        our_logo = our_customization.get("image")
+        opp_logo = opp_customization.get("image")
+
+        # 프론트엔드가 우리팀/상대팀 객체 내부에서 logoUrl을 바로 참조할 수 있도록 구조 반영
+        result["ourTeam"] = {
+            "name": current.team_name,
+            "tag": current.team_tag,
+            "logoUrl": our_logo,
+        }
+        result["opponentTeam"] = {
+            "name": team_name,
+            "tag": team_tag,
+            "logoUrl": opp_logo,
+            "ratingIconUrl": opp_logo,
+        }
+
         checkpoint("예측 결과 반환 준비 완료")
         return result
     except (HenrikRateLimitError, HTTPException) as exc:

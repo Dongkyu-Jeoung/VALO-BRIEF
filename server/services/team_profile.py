@@ -87,6 +87,7 @@ def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
             counts[victim] = counts.get(victim, 0) + 1
     return counts
 
+
 def build_team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
     """team_info(get_premier_team 응답) 하나만으로 계산되는 필드 - 매치 상세 조회 불필요.
     build_team_header/build_team_profile이 공유."""
@@ -94,11 +95,13 @@ def build_team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
     matches_played = stats.get("matches") or 0
+    logo_image = customization.get("image")
     return {
         "name": team_info.get("name") or team_name,
         "tag": team_info.get("tag") or team_tag,
         "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
-        "ratingIconUrl": customization.get("image"),
+        "logoUrl": logo_image,
+        "ratingIconUrl": logo_image,
         "recentSummary": {
             "winRate": round((stats.get("wins") or 0) / matches_played * 100) if matches_played else 0,
             "wins": stats.get("wins") or 0,
@@ -107,7 +110,6 @@ def build_team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
             "avgRoundLose": round((stats.get("rounds_lost") or 0) / matches_played, 1) if matches_played else 0,
         },
     }
-
 
 
 def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, agents: dict):
@@ -180,8 +182,6 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         if (rounds[i].get("winning_team") or "").lower() == side
     )
 
-    # 스파이크 설치 사이트 / 설치 시간 집계 (우리 팀이 직접 설치한 라운드만 대상 -
-    # 상대가 설치한 라운드까지 포함하면 "우리 팀 선호 사이트"라는 의미가 깨짐)
     plant_site_counts: dict[str, int] = {}
     plant_times: list[int] = []
     for rnd in rounds:
@@ -198,7 +198,6 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         if isinstance(raw_time, (int, float)) and raw_time > 0:
             plant_times.append(int(raw_time))
 
-    # 맵별 BEST(ACS 최고)/WORST(선사망률 최고) 선수 산출용 개인 스탯 (이 매치 1건 기준)
     player_stats = [
         {
             "puuid": p.get("puuid"),
@@ -236,7 +235,6 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
 
 
 def _map_winrates(records: list) -> list:
-    """매치 기록을 맵별로 묶어 승/패/승률 집계 (0경기 맵 원천 차단)."""
     buckets: dict[str, dict] = {}
     for r in records:
         bucket = buckets.setdefault(r["map"], {"map": r["map"], "win": 0, "lose": 0})
@@ -251,7 +249,6 @@ def _map_winrates(records: list) -> list:
 
 
 def _map_info_by_map(records: list, agents: dict) -> dict:
-    """맵별 상세 정보 및 선호 요원 조합(BEST/WORST) 계산 (0경기 맵 원천 차단)."""
     buckets: dict[str, dict] = {}
     for r in records:
         map_name = r["map"]
@@ -262,12 +259,10 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         b["games"] += 1
         b["win" if r["result"] == "win" else "lose"] += 1
 
-        # 스파이크 설치 사이트/시간 누적
         for site, cnt in r.get("plantSiteCounts", {}).items():
             b["plantSiteCounts"][site] = b["plantSiteCounts"].get(site, 0) + cnt
         b["plantTimes"].extend(r.get("plantTimes", []))
 
-        # BEST/WORST 선수 산출용 개인 스탯 누적 (puuid 기준)
         for ps in r.get("playerStats", []):
             puuid = ps.get("puuid")
             if not puuid:
@@ -281,7 +276,6 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             pbucket["firstDeaths"] += ps.get("firstDeaths", 0)
             pbucket["roundsPlayed"] += ps.get("roundsPlayed", 0)
 
-        # 등장한 요원 조합 수집 (한글명 변환)
         agent_names = []
         for char in r.get("rosterAgents", []):
             meta = agents["by_name"].get(char.lower())
@@ -296,7 +290,6 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             continue
         win_rate = round(b["win"] / games * 100) if games else 0
 
-        # 선호 사이트: 우리 팀이 설치한 라운드 기준 사이트별 비율
         total_plants = sum(b["plantSiteCounts"].values())
         preferred_site = (
             {site: round(cnt / total_plants * 100) for site, cnt in b["plantSiteCounts"].items()}
@@ -304,14 +297,12 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             else {"A": 0, "B": 0}
         )
 
-        # 평균 스파이크 설치 시간: plant_time_in_round(ms) 평균 -> 초 단위 표시
         avg_plant_ms = round(sum(b["plantTimes"]) / len(b["plantTimes"])) if b["plantTimes"] else 0
         avg_plant_sec = round(avg_plant_ms / 1000) if avg_plant_ms else 0
 
-        # 요원 조합 통계 처리 (BEST / WORST 산출)
         combo_stats = {}
         for c in b["combos"]:
-            key = tuple(sorted(c["agents"])) # 5인 전체 조합 기준
+            key = tuple(sorted(c["agents"]))
             if not key:
                 continue
             stat = combo_stats.setdefault(key, {"wins": 0, "total": 0})
@@ -325,7 +316,6 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             reverse=True
         )
 
-        # BEST(ACS 최고)/WORST(선사망률 최고, 동률이면 ACS 낮은 쪽) 선수 산출
         player_summaries = []
         for pbucket in b["players"].values():
             avg_acs = round(pbucket["acsSum"] / pbucket["acsCount"]) if pbucket["acsCount"] else 0
@@ -344,19 +334,18 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         result[map_name] = {
             "mapWinRate": win_rate,
             "sampleGames": games,
-            "attackWinRate": win_rate,   # 임시 매칭 승률 연동 방어
-            "defenseWinRate": win_rate,  # 임시 매칭 승률 연동 방어
+            "attackWinRate": win_rate,
+            "defenseWinRate": win_rate,
             "preferredSite": preferred_site,
             "avgSpikePlantTime": f"{avg_plant_sec}초" if avg_plant_sec else "-",
-            "combos": sorted_combos,       # "선호 요원 조합" 섹션(조합 A/B)에서 사용
-            "comboAce": best_players,      # BEST 섹션에서 사용 (선수 1명)
-            "comboWeakness": worst_players, # WORST 섹션에서 사용 (선수 1명)
+            "combos": sorted_combos,
+            "comboAce": best_players,
+            "comboWeakness": worst_players,
         }
     return result
 
 
 def _player_ranking(all_roster_stats: list, agents: dict, limit: int = 5) -> list:
-    """여러 매치에 걸쳐 등장한 로스터 개인 스탯을 puuid 기준으로 평균 내 ACS 순으로 정렬."""
     buckets: dict[str, dict] = {}
     for p in all_roster_stats:
         puuid = p.get("puuid")
@@ -411,6 +400,7 @@ def build_team_profile(
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
     matches_played = stats.get("matches") or 0
+    logo_image = customization.get("image")
 
     records: list = []
     all_roster_stats: list = []
@@ -439,7 +429,8 @@ def build_team_profile(
         "name": team_info.get("name") or team_name,
         "tag": team_info.get("tag") or team_tag,
         "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
-        "ratingIconUrl": customization.get("image"),
+        "logoUrl": logo_image,
+        "ratingIconUrl": logo_image,
         "recentSummary": {
             "winRate": round((stats.get("wins") or 0) / matches_played * 100) if matches_played else 0,
             "wins": stats.get("wins") or 0,
@@ -505,6 +496,7 @@ def build_quick_analysis(
 
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
+    logo_image = customization.get("image")
 
     return {
         "teamName": team_info.get("name") or team_name,
@@ -519,6 +511,7 @@ def build_quick_analysis(
         "tier": {
             "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
             "rp": placement.get("points") or 0,
-            "iconUrl": customization.get("image"),
+            "logoUrl": logo_image,
+            "iconUrl": logo_image,
         },
     }
