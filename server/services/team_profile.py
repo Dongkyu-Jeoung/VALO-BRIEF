@@ -21,6 +21,12 @@ from services.player_profile import ROLE_LABELS, _load_ref_agents, _load_ref_map
 # 항상 같은 매치 집합을 캐시하도록 이 상수 하나를 공유해서 쓴다.
 MATCH_HISTORY_LIMIT = 10
 
+# 요원 조합(combos) 표시 순서 고정용. Henrik이 내려주는 roster 순서는 매치마다 들쭉날쭉해서
+# (참가 순서/내부 정렬 기준 불명) 같은 5인 조합이어도 경기마다 표시 순서가 달라 보이는 문제가
+# 있었다 - 화면(요원 조합 섹션)에서 항상 같은 순서로 보이도록 역할군 기준으로 정렬한다.
+# ROLE_LABELS(player_profile.py)와 같은 role_type 값 체계를 그대로 쓴다.
+_AGENT_ROLE_ORDER = {"duelist": 0, "initiator": 1, "controller": 2, "sentinel": 3}
+
 
 def _season_act_for(dt: datetime) -> tuple[str, str]:
     """연도당 6개 Act(2개월씩)로 나누는 달력 기반 추정. player_profile.py의 진짜 Episode/Act
@@ -86,6 +92,18 @@ def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
         if victim in our_puuids:
             counts[victim] = counts.get(victim, 0) + 1
     return counts
+
+
+def _sorted_roster_agents(characters: list[str], agents: dict) -> list[str]:
+    """rosterAgents(표시용 요원 리스트)를 역할군 기준으로 정렬. 같은 5인 조합이면 매치마다
+    항상 같은 순서로 나오게 하기 위함 - _AGENT_ROLE_ORDER 상단 주석 참고. 정렬 실패 원인이
+    되는 미확인 캐릭터명은 예외를 던지지 않고 맨 뒤로 보낸다(방어적 fallback)."""
+    def sort_key(character: str) -> tuple[int, str]:
+        meta = agents["by_name"].get((character or "").lower()) or {}
+        role_rank = _AGENT_ROLE_ORDER.get(meta.get("role_type"), 99)
+        return role_rank, character or ""
+
+    return sorted(characters, key=sort_key)
 
 
 def build_team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
@@ -226,7 +244,11 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         "act": act,
         "pistolRoundsWon": pistol_won,
         "pistolRoundsPlayed": len(pistol_indexes),
-        "rosterAgents": [p.get("character") for p in roster_stats],
+        # 표시용 요원 리스트는 역할군 순서로 고정 정렬 - _sorted_roster_agents 참고.
+        # (roster_stats 자체의 순서는 개인 스탯 등 다른 필드가 의존하므로 그대로 둔다)
+        "rosterAgents": _sorted_roster_agents(
+            [p.get("character") for p in roster_stats], agents
+        ),
         "plantSiteCounts": plant_site_counts,
         "plantTimes": plant_times,
         "playerStats": player_stats,
@@ -276,6 +298,7 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             pbucket["firstDeaths"] += ps.get("firstDeaths", 0)
             pbucket["roundsPlayed"] += ps.get("roundsPlayed", 0)
 
+        # rosterAgents는 이미 _parse_team_match에서 역할군 순서로 정렬되어 들어온다.
         agent_names = []
         for char in r.get("rosterAgents", []):
             meta = agents["by_name"].get(char.lower())
