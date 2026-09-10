@@ -159,12 +159,21 @@ def duelist_acs_from_matches(matches: list[dict], team_name: str, team_tag: str)
     return sum(acs_values) / len(acs_values)
 
 
+def _normalize_to_100(our_value: float, their_value: float) -> tuple[float, float]:
+    """두 팀의 원본 관측치(각자 독립적으로 계산된 값 - team_engagement_cache.trade_rate처럼
+    서로 다른 표본에서 나와 합이 100일 필요가 없는 값)를 "우리 vs 상대" 대결 구도의 0~100
+    스코어 쌍으로 정규화한다 - 프론트 DuelCompareBar가 항상 합이 100인 두 값을 그린다고
+    전제하므로, 여기서 미리 맞춰서 내려보낸다(그렇지 않으면 바 너비와 표시 숫자가 어긋나
+    보임). 둘 다 0이면(표본이 아예 없음) 50:50 무승부로 처리."""
+    total = our_value + their_value
+    our_pct = round(our_value / total * 100, 1) if total else 50.0
+    their_pct = round(100 - our_pct, 1) if total else 50.0
+    return our_pct, their_pct
+
+
 def _duelist_matchup_from_acs(our_acs: float, their_acs: float) -> dict:
-    """두 팀의 듀얼리스트 평균 ACS를 0~100 스코어로 정규화해서 비교. 둘 다 0이면(듀얼리스트를
-    플레이한 기록 자체가 없음) 50:50 무승부로 처리."""
-    total = our_acs + their_acs
-    our_score = round(our_acs / total * 100, 1) if total else 50.0
-    their_score = round(100 - our_score, 1) if total else 50.0
+    """두 팀의 듀얼리스트 평균 ACS를 0~100 스코어로 정규화해서 비교."""
+    our_score, their_score = _normalize_to_100(our_acs, their_acs)
 
     # ±5%p 이내는 "팽팽함"으로 본다 - 표본이 적을 때 근소한 차이로 유/불리를 단정하지
     # 않기 위한 안전마진(임의로 정한 임계값 - 데이터가 쌓이면 재검토 대상, 7번 참고).
@@ -199,11 +208,10 @@ def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs,
 
     predicted_trade = min(max(predicted_trade, 0.0), 100.0)
     predicted_duelist_acs = max(predicted_duelist_acs, 0.0)
-    # 학습된 모델은 "team_a(우리팀) 관점 트레이드 성공률"만 예측한다 - 상대팀 관점은
-    # 100에서 빼는 게 아니라(트레이드는 팀별로 독립적인 비율이라 합이 100일 필요 없음)
-    # 상대팀을 team_a로 놓고 한 번 더 예측하는 게 정확하지만, 지금은 대칭 근사로
-    # (100 - 우리팀 예측치)를 상대팀 값으로 쓴다 - 데이터가 쌓여 모델이 안정되면 상대팀도
-    # 별도로 추론하도록 개선 가능(7-4번 참고).
+    # 학습된 모델은 "team_a(우리팀) 관점 트레이드 성공률"만 예측한다 - 상대팀을 team_a로
+    # 놓고 한 번 더 예측하는 게 정확하지만, 지금은 대칭 근사로 (100 - 우리팀 예측치)를
+    # 상대팀 값으로 쓴다(_normalize_to_100과 동일하게 "합이 100인 대결 구도"로 맞추기
+    # 위함 - 데이터가 쌓여 모델이 안정되면 상대팀도 별도로 추론하도록 개선 가능, 7-4번 참고).
     return {
         "trade": {
             "ourWinRate": round(predicted_trade, 1),
@@ -238,10 +246,11 @@ def build_engagement_prediction_from_features(
         return _predict_with_model(artifact, team_trade_rate, opponent_trade_rate, team_duelist_acs, opponent_duelist_acs)
 
     duelist_matchup = _duelist_matchup_from_acs(team_duelist_acs or 0.0, opponent_duelist_acs or 0.0)
+    our_trade_pct, their_trade_pct = _normalize_to_100(team_trade_rate or 0.0, opponent_trade_rate or 0.0)
     return {
         "trade": {
-            "ourWinRate": team_trade_rate if team_trade_rate is not None else 50.0,
-            "theirWinRate": opponent_trade_rate if opponent_trade_rate is not None else 50.0,
+            "ourWinRate": our_trade_pct,
+            "theirWinRate": their_trade_pct,
         },
         "duelistMatchup": duelist_matchup,
         "modelVersion": "heuristic-v0",

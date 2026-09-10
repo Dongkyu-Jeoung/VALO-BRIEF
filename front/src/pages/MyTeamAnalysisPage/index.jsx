@@ -19,9 +19,14 @@ const TABS = ['통계', '개인 분석', '팀 분석', 'AI 리포트'];
 export default function MyTeamAnalysisPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : '통계';
-  const { season, setSeason, act, setAct } = useSeasonActFilter();
 
   const [stats, setStats] = useState(null);
+  // stats.actOptions(백엔드가 실제 전적 기준으로 내려주는 최신 시즌/Act)를 넘겨야
+  // useSeasonActFilter가 "실제 전적이 있는 최신 시즌"을 기본값으로 잡는다 - 이걸 안 넘기면
+  // 고정 SEASONS/ACTS의 첫 값으로 기본 선택돼, 그 값에 해당하는 전적이 하나도 없을 때
+  // "처음엔 아무것도 안 보이다가 Act 셀렉트박스에서 실제 전적 있는 시즌을 직접 골라야만
+  // 보이는" 증상이 생긴다(services/my_team_stats.py::build_my_team_stats 참고).
+  const { season, setSeason, act, setAct } = useSeasonActFilter(stats?.actOptions);
   const [analysis, setAnalysis] = useState(null);
   const [aiReport, setAiReport] = useState(null);
   const [selectedMapId, setSelectedMapId] = useState('ascent');
