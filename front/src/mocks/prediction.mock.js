@@ -14,8 +14,8 @@ export const predictionMock = {
         avgSpikePlantTime: 32,
         matchSample: 13,
         combos: [
-          { label: '조합 A', pct: 34, agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'] },
-          { label: '조합 B', pct: 21, agents: ['jett', 'fade', 'viper', 'cypher', 'kayo'] },
+          { agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'], result: 'win' },
+          { agents: ['jett', 'fade', 'viper', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [
           { name: 'Nova', acs: 274 },
@@ -32,8 +32,8 @@ export const predictionMock = {
         avgSpikePlantTime: 32,
         matchSample: 13,
         combos: [
-          { label: '조합 A', pct: 34, agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'] },
-          { label: '조합 B', pct: 21, agents: ['jett', 'fade', 'viper', 'cypher', 'kayo'] },
+          { agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'], result: 'win' },
+          { agents: ['jett', 'fade', 'viper', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [
           { name: 'Nova', acs: 274 },
@@ -50,8 +50,8 @@ export const predictionMock = {
         avgSpikePlantTime: 35,
         matchSample: 11,
         combos: [
-          { label: '조합 A', pct: 29, agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'] },
-          { label: '조합 B', pct: 18, agents: ['jett', 'fade', 'viper', 'cypher', 'kayo'] },
+          { agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'], result: 'win' },
+          { agents: ['jett', 'fade', 'viper', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [
           { name: 'Dash', acs: 251 },
@@ -68,8 +68,8 @@ export const predictionMock = {
         avgSpikePlantTime: 36,
         matchSample: 8,
         combos: [
-          { label: '조합 A', pct: 30, agents: ['jett', 'sova', 'viper', 'kayo', 'cypher'] },
-          { label: '조합 B', pct: 20, agents: ['neon', 'fade', 'omen', 'killjoy', 'breach'] },
+          { agents: ['jett', 'sova', 'viper', 'kayo', 'cypher'], result: 'win' },
+          { agents: ['neon', 'fade', 'omen', 'killjoy', 'breach'], result: 'lose' },
         ],
         comboAce: [{ name: 'Nova', acs: 260 }],
         comboWeakness: [{ name: 'Ruko', fd: 50, acs: 170 }],
@@ -80,8 +80,8 @@ export const predictionMock = {
         avgSpikePlantTime: 33,
         matchSample: 12,
         combos: [
-          { label: '조합 A', pct: 35, agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'] },
-          { label: '조합 B', pct: 25, agents: ['raze', 'fade', 'viper', 'cypher', 'skye'] },
+          { agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'], result: 'win' },
+          { agents: ['raze', 'fade', 'viper', 'cypher', 'skye'], result: 'lose' },
         ],
         comboAce: [{ name: 'Iris', acs: 240 }],
         comboWeakness: [{ name: 'Solstice', fd: 45, acs: 160 }],
@@ -92,8 +92,8 @@ export const predictionMock = {
         avgSpikePlantTime: 34,
         matchSample: 9,
         combos: [
-          { label: '조합 A', pct: 32, agents: ['jett', 'sova', 'viper', 'killjoy', 'sage'] },
-          { label: '조합 B', pct: 22, agents: ['reyna', 'fade', 'omen', 'cypher', 'kayo'] },
+          { agents: ['jett', 'sova', 'viper', 'killjoy', 'sage'], result: 'win' },
+          { agents: ['reyna', 'fade', 'omen', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [{ name: 'Dash', acs: 250 }],
         comboWeakness: [{ name: 'Ruko', fd: 52, acs: 175 }],
@@ -104,8 +104,8 @@ export const predictionMock = {
         avgSpikePlantTime: 31,
         matchSample: 10,
         combos: [
-          { label: '조합 A', pct: 36, agents: ['raze', 'fade', 'omen', 'viper', 'killjoy'] },
-          { label: '조합 B', pct: 24, agents: ['jett', 'reyna', 'sova', 'cypher', 'breach'] },
+          { agents: ['raze', 'fade', 'omen', 'viper', 'killjoy'], result: 'win' },
+          { agents: ['jett', 'reyna', 'sova', 'cypher', 'breach'], result: 'lose' },
         ],
         comboAce: [{ name: 'Nova', acs: 265 }],
         comboWeakness: [{ name: 'Solstice', fd: 48, acs: 165 }],
@@ -116,8 +116,8 @@ export const predictionMock = {
         avgSpikePlantTime: 37,
         matchSample: 7,
         combos: [
-          { label: '조합 A', pct: 28, agents: ['jett', 'fade', 'viper', 'killjoy', 'astra'] },
-          { label: '조합 B', pct: 22, agents: ['reyna', 'sova', 'omen', 'cypher', 'kayo'] },
+          { agents: ['jett', 'fade', 'viper', 'killjoy', 'astra'], result: 'win' },
+          { agents: ['reyna', 'sova', 'omen', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [{ name: 'Iris', acs: 230 }],
         comboWeakness: [{ name: 'Ruko', fd: 55, acs: 160 }],
@@ -128,8 +128,8 @@ export const predictionMock = {
         avgSpikePlantTime: 30,
         matchSample: 9,
         combos: [
-          { label: '조합 A', pct: 31, agents: ['raze', 'omen', 'viper', 'killjoy', 'skye'] },
-          { label: '조합 B', pct: 20, agents: ['jett', 'reyna', 'sova', 'cypher', 'breach'] },
+          { agents: ['raze', 'omen', 'viper', 'killjoy', 'skye'], result: 'win' },
+          { agents: ['jett', 'reyna', 'sova', 'cypher', 'breach'], result: 'lose' },
         ],
         comboAce: [{ name: 'Nova', acs: 281 }],
         comboWeakness: [{ name: 'Solstice', fd: 60, acs: 188 }],
@@ -140,8 +140,8 @@ export const predictionMock = {
         avgSpikePlantTime: 33,
         matchSample: 11,
         combos: [
-          { label: '조합 A', pct: 33, agents: ['raze', 'fade', 'omen', 'cypher', 'breach'] },
-          { label: '조합 B', pct: 23, agents: ['jett', 'reyna', 'viper', 'killjoy', 'skye'] },
+          { agents: ['raze', 'fade', 'omen', 'cypher', 'breach'], result: 'win' },
+          { agents: ['jett', 'reyna', 'viper', 'killjoy', 'skye'], result: 'lose' },
         ],
         comboAce: [{ name: 'Dash', acs: 245 }],
         comboWeakness: [{ name: 'Ruko', fd: 50, acs: 170 }],
@@ -152,8 +152,8 @@ export const predictionMock = {
         avgSpikePlantTime: 32,
         matchSample: 10,
         combos: [
-          { label: '조합 A', pct: 30, agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'] },
-          { label: '조합 B', pct: 20, agents: ['raze', 'fade', 'viper', 'cypher', 'kayo'] },
+          { agents: ['jett', 'reyna', 'omen', 'sova', 'killjoy'], result: 'win' },
+          { agents: ['raze', 'fade', 'viper', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [{ name: 'Nova', acs: 250 }],
         comboWeakness: [{ name: 'Ruko', fd: 50, acs: 170 }],
@@ -164,8 +164,8 @@ export const predictionMock = {
         avgSpikePlantTime: 34,
         matchSample: 8,
         combos: [
-          { label: '조합 A', pct: 32, agents: ['jett', 'sova', 'viper', 'killjoy', 'sage'] },
-          { label: '조합 B', pct: 22, agents: ['reyna', 'fade', 'omen', 'cypher', 'kayo'] },
+          { agents: ['jett', 'sova', 'viper', 'killjoy', 'sage'], result: 'win' },
+          { agents: ['reyna', 'fade', 'omen', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [{ name: 'Iris', acs: 240 }],
         comboWeakness: [{ name: 'Solstice', fd: 48, acs: 165 }],
@@ -176,8 +176,8 @@ export const predictionMock = {
         avgSpikePlantTime: 31,
         matchSample: 12,
         combos: [
-          { label: '조합 A', pct: 35, agents: ['raze', 'breach', 'omen', 'killjoy', 'viper'] },
-          { label: '조합 B', pct: 25, agents: ['jett', 'fade', 'sova', 'cypher', 'kayo'] },
+          { agents: ['raze', 'breach', 'omen', 'killjoy', 'viper'], result: 'win' },
+          { agents: ['jett', 'fade', 'sova', 'cypher', 'kayo'], result: 'lose' },
         ],
         comboAce: [{ name: 'Dash', acs: 260 }],
         comboWeakness: [{ name: 'Ruko', fd: 52, acs: 180 }],
