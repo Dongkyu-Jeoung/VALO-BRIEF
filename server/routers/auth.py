@@ -37,6 +37,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refreshToken: str
+
+
 class RiotVerifyRequest(BaseModel):
     teamName: str
     teamTag: str
@@ -169,8 +173,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
     token = auth_service.create_access_token(team)
+    refresh_token = auth_service.create_refresh_token(team)
     return {
         "token": token,
+        "refreshToken": refresh_token,
         "user": {
             "id": team.team_id,
             "loginId": team.login_id,
@@ -179,6 +185,21 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             "nickname": team.team_name,
         },
     }
+
+
+@router.post("/refresh")
+def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
+    """access token 만료 시 프론트(httpClient.js)가 조용히 호출해서 새 access token만
+    재발급받는다. refresh token 자체는 회전하지 않는다(stateless라 회전해도 서버가
+    이전 토큰을 무효화할 수단이 없어 의미가 적음) - 탭이 열려있는 동안 계속 이 토큰으로
+    재발급받다가, 탭을 닫으면 프론트가 sessionStorage에서 지워서 세션이 끝난다."""
+    token_payload = auth_service.decode_refresh_token(payload.refreshToken)
+    if token_payload is None:
+        raise HTTPException(status_code=401, detail="유효하지 않거나 만료된 리프레시 토큰입니다.")
+    team = auth_service.find_team_by_id(db, token_payload.get("sub"))
+    if team is None:
+        raise HTTPException(status_code=401, detail="존재하지 않는 계정입니다.")
+    return {"token": auth_service.create_access_token(team)}
 
 
 @router.get("/me", response_model=TeamOut)
