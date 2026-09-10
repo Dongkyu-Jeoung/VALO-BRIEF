@@ -263,7 +263,10 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
                     weapon_deaths[equipped] = weapon_deaths.get(equipped, 0) + 1
             for ke in ps_target.get("kill_events") or []:
                 wpn = _kill_weapon_uuid(ke, equipped)
-                if wpn:
+                # damage_weapon_id가 항상 총 UUID인 건 아니다 - 어빌리티로 처치한 킬은
+                # 해당 스킬의 UUID가 들어와서 ref_weapons에 없다(match_sync.py:371의
+                # weapon_uuids 검증과 동일한 이유). ref_weapons에 있는 진짜 무기만 집계.
+                if wpn and wpn in weapon_names:
                     weapon_kills[wpn] = weapon_kills.get(wpn, 0) + 1
 
             # --- 개인 클러치: 우리 팀에서 이 선수가 마지막 생존자가 된 순간 ---
