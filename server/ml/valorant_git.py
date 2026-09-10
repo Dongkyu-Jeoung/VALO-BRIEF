@@ -1,21 +1,14 @@
-import os
+import logging
 import sys
 import requests
-import time
 import pandas as pd
 from urllib import parse
 from threading import Semaphore
-from pathlib import Path
-from dotenv import load_dotenv
 
 from services.henrik_api import HenrikRateLimitError
-from services.rate_limiter import throttle_sync
+from services.henrik_config import ML as _API
 
-# services/henrik_api.py와 같은 .env(HENRIK_API_KEY)를 공유해서 쓴다 - 키를 소스에
-# 하드코딩하지 않기 위함(예전엔 여기 평문으로 박혀 있었음, git 이력엔 남아있으니 키를
-# 재발급하는 걸 권장).
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-API_KEY = os.getenv("HENRIK_API_KEY")
+logger = logging.getLogger(__name__)
 
 # 아래 디버그 print()들이 이모지(✅❌⚠️)를 쓰는데, Windows 콘솔 기본 인코딩(cp949)에서는
 # print()가 그대로 죽는다(UnicodeEncodeError) - 이 모듈이 실제 요청 경로(routers/predict.py)에
@@ -26,23 +19,15 @@ try:
 except Exception:
     pass
 
-HEADERS = {
-    "Authorization": API_KEY,
-    "Content-Type": "application/json"
-}
-
 PLATFORM = "pc"  # pc 또는 console
 
-# HenrikDev Basic Key 기준 분당 30 요청 제한. 안전하게 2.2초 간격(분당 약 27회) + 429 발생 시 재시도.
+# 동시 네트워크 요청 수 제한. 60초당 호출량은 공유 rate_limiter에서 별도로 제한한다.
 MAX_CONCURRENT_REQUEST = 6
 API_SEMAPHORE = Semaphore(MAX_CONCURRENT_REQUEST)
 MAX_RETRIES_ON_429 = 5
 
-# 레이트리밋 카운터는 services/rate_limiter.py로 통합했다 - services/henrik_api.py(일반
-# 검색/프로필 트래픽)도 같은 Henrik 키의 같은 버킷을 쓰는데, 예전엔 이 파일이 따로 카운터를
-# 갖고 있어서 두 클라이언트가 각자 "나는 28/분 이하"라고 안심해도 합치면 실제 한도(30/분)를
-# 넘겨 429를 받을 수 있었다(승부예측_성능_분석.md 3번 참고). 이제 throttle_sync() 하나가
-# 두 클라이언트가 보낸 요청을 모두 같이 센다.
+# ML 선수 계정·경기 조회는 추가 키의 예산을 사용한다.
+# 키 미등록/동일 키 등록 시에는 일반 클라이언트와 동일한 제한기를 공유한다.
 
 PLAYER_FEATURES = [
     "rr",
@@ -65,8 +50,8 @@ _MATCH_DETAIL_CACHE = {}
 def api_get(url: str) -> dict:
     """
     모든 HenrikDev API 호출을 통과시키는 공통 함수.
-    - 매 호출 사이 REQUEST_INTERVAL_SEC만큼 대기해 분당 요청 한도(Basic Key: 30/min)를 넘지 않도록 한다.
-    - 429(Rate Limited)를 받으면 지수 백오프로 재시도하고, 그래도 안 되면 HenrikRateLimitError를
+    - ML 키의 최근 60초 요청 예산을 확인하고, 소진된 경우 대기한다.
+    - 429(Rate Limited)를 받으면 해당 키만 서버 안내 시간만큼 대기하고, 재시도 소진 시 HenrikRateLimitError를
       던진다(services/henrik_api.py와 동일한 예외 - main.py의 전역 핸들러가 503으로 응답).
       예전엔 재시도를 다 쓰고도 마지막 429 응답을 그냥 반환했는데, 호출부(get_puuid_by_riot_id
       등)가 status_code != 200을 전부 "존재하지 않음"으로 처리해서 실제로는 레이트리밋일 때도
@@ -74,21 +59,21 @@ def api_get(url: str) -> dict:
     """
     res = None
     for attempt in range(MAX_RETRIES_ON_429 + 1):
-        throttle_sync()
         with API_SEMAPHORE:
-
-            res = requests.get(url, headers=HEADERS, timeout=(5, 30))
+            _API.limiter.throttle_sync()
+            res = requests.get(url, headers={**_API.headers, "Content-Type": "application/json"}, timeout=(5, 30))
 
         if res.status_code == 429:
 
-            wait = 2 ** attempt
-            time.sleep(wait)
+            wait = _API.limiter.register_rate_limit(res.headers)
+            logger.warning("[HENRIK 429] key=%s sync attempt=%d/%d key_wait=%.2fs",
+                           _API.name, attempt + 1, MAX_RETRIES_ON_429 + 1, wait)
             continue
 
         return res
 
     print(f"  ❌ 429 재시도 한도 초과, 요청 포기: {url}")
-    raise HenrikRateLimitError(url)
+    raise HenrikRateLimitError(url, retry_after=wait)
 
 
 def get_puuid_by_riot_id(name: str, tag: str) -> str:

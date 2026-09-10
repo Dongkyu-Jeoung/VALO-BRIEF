@@ -3,21 +3,14 @@ HenrikDev(Valorant 비공식 API) 클라이언트.
 계정/팀 존재 확인, 랭크, 매치 이력 조회에 필요한 최소한의 엔드포인트만 감싼다.
 """
 import asyncio
-import os
+import logging
 import time
 import httpx
-from pathlib import Path
-from dotenv import load_dotenv
+from services.henrik_config import GENERAL as _API
 
-from services.rate_limiter import throttle_async
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(BASE_DIR / ".env")
+logger = logging.getLogger(__name__)
 
 HENRIK_API_BASE_URL = "https://api.henrikdev.xyz"
-HENRIK_API_KEY = os.getenv("HENRIK_API_KEY")
-
-_HEADERS = {"Authorization": HENRIK_API_KEY} if HENRIK_API_KEY else {}
 _TIMEOUT = 5.0
 
 # 같은 (경로+파라미터) 요청을 짧은 시간 안에 다시 받는 경우가 많다(검색 직후 프로필 진입,
@@ -41,30 +34,15 @@ class HenrikRateLimitError(Exception):
     /exists 응답에서 "존재하지 않는 팀/선수"와 동일하게 처리돼 - 실제로는 존재하는 팀인데
     검색이 갑자기 안 되는 것처럼 보이는 버그의 원인이었다(팀 검색 1건이 exists 확인 +
     백그라운드 프리페치(이력+매치상세 최대 10건)까지 겹쳐 최대 12개 요청을 짧은 시간에
-    쓰는데, Henrik 무료 키 한도가 분당 30건이라 검색을 2~3번만 연달아 해도 넘기기 쉬움 -
-    실측으로 재현 확인). main.py의 전역 예외 핸들러가 이걸 잡아 503으로 응답한다."""
+    쓰므로 다른 화면 요청과 합쳐 API 키 한도를 초과할 수 있다).
+    main.py의 전역 예외 핸들러가 이걸 잡아 503으로 응답한다."""
+
+    def __init__(self, path, retry_after=60.0):
+        super().__init__(path)
+        self.retry_after = retry_after
 
 
-# 레이트리밋 카운터는 services/rate_limiter.py로 통합했다 - ml/valorant_git.py(예측
-# 파이프라인)도 같은 Henrik 키의 같은 버킷을 쓰면서 예전엔 이 파일 안에 따로 카운터를
-# 갖고 있었는데, 그러면 두 클라이언트가 각자 "나는 28/분 이하"라고 안심해도 합치면 실제
-# 한도(30/분)를 넘길 수 있었다(승부예측_성능_분석.md 3번 참고). 이제 throttle_async()
-# 하나가 두 클라이언트가 보낸 요청을 모두 같이 센다.
-
-
-def _retry_after_seconds(res: httpx.Response, default: float = 2.0) -> float:
-    """429 응답의 Retry-After(표준) 또는 x-ratelimit-reset(Henrik 커스텀) 헤더를 초 단위로
-    파싱. 값이 너무 크면(리셋까지 오래 남음) 요청 하나 때문에 응답을 그만큼 붙잡아두지 않게
-    상한을 둔다."""
-    for header in ("Retry-After", "x-ratelimit-reset"):
-        raw = res.headers.get(header)
-        if raw is None:
-            continue
-        try:
-            return min(float(raw), 5.0)
-        except ValueError:
-            continue
-    return default
+# 검색·프로필·팀 로스터·DB 보완은 일반 키의 예산을 공유한다.
 
 
 def _cache_key(path: str, params: dict | None) -> str:
@@ -78,7 +56,7 @@ def _get_client() -> httpx.AsyncClient:
     """프로세스 전역에서 재사용하는 커넥션 풀 클라이언트를 반환(없으면 생성)."""
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(base_url=HENRIK_API_BASE_URL, headers=_HEADERS, timeout=_TIMEOUT)
+        _client = httpx.AsyncClient(base_url=HENRIK_API_BASE_URL, headers=_API.headers, timeout=_TIMEOUT)
     return _client
 
 
@@ -94,8 +72,8 @@ async def warm_up() -> None:
     """FastAPI startup 훅에서 호출 - 첫 실사용자 요청 전에 TCP+TLS 핸드셰이크를 미리
     끝내둔다. 안 하면 재시작 직후 첫 검색이 이 핸드셰이크 비용을 그대로 떠안는다."""
     try:
-        await _get_client().get("/valorant/v1/status/kr")
-    except httpx.HTTPError:
+        await _get_uncached("/valorant/v1/status/kr", None)
+    except (httpx.HTTPError, HenrikRateLimitError):
         pass
 
 
@@ -140,25 +118,19 @@ async def _get(path: str, params: dict | None = None) -> dict | list | None:
 async def _get_uncached(path: str, params: dict | None) -> dict | list | None:
     """실제 네트워크 요청 - 429면 Retry-After만큼 한 번 기다렸다 재시도하고, 그래도
     막히면 HenrikRateLimitError를 던진다."""
-    await throttle_async()
     client = _get_client()
-    try:
-        res = await client.get(path, params=params)
-    except httpx.HTTPError:
-        # 네트워크/타임아웃 등 - 존재 여부를 확정할 수 없으므로 미존재로 간주
-        return None
-
-    if res.status_code == 429:
-        await asyncio.sleep(_retry_after_seconds(res))
-        await throttle_async()
+    for attempt in range(2):
+        await _API.limiter.throttle_async()
         try:
             res = await client.get(path, params=params)
         except httpx.HTTPError:
             return None
-        if res.status_code == 429:
-            raise HenrikRateLimitError(path)
-
-    return res.json().get("data") if res.status_code == 200 else None
+        if res.status_code != 429:
+            return res.json().get("data") if res.status_code == 200 else None
+        wait = _API.limiter.register_rate_limit(res.headers)
+        logger.warning("[HENRIK 429] key=%s async attempt=%d/2 key_wait=%.2fs", _API.name, attempt + 1, wait)
+        if attempt == 1:
+            raise HenrikRateLimitError(path, retry_after=wait)
 
 
 async def get_account(riot_name: str, riot_tag: str) -> dict | None:

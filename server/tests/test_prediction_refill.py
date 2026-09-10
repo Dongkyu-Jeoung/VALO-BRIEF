@@ -3,7 +3,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -76,7 +76,7 @@ class RefillTests(unittest.IsolatedAsyncioTestCase):
         api.assert_not_awaited()
 
     async def test_duplicate_and_cooldown(self):
-        refill._last_attempt.clear()
+        refill._next_attempt.clear()
         with patch.object(refill, "refill", AsyncMock()) as worker:
             refill.schedule_refill("team", "Our", "T", ["p"], lambda msg: None)
             task = refill._tasks["team"]
@@ -85,7 +85,68 @@ class RefillTests(unittest.IsolatedAsyncioTestCase):
             refill.schedule_refill("team", "Our", "T", ["p"], lambda msg: None)
         self.assertEqual(worker.await_count, 1)
         self.assertNotIn("team", refill._tasks)
-        refill._last_attempt.clear()
+        refill._next_attempt.clear()
+
+    async def test_rate_limit_retries_same_match_without_restarting_history(self):
+        history = {"league_matches": [{"id": "m1"}, {"id": "m2"}]}
+        matches = [{"metadata": {"matchid": mid}, "teams": {"red": {
+            "roster": {"name": "Our", "tag": "T"}}}} for mid in ("m1", "m2")]
+        with patch.object(refill, "_remaining", side_effect=[["p"], ["p"], []]), \
+             patch.object(refill, "_store") as store, \
+             patch.object(refill.henrik_api, "get_premier_team_history", AsyncMock(return_value=history)) as history_api, \
+             patch.object(refill.henrik_api, "get_match_detail", AsyncMock(side_effect=[
+                 matches[0], refill.henrik_api.HenrikRateLimitError("m2", retry_after=90), matches[1]])) as api, \
+             patch.object(refill.asyncio, "sleep", AsyncMock()) as sleep:
+            await refill.refill("team", "Our", "T", ["p"], lambda msg: None)
+        self.assertEqual([call.args[0] for call in api.await_args_list], ["m1", "m2", "m2"])
+        self.assertEqual(store.call_count, 2)
+        history_api.assert_awaited_once()
+        sleep.assert_awaited_once_with(90)
+
+    async def test_retry_is_bounded_and_releases_worker_lock(self):
+        async def sleep_without_lock(delay):
+            self.assertFalse(refill._worker_lock.locked())
+        fetch = AsyncMock(side_effect=refill.henrik_api.HenrikRateLimitError("m", retry_after=90))
+        with patch.object(refill.asyncio, "sleep", AsyncMock(side_effect=sleep_without_lock)) as sleep:
+            with self.assertRaises(refill.henrik_api.HenrikRateLimitError):
+                await refill._fetch_with_retry(fetch, lambda msg: None)
+        self.assertEqual(fetch.await_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.await_args_list], [90, 120, 240])
+
+    async def test_exhausted_rate_limit_uses_server_cooldown(self):
+        refill._next_attempt.clear()
+        with patch.object(refill, "refill", AsyncMock(side_effect=refill.henrik_api.HenrikRateLimitError("m", retry_after=90))), \
+             patch.object(refill, "time", Mock(monotonic=Mock(return_value=100))):
+            refill.schedule_refill("team", "Our", "T", ["p"], lambda msg: None)
+            await refill._tasks["team"]
+        self.assertEqual(refill._next_attempt["team"], 190)
+        self.assertNotIn("team", refill._tasks)
+        refill._next_attempt.clear()
+
+    async def test_cancellation_cleans_task_without_cooldown(self):
+        refill._next_attempt.clear()
+        with patch.object(refill, "refill", AsyncMock(side_effect=asyncio.CancelledError)):
+            refill.schedule_refill("team", "Our", "T", ["p"], lambda msg: None)
+            with self.assertRaises(asyncio.CancelledError):
+                await refill._tasks["team"]
+        self.assertNotIn("team", refill._tasks)
+        self.assertNotIn("team", refill._next_attempt)
+
+    async def test_cancel_during_retry_sleep_releases_lock(self):
+        fetch = AsyncMock(side_effect=refill.henrik_api.HenrikRateLimitError("m"))
+        with patch.object(refill.asyncio, "sleep", AsyncMock(side_effect=asyncio.CancelledError)):
+            with self.assertRaises(asyncio.CancelledError):
+                await refill._fetch_with_retry(fetch, lambda msg: None)
+        self.assertEqual(fetch.await_count, 1)
+        self.assertFalse(refill._worker_lock.locked())
+
+    async def test_non_rate_limit_error_is_not_retried(self):
+        fetch = AsyncMock(side_effect=ValueError("invalid data"))
+        with patch.object(refill.asyncio, "sleep", AsyncMock()) as sleep:
+            with self.assertRaises(ValueError):
+                await refill._fetch_with_retry(fetch, lambda msg: None)
+        fetch.assert_awaited_once()
+        sleep.assert_not_awaited()
 
 
 if __name__ == "__main__":
