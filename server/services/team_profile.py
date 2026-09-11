@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from services.death_hotspot_service import compute_player_hotspots
 from services.map_coords_service import normalize_location
 from services.player_profile import ROLE_LABELS, _load_ref_agents, _load_ref_maps
+from services.round_phase_analysis import aggregate_round_phase, analyze_rounds, determine_team_color
 
 # 매치 상세(v2/match) 1건이 ~1.3MB로 무거워서(실측), 최근 몇 건까지 불러올지 제한한다.
 # routers/teams.py(실제 조회)와 routers/search.py(존재확인 시 백그라운드 프리페치)가
@@ -63,6 +64,37 @@ def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
         if str(roster.get("name", "")).lower() == name_l and str(roster.get("tag", "")).lower() == tag_l:
             return side
     return None
+
+
+def compute_round_phase_from_matches(match_details: list, team_name: str, team_tag: str) -> dict:
+    """라이브 match_details(v2/match raw dict 리스트)로 공격/수비/피스톨/에코 라운드
+    승률을 실제로 계산한다.
+
+    2026-09-11까지는 이 자리가 {"attackWinRate": 50, "ecoWinRate": 40, ...} 같은
+    하드코딩된 가짜 값이었다(상대팀은 미가입일 수 있어 team_id가 없어서 services/
+    my_team_analysis.py의 DB 캐시 경로를 못 씀) - services/round_phase_analysis.py로
+    그 계산 로직을 공유 모듈로 빼서, 여기서는 DB의 team_id 대신 이 매치의 roster.members
+    (푸틴/puuid 집합)로 "우리 팀"을 식별해 똑같은 계산을 라이브로 돌린다. matches.
+    round_detail_json이 곧 v2/match의 rounds 필드 그대로라(services/match_history.py
+    참고) 입력 형태가 완전히 같다."""
+    all_records: list[dict] = []
+    for match in match_details:
+        if not match:
+            continue
+        side = _match_our_side(match, team_name, team_tag)
+        if side is None:
+            continue
+        rounds = match.get("rounds") or []
+        if not rounds:
+            continue
+        our_puuids = set(((match.get("teams") or {}).get(side) or {}).get("roster", {}).get("members") or [])
+        our_color = determine_team_color(rounds, our_puuids)
+        if our_color is None:
+            continue
+        all_records.extend(analyze_rounds(rounds, our_color))
+
+    metrics, _wins, _losses = aggregate_round_phase(all_records)
+    return metrics
 
 
 def _first_blood_count(match: dict, our_puuids: set[str]) -> int:
@@ -474,8 +506,11 @@ def build_team_profile(
 
     act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
 
-    pistol_won_total = sum(r.get("pistolRoundsWon", 0) for r in records)
-    pistol_played_total = sum(r.get("pistolRoundsPlayed", 0) for r in records)
+    # 2026-09-11: 공격/수비/에코/피스톨/선취킬/선취死 승률을 전부 round_phase_analysis로
+    # 실제 계산한다(과거엔 하드코딩된 가짜 값이었음 - compute_round_phase_from_matches
+    # 참고). attackWinRate/defenseWinRate/atkWinRate/defWinRate 두 이름을 다 내려주는
+    # 이유: front/src/pages/MatchPredictionPage/index.jsx가 두 이름 다 폴백으로 읽는다.
+    round_phase = compute_round_phase_from_matches(match_details, team_name, team_tag)
 
     return {
         "name": team_info.get("name") or team_name,
@@ -494,22 +529,14 @@ def build_team_profile(
         "mapWinrates": _map_winrates(records),
         "mapInfoByMap": _map_info_by_map(records, agents),
         "roundInfo": {
-            "attackWinRate": 50,
-            "defenseWinRate": 50,
-            "pistolWinRate": round(pistol_won_total / pistol_played_total * 100) if pistol_played_total else 50,
-            "ecoWinRate": 40,
-            "fbWinRate": 55,
-            "fdLoseRate": 45,
-            "fbWin": 55,
-            "fdLose": 45,
-            "firstBloodWinRate": 55,
-            "firstDeathLoseRate": 45,
-            "fbPercentage": 55,
-            "fdPercentage": 45,
-            "fb": {"winRate": 55, "loseRate": 45},
-            "fd": {"winRate": 45, "loseRate": 55},
-            "firstBlood": {"winRate": 55},
-            "firstDeath": {"winRate": 45},
+            "attackWinRate": round_phase["atkWinRate"],
+            "defenseWinRate": round_phase["defWinRate"],
+            "atkWinRate": round_phase["atkWinRate"],
+            "defWinRate": round_phase["defWinRate"],
+            "pistolWinRate": round_phase["pistolWinRate"],
+            "ecoWinRate": round_phase["ecoWinRate"],
+            "fbWinRate": round_phase["fbWinPct"],
+            "fdLoseRate": round_phase["fdLosePct"],
         },
         "matchHistory": records,
         "actOptions": act_options,

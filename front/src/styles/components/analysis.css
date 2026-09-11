@@ -23,6 +23,42 @@
   color: var(--text-1);
 }
 
+/* EngagementPredictionBlock: 최종 교전 승률(스태킹 메타 모델 결과) - 이 화면의
+   headline이라 별도 카드로 감싸 트레이드/듀얼리스트 매치업(보조 지표)보다
+   먼저, 더 눈에 띄게 보여준다. */
+.duel-hero {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 10px);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+
+.duel-hero-label {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+/* 트레이드/듀얼리스트 매치업 - 좁은 화면에서는 위아래로 쌓임 */
+.duel-compare-grid {
+  display: flex;
+  gap: 28px;
+}
+
+.duel-compare-grid .duel-compare-block {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .duel-compare-grid {
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
 /* ===== 스탯 카드 레이아웃 ===== */
 .stat-inline {
   background: var(--bg-panel-2);
@@ -169,77 +205,91 @@
 
 /* ===== 각 분석 블록 간 상하 간격 보정 ===== */
 .duel-compare-block {
-  margin-top: 24px;
-  margin-bottom: 32px;
+  margin-top: 0;
+  margin-bottom: 24px;
 }
 
 .duel-compare-block .duel-compare-title {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-2);
-  margin-bottom: 38px; 
-  font-weight: 700;
-  padding-left: 30px;
+  margin-bottom: 14px;
+  font-weight: 600;
 }
 
-/* ===== 타격대 vs 타격대: 화면 비율 연동 가변 반응형 스타일 ===== */
+/* ===== part-to-whole 100% 스택 바 (우리팀 vs 상대팀, 두 값의 합=100) =====
+   두 구간을 곧바로 붙이지 않고 2px 서피스 간격(트랙 배경이 비쳐 보임)으로만
+   분리한다 - 테두리를 그려 나누지 않는다. 바깥쪽 끝만 둥글게(pill), 간격과
+   맞닿는 안쪽은 각지게 둬서 "하나의 막대가 둘로 나뉜" 형태를 유지한다. */
 .duel-compare {
+  width: 100%;
+}
+
+.duel-compare-labels {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  width: 70%;
-  margin: 32px auto; 
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
-.duel-side-label {
+.duel-compare-label {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  width: 70px;
-  flex-shrink: 0;
-  white-space: nowrap;
-  gap: 8px;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 
-.duel-side-label.them {
-  align-items: center;
+.duel-compare-label.them {
+  flex-direction: row-reverse;
 }
 
-.duel-side-label .team-name {
-  font-size: 13.5px;
+.duel-compare-label .team-name {
+  font-size: 12.5px;
   color: var(--text-2);
-  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.duel-side-label .team-pct,
-.duel-side-label b {
+.duel-compare-label .team-pct {
   color: var(--text-1);
   font-family: var(--font-mono, 'JetBrains Mono', 'Pretendard', monospace);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
+  flex-shrink: 0;
 }
 
-.duel-bar {
-  flex: 1;
-  height: 12px;
-  border-radius: 6px;
-  overflow: hidden;
+.duel-compare-bar {
   display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--radius-pill, 999px);
+  overflow: hidden;
   background: var(--bg-panel-3);
-  margin: 14px 0;
 }
 
-.duel-bar .us {
+.duel-compare-bar .seg {
+  transition: width var(--transition-base, 0.2s ease);
+}
+
+.duel-compare-bar .seg.us {
   background: var(--win);
-  transition: width var(--transition-base, 0.3s ease);
+  border-radius: var(--radius-pill, 999px) 0 0 var(--radius-pill, 999px);
 }
 
-.duel-bar .them {
+.duel-compare-bar .seg.them {
   background: var(--lose);
-  transition: width var(--transition-base, 0.3s ease);
+  border-radius: 0 var(--radius-pill, 999px) var(--radius-pill, 999px) 0;
+}
+
+/* size="lg" - 화면당 하나, 가장 중요한 결과만 강조(예: 최종 교전 승률) */
+.duel-compare--lg .duel-compare-label .team-pct {
+  font-size: 26px;
+}
+
+.duel-compare--lg .duel-compare-bar {
+  height: 14px;
 }
 
 .subsection-title {
@@ -293,22 +343,37 @@
   color: var(--lose);
 }
 
-/* EngagementPredictionBlock: AI 예측 매치업 유불리 텍스트 */
+/* EngagementPredictionBlock: AI 예측 매치업 유불리 뱃지 - 라벨("예상 결과")은
+   중립 텍스트로 두고, 실제 결과 값만 작은 뱃지로 강조한다(본문 텍스트에 직접
+   승/패 색을 입히지 않는다 - 색은 항상 뱃지 배경이 대신 들고 있음). */
 .matchup-favor-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-family: var(--font-body, 'Pretendard', sans-serif);
-  font-size: 15px;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 16px;
+}
+
+.matchup-favor-text .favor-badge {
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-1);
-  text-align: center;
-  margin-top: 20px;
+  background: var(--bg-panel-3);
+  border-radius: var(--radius-pill, 999px);
+  padding: 3px 12px;
 }
 
-.matchup-favor-text.text-win {
+.matchup-favor-text.text-win .favor-badge {
   color: var(--win);
+  background: var(--win-soft);
 }
 
-.matchup-favor-text.text-lose {
+.matchup-favor-text.text-lose .favor-badge {
   color: var(--lose);
+  background: var(--lose-soft);
 }
 
 .model-version-note {

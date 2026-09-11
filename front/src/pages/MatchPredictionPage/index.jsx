@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { fetchTeamAnalysis, fetchTeamProfile } from '../../api/teams';
+import { fetchTeamAiReport, fetchTeamAnalysis, fetchTeamProfile } from '../../api/teams';
 import { fetchPrediction, fetchRecentOpponent } from '../../api/prediction';
 import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +25,16 @@ export default function MatchPredictionPage() {
   // 우리팀(로그인한 팀) vs 상대팀 승률 예측 - /api/predict/{team_name}/{team_tag}가
   // JWT로 로그인한 팀을 "우리팀"으로 자동 인식해서 실제 모델(XGBoost)을 돌린다.
   const [prediction, setPrediction] = useState(null);
+  // resolveOpponent()가 실제로 확정한 상대팀 name/tag - 데모 링크 자동 치환(최근 상대로
+  // 바뀔 수 있음) 이후의 값이라 URL의 teamName/teamTag와 다를 수 있다. AI 리포트 탭이
+  // 지연 로딩(activeTab이 바뀔 때 따로 fetch)이라 이 값을 따로 들고 있어야 한다.
+  const [resolvedOpponent, setResolvedOpponent] = useState(null);
+  const [aiReport, setAiReport] = useState(null);
+  // aiReport는 정상적으로 null일 수 있어서(상대팀 데이터가 아직 준비 안 됨) "아직 요청
+  // 자체를 안 보냈다"와 구분하는 별도 플래그가 필요하다 - 없으면 null인 동안 매 렌더마다
+  // 계속 재요청하게 된다.
+  const [aiReportRequested, setAiReportRequested] = useState(false);
+  const [aiReportSettled, setAiReportSettled] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -33,6 +43,10 @@ export default function MatchPredictionPage() {
     setPrediction(null);
     setOpponentTeam(null);
     setAnalysisData(null);
+    setResolvedOpponent(null);
+    setAiReport(null);
+    setAiReportRequested(false);
+    setAiReportSettled(false);
 
     // 로그인 전: URL의 팀(데모 링크는 실존하지 않는 team-ascend라 자동으로 mock 폴백된다).
     // 로그인 후 + URL이 기본 데모 링크(네비 메뉴/홈 카드가 항상 이 팀으로 연결)일 때만
@@ -50,6 +64,7 @@ export default function MatchPredictionPage() {
 
     resolveOpponent().then(({ teamName: name, teamTag: tag }) => {
       if (!active) return;
+      setResolvedOpponent({ name, tag });
 
       fetchTeamAnalysis(name, tag).then((data) => {
         if (active && data) {
@@ -74,6 +89,21 @@ export default function MatchPredictionPage() {
 
     return () => { active = false; };
   }, [teamName, teamTag, isAuthenticated]);
+
+  // AI 리포트는 비용이 큰 LLM 호출이라(services/opponent_ai_report.py) 탭을 처음 열 때만
+  // 지연 조회한다(MyTeamAnalysisPage와 동일한 패턴). resolvedOpponent가 정해지기 전엔
+  // 대기 - 데모 링크 자동 치환 중에 URL의 teamName/teamTag로 잘못 조회하지 않기 위함.
+  useEffect(() => {
+    if (activeTab !== 'AI 리포트' || aiReportRequested || !resolvedOpponent) return;
+    let active = true;
+    setAiReportRequested(true);
+    fetchTeamAiReport(resolvedOpponent.name, resolvedOpponent.tag).then((data) => {
+      if (!active) return;
+      setAiReport(data);
+      setAiReportSettled(true);
+    });
+    return () => { active = false; };
+  }, [activeTab, aiReportRequested, resolvedOpponent]);
 
   // 승률은 프로필·분석 요청의 완료를 기다리지 않고 먼저 표시한다.
   if (!prediction) return <LoadingText full />;
@@ -133,7 +163,9 @@ export default function MatchPredictionPage() {
         analysisData ? <AnalysisTab analysis={analysisData} /> : <LoadingText />
       ) : null}
       {activeTab === 'AI 리포트' ? (
-        <AiReportTab report={prediction.aiReport} opponentName={displayOpponentTeam.name} />
+        aiReportSettled ? (
+          <AiReportTab report={aiReport} opponentName={displayOpponentTeam.name} />
+        ) : <LoadingText />
       ) : null}
     </div>
   );

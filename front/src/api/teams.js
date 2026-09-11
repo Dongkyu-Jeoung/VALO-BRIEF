@@ -51,3 +51,17 @@ export function fetchTeamAnalysis(teamName, teamTag) {
     'fetchTeamAnalysis'
   );
 }
+
+// 승부예측 "AI 리포트" 탭(상대팀 인사이트) - 백엔드가 아직 재료(team_engagement_cache)가
+// 없으면 null을 정상 응답(200)으로 준다(에러가 아님) - withFallback은 실제로 던져진
+// 예외에만 mock으로 대체하므로 null은 그대로 통과해 AiReportTab이 "준비 중" 안내를
+// 보여준다.
+export function fetchTeamAiReport(teamName, teamTag) {
+  const cleanName = encodeURIComponent((teamName || '').trim());
+  const cleanTag = encodeURIComponent((teamTag || '').trim());
+  return withFallback(
+    () => httpClient.get(`/api/teams/${cleanName}/${cleanTag}/ai-report`),
+    predictionMock.aiReport,
+    'fetchTeamAiReport'
+  );
+}

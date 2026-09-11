@@ -2,18 +2,20 @@
 승부예측 페이지 "분석" 탭 ③번(교전 매치업 예측) 전용 모듈.
 server/승부예측_성능_분석.md 6~7번 참고.
 
-build_engagement_prediction()은 학습된 모델(models/engagement_model.pkl)이 있으면 그걸로
-예측하고, 없으면(아직 학습 전 - 정상 상태) 결정론적 통계(6-3번 "0단계")로 값을 채워서
-modelVersion="heuristic-v0"로 표시해 내려준다. 학습된 모델의 입력 피처는 이 결정론적
-계산과 완전히 같은 함수(_trade_success_rate/_duelist_avg_acs)로 만든다 - ml/train_
-engagement_model.py가 학습에 쓰는 피처와 여기 추론에 쓰는 피처가 어긋나면 안 되기 때문.
+build_engagement_prediction()은 학습된 모델(models/engagement_meta_model.pkl - base
+모델 2개와 메타 모델이 전부 한 파일에 들어있다, ml/train_engagement_meta_model.py 참고)이
+있으면 그걸로 예측하고, 없으면(아직 학습 전 - 정상 상태) 결정론적 통계(6-3번 "0단계")로
+값을 채워서 modelVersion="heuristic-v0"로 표시해 내려준다. 학습된 모델의 입력 피처는
+이 결정론적 계산과 완전히 같은 함수(_trade_success_rate/_duelist_avg_acs)로 만든다 -
+학습에 쓰는 피처와 여기 추론에 쓰는 피처가 어긋나면 안 되기 때문.
 
-추가로 models/engagement_meta_model.pkl이 있으면(ml/train_engagement_meta_model.py가
-생성하는 스태킹 메타 모델) base 모델 두 개(trade_model/duelist_model)의 예측치를 다시
-입력으로 받아 "최종 교전 승률"(finalPrediction)을 하나 더 계산해 응답에 얹는다 - 두
-base 모델 출력에 얼마나 가중치를 줄지는 이 메타 모델이 실제 매치 승패로 학습해서 정한다
-(교전매치업_예측_분석.md 8번 참고). 메타 모델이 없으면 이 키 자체가 응답에 없다(하위 호환 - 기존 프론트 계약을
-깨지 않음).
+2026-09-11: 원래 base 모델(engagement_model.pkl)과 메타 모델(engagement_meta_model.pkl)을
+파일 2개로 따로 학습·저장했으나, 따로 재학습하다 버전이 어긋나는 사고가 있어 하나로
+합쳤다 - 이제 artifact 하나 안에 trade_model/duelist_model/meta_model이 전부 들어있다.
+artifact["meta_model"]이 None이면(메타 학습에 쓸 승패 라벨 표본이 아직 부족한 경우)
+"최종 교전 승률"(finalPrediction) 키 자체를 응답에서 뺀다(하위 호환 - 기존 프론트
+계약을 깨지 않음). 어느 base 입력에 얼마나 가중치를 줄지는 하드코딩이 아니라 메타
+모델이 실제 매치 승패로 학습해서 정한다(교전매치업_예측_분석.md 8번 참고).
 
 주의(중요): 트레이드 성공률 계산은 v2/match 스키마(services/henrik_api.py::get_match_detail
 가 주는 형태 - killer_puuid/victim_puuid/kill_time_in_round가 최상위 평면 필드)를 전제로
@@ -41,44 +43,26 @@ TRADE_WINDOW_MS = 5000
 # 값(5)으로 맞춰 일관성을 유지한다. ml/train_engagement_model.py도 이 상수를 그대로 쓴다.
 RECENT_MATCHES = 5
 
-MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_model.pkl"
-# 스태킹 메타 모델(ml/train_engagement_meta_model.py) - trade_model/duelist_model(위 두 base
-# 모델)의 예측치를 입력으로 받아 "최종 교전 승률" 하나로 합치는 로지스틱 회귀. base 모델과
-# 마찬가지로 파일이 없으면(아직 학습 전) 조용히 건너뛴다 - 8번(VALO-BRIEF 루트의 교전매치업_예측_분석.md)
-# 참고.
-META_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_meta_model.pkl"
+# base 모델(trade_model/duelist_model) + 메타 모델(meta_model, 없을 수 있음)이 전부
+# 한 파일에 들어있다 - ml/train_engagement_meta_model.py가 유일한 저장 지점.
+MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_meta_model.pkl"
 
 # model_loader.py처럼 모듈 임포트 시점에 joblib.load()를 바로 하면, 파일이 아직 없는
 # 지금 상태에서 서버 전체가 임포트 에러로 못 뜬다 - 그래서 여기서는 첫 호출 때 지연 로드하고,
 # 파일이 없으면 조용히 None으로 남겨서 "모델 학습 전" 상태를 정상 동작으로 처리한다.
 _artifact = None
 _artifact_loaded = False
-_meta_artifact = None
-_meta_artifact_loaded = False
 
 
 def _get_artifact():
-    """학습된 모델 아티팩트(dict: trade_model/duelist_model/feature_columns, ml/
-    train_engagement_model.py가 저장하는 형식)가 있으면 로드해서 캐싱, 없으면
-    None(정상 - 아직 학습 전)."""
+    """학습된 모델 아티팩트(dict: trade_model/duelist_model/feature_columns/meta_model
+    (None일 수 있음)/meta_feature_columns, ml/train_engagement_meta_model.py가 저장하는
+    형식)가 있으면 로드해서 캐싱, 없으면 None(정상 - 아직 학습 전)."""
     global _artifact, _artifact_loaded
     if not _artifact_loaded:
         _artifact = joblib.load(MODEL_PATH) if MODEL_PATH.exists() else None
         _artifact_loaded = True
     return _artifact
-
-
-def _get_meta_artifact():
-    """스태킹 메타 모델 아티팩트(dict: meta_model/model_version, ml/train_engagement_
-    meta_model.py가 저장하는 형식). base 모델(_get_artifact)이 있어야만 의미가 있지만,
-    base 모델 유무와 별개로 그냥 파일 존재 여부만 본다 - 메타 모델이 아직 없으면(표본
-    부족 등) None이고, 이때 _predict_with_model은 finalPrediction 없이 기존 trade/
-    duelistMatchup만 내려준다(하위 호환)."""
-    global _meta_artifact, _meta_artifact_loaded
-    if not _meta_artifact_loaded:
-        _meta_artifact = joblib.load(META_MODEL_PATH) if META_MODEL_PATH.exists() else None
-        _meta_artifact_loaded = True
-    return _meta_artifact
 
 
 def _team_roster(match: dict, team_name: str, team_tag: str) -> tuple[str | None, set[str]]:
@@ -247,23 +231,24 @@ def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs,
             "theirWinRate": round(100 - predicted_trade, 1),
         },
         "duelistMatchup": duelist_matchup,
-        "modelVersion": artifact.get("model_version", "engagement-v1"),
+        "modelVersion": artifact.get("model_version", "engagement-v2"),
     }
 
     # 스태킹 메타 모델 - 위 두 base 모델의 예측치(P_trade=트레이드 성공률, P_match=듀얼리스트
     # 매치업 정규화 점수)를 입력으로 받아 "최종 교전 승률" 하나로 합친다. 두 입력에 실제로
     # 얼마나 가중치를 주는지는 하드코딩이 아니라 ml/train_engagement_meta_model.py가 실제
     # 매치 승패(label_win)로 학습해서 정한다 - 8번(VALO-BRIEF 루트의 교전매치업_예측_분석.md) 참고.
-    meta_artifact = _get_meta_artifact()
-    if meta_artifact is not None:
+    # 표본 부족으로 메타 단계가 아직 안 됐으면 artifact["meta_model"]이 None이다.
+    meta_model = artifact.get("meta_model")
+    if meta_model is not None:
         p_trade = result["trade"]["ourWinRate"]
         p_match = duelist_matchup["ourScore"]
-        meta_X = pd.DataFrame([{"p_trade": p_trade, "p_match": p_match}])[meta_artifact["feature_columns"]]
-        our_final = float(meta_artifact["meta_model"].predict_proba(meta_X)[0][1]) * 100
+        meta_X = pd.DataFrame([{"p_trade": p_trade, "p_match": p_match}])[artifact["meta_feature_columns"]]
+        our_final = float(meta_model.predict_proba(meta_X)[0][1]) * 100
         result["finalPrediction"] = {
             "ourWinRate": round(our_final, 1),
             "theirWinRate": round(100 - our_final, 1),
-            "modelVersion": meta_artifact.get("model_version", "engagement-meta-v1"),
+            "modelVersion": artifact.get("model_version", "engagement-meta-v2"),
         }
 
     return result
