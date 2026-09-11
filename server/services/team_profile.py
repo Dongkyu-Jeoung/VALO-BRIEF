@@ -118,9 +118,12 @@ def _death_locations(match: dict, our_puuids: set[str], map_name_en: str) -> lis
 def _sorted_roster_agents(characters: list[str], agents: dict) -> list[str]:
     """rosterAgents(표시용 요원 리스트)를 역할군 기준으로 정렬. 같은 5인 조합이면 매치마다
     항상 같은 순서로 나오게 하기 위함 - _AGENT_ROLE_ORDER 상단 주석 참고. 정렬 실패 원인이
-    되는 미확인 캐릭터명은 예외를 던지지 않고 맨 뒤로 보낸다(방어적 fallback)."""
+    되는 미확인 캐릭터명은 예외를 던지지 않고 맨 뒤로 보낸다(방어적 fallback).
+    .replace("/", "") - Henrik이 "KAY/O"처럼 슬래시 포함 이름을 주는데 ref_agents엔
+    "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(2026-09-11, 35개 매치에서
+    KAY/O 참가 시 agent_uuid가 계속 NULL로 저장되던 버그의 원인으로 실측 확인)."""
     def sort_key(character: str) -> tuple[int, str]:
-        meta = agents["by_name"].get((character or "").lower()) or {}
+        meta = agents["by_name"].get((character or "").lower().replace("/", "")) or {}
         role_rank = _AGENT_ROLE_ORDER.get(meta.get("role_type"), 99)
         return role_rank, character or ""
 
@@ -204,7 +207,8 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         mstats = mvp_player.get("stats") or {}
         shots = (mstats.get("headshots") or 0) + (mstats.get("bodyshots") or 0) + (mstats.get("legshots") or 0)
         mkills, mdeaths, massists = mstats.get("kills", 0), mstats.get("deaths", 0), mstats.get("assists", 0)
-        agent_meta = agents["by_name"].get((mvp_player.get("character") or "").lower())
+        # .replace("/", "") - _sorted_roster_agents 주석 참고(KAY/O 매칭 문제).
+        agent_meta = agents["by_name"].get((mvp_player.get("character") or "").lower().replace("/", ""))
         agent_ko = (agent_meta or {}).get("name_ko") or mvp_player.get("character") or "-"
         mvp = {
             "agent": agent_ko,
@@ -326,9 +330,10 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             pbucket["roundsPlayed"] += ps.get("roundsPlayed", 0)
 
         # rosterAgents는 이미 _parse_team_match에서 역할군 순서로 정렬되어 들어온다.
+        # .replace("/", "") - _sorted_roster_agents 주석 참고(KAY/O 매칭 문제).
         agent_names = []
         for char in r.get("rosterAgents", []):
-            meta = agents["by_name"].get(char.lower())
+            meta = agents["by_name"].get(char.lower().replace("/", ""))
             agent_names.append((meta or {}).get("name_ko") or char)
         if agent_names:
             b["combos"].append({"agents": agent_names, "won": r["result"] == "win"})
@@ -415,7 +420,8 @@ def _player_ranking(all_roster_stats: list, agents: dict, limit: int = 5) -> lis
             + (r.get("stats") or {}).get("legshots", 0)
             for r in records
         )
-        agent_meta = agents["by_name"].get(bucket["character"].lower())
+        # .replace("/", "") - _sorted_roster_agents 주석 참고(KAY/O 매칭 문제).
+        agent_meta = agents["by_name"].get(bucket["character"].lower().replace("/", ""))
         ranked.append({
             "name": bucket["name"],
             "acs": round(sum(acs_values) / n) if n else 0,
