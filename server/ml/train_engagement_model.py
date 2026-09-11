@@ -36,6 +36,11 @@ from ml.engagement_training import FEATURE_COLUMNS, LABEL_COLUMNS, build_trainin
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_model.pkl"
 MODEL_VERSION = "engagement-v1"
 
+# ml/train_engagement_meta_model.py가 스태킹용 out-of-fold 예측을 만들 때 여기 배포되는
+# trade_model/duelist_model과 똑같은 하이퍼파라미터로 재현해야 하므로(다르면 메타 모델이
+# 학습한 "base 모델의 특성"과 실제 배포된 base 모델의 특성이 어긋난다) 상수로 공유한다.
+BASE_MODEL_PARAMS = dict(n_estimators=200, max_depth=4, learning_rate=0.05, random_state=42)
+
 # 표본이 이보다 적으면 학습을 거부한다 - 6개 피처짜리 회귀 모델이 train/test로 나눠도
 # 최소한의 검증이 되려면 이 정도는 있어야 한다는 보수적인 최초 기준(정확한 최소치는
 # 데이터가 쌓이는 대로 학습/검증 곡선을 보면서 재조정 - server/승부예측_성능_분석.md
@@ -88,10 +93,10 @@ def train_engagement_model(db=None, min_samples: int = MIN_SAMPLES, api_url: str
         X, y_trade, y_duelist, test_size=0.2, random_state=42
     )
 
-    trade_model = XGBRegressor(n_estimators=200, max_depth=4, learning_rate=0.05, random_state=42)
+    trade_model = XGBRegressor(**BASE_MODEL_PARAMS)
     trade_model.fit(X_train, y_trade_train)
 
-    duelist_model = XGBRegressor(n_estimators=200, max_depth=4, learning_rate=0.05, random_state=42)
+    duelist_model = XGBRegressor(**BASE_MODEL_PARAMS)
     duelist_model.fit(X_train, y_duelist_train)
 
     # 베이스라인(항상 학습 데이터의 평균만 예측)과 비교 - 4번에서 지적한 "검증 없이 그냥

@@ -15,6 +15,10 @@ import DuelCompareBar from '../common/DuelCompareBar';
  *   trade: { ourWinRate: number, theirWinRate: number },       // 1대1 트레이드 성공률 예측(%)
  *   duelistMatchup: { ourScore: number, theirScore: number, favor: 'us'|'them'|'even' },
  *   modelVersion?: string,
+ *   finalPrediction?: { ourWinRate: number, theirWinRate: number },  // 스태킹 메타 모델
+ *     - trade/duelistMatchup 두 예측을 학습된 가중치로 합친 "최종 교전 승률". 메타 모델이
+ *       아직 없으면(server/ml/train_engagement_meta_model.py 미실행) 이 키 자체가 없다 -
+ *       교전매치업_예측_분석.md 8번 참고.
  * }
  */
 export default function EngagementPredictionBlock({
@@ -27,7 +31,8 @@ export default function EngagementPredictionBlock({
     return (
       <div className="analysis-row">
         <div className="analysis-row-head">
-          <h5>{title} <span className="tag">AI</span></h5>
+          <h5>{title}</h5>
+          {/* <span className="tag">AI</span> */}
         </div>
         <div className="empty-text">
           아직 학습된 예측 모델이 없어 이 매치업의 교전 예측을 준비 중입니다.
@@ -46,7 +51,8 @@ export default function EngagementPredictionBlock({
   return (
     <div className="analysis-row">
       <div className="analysis-row-head">
-        <h5>{title} <span className="tag">AI</span></h5>
+        <h5>{title}</h5>
+        {/* <span className="tag">AI</span> */}
       </div>
 
       <div className="duel-compare-block">
@@ -69,14 +75,28 @@ export default function EngagementPredictionBlock({
           rightLabel={theirLabel}
           rightPct={duel.theirScore}
         />
-        <div className={`matchup-favor-text ${favorClass}`.trim()}>
-          예상 결과: <span>{favorText}</span>
-        </div>
       </div>
 
-      {data.modelVersion ? (
-        <div className="empty-text model-version-note">모델 버전: {data.modelVersion}</div>
+      {data.finalPrediction ? (
+        <div className="duel-compare-block">
+          <div className="duel-compare-title">최종 교전 승률 (트레이드 + 듀얼리스트 매치업 종합)</div>
+          <div className="duel-compare-spacer" />
+          <DuelCompareBar
+            leftLabel={ourLabel}
+            leftPct={data.finalPrediction.ourWinRate}
+            rightLabel={theirLabel}
+            rightPct={data.finalPrediction.theirWinRate}
+          />
+          <div className={`matchup-favor-text ${favorClass}`.trim()}>
+            예상 결과: <span>{favorText}</span>
+          </div>
+        </div>
+
       ) : null}
+
+      {/* {data.modelVersion ? (
+        <div className="empty-text model-version-note">모델 버전: {data.modelVersion}</div>
+      ) : null} */}
     </div>
   );
 }

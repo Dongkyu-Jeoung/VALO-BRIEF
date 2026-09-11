@@ -107,7 +107,9 @@ async def get_team_profile(
 
 
 @router.get("/{team_name}/{team_tag}/quick-analysis")
-async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = Depends(get_db)):
+async def get_team_quick_analysis(
+    team_name: str, team_tag: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
     """QuickAnalysisModal(통합검색 '팀명#태그' 팝업)용 최근 5게임 요약 조회.
     get_team_profile과 동일하게 team_info + history를 동시에 불러온 뒤 최근 매치 상세를
     한 번 더 동시에 불러오지만, 매치 건수는 QUICK_ANALYSIS_MATCH_LIMIT(5)로 더 적게 가져온다."""
@@ -123,8 +125,17 @@ async def get_team_quick_analysis(team_name: str, team_tag: str, db: Session = D
     league_matches = (history or {}).get("league_matches") or []
     recent = sorted(league_matches, key=lambda m: m.get("started_at") or "", reverse=True)
     match_ids = [m["id"] for m in recent[:QUICK_ANALYSIS_MATCH_LIMIT] if m.get("id")]
+    started_at_by_id = {m["id"]: m.get("started_at") for m in recent if m.get("id")}
 
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
+    # get_team_profile/get_team_analysis와 동일한 이유로 write-through를 백그라운드로 미룬다 -
+    # 이 팝업은 원래 team_engagement_cache에 전혀 안 쌓였는데(quick-analysis만 유일하게
+    # 이 호출이 빠져 있었음), 여기서 조회한 매치도 다른 검색 경로와 똑같이 학습 데이터로
+    # 누적되도록 추가한다(_accumulate_match_history_task 참고). QUICK_ANALYSIS_MATCH_LIMIT(5)
+    # 건뿐이라 write-through 비용도 작다.
+    background_tasks.add_task(
+        _accumulate_match_history_task, match_ids, list(match_details), started_at_by_id
+    )
 
     return build_quick_analysis(
         db,

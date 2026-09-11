@@ -106,50 +106,29 @@ def build_player_feature(name: str, tag: str, db: Session | None = None, puuid: 
     #     f"puuid={puuid}"
     # )
 
-    # 2. 최근 5경기
-    matches = get_matches_v4(
-        REGION,
-        PLATFORM,
-        puuid,
-        RECENT_MATCHES
-    )
+    # 2. 최근 5경기 - get_matches_v4(total_matches)는 항상 처음(start=0)부터 그 개수만큼의
+    # "원본" 매치를 준다(모드 무관). 그중 데스매치/팀 데스매치/에스컬레이션/5v5가 아닌 커스텀은
+    # extract_player_rows_from_match가 빈 리스트를 반환해 걸러지므로, 최근 5경기가 하필 전부
+    # 그런 모드면 유효 표본이 0~4개로 부족해질 수 있다(이 선수 하나 때문에 예측 전체가
+    # ValueError로 실패했던 원인). 부족하면 더 넓게(최대 3배) 훑어서 채운다 - get_match_detail_v4의
+    # _MATCH_DETAIL_CACHE 덕에 이미 받은 매치는 다시 네트워크를 안 탄다.
+    def _collect_rows(total_matches):
+        matches = get_matches_v4(REGION, PLATFORM, puuid, total_matches)
+        collected = []
+        for m in matches:
+            match_id = m["metadata"]["match_id"]
+            detail = get_match_detail_v4(REGION, match_id)
+            if detail is None:
+                continue
+            player_rows = extract_player_rows_from_match(detail, puuid)
+            target_row = next((row for row in player_rows if row.get("puuid") == puuid), None)
+            if target_row is not None:
+                collected.append(target_row)
+        return collected
 
-    # 디버그
-    # print(
-    #     f"[PLAYER FEATURE DEBUG] "
-    #     f"target_puuid={puuid}"
-    # )
-
-    rows = []
-
-    for m in matches:
-
-        match_id = m["metadata"]["match_id"]
-
-        detail = get_match_detail_v4(
-            REGION,
-            match_id
-        )
-
-        if detail is None:
-            continue
-
-        player_rows = extract_player_rows_from_match(
-            detail,
-            puuid
-        )
-
-        target_row = next(
-            (
-                row
-                for row in player_rows
-                if row.get("puuid") == puuid
-            ),
-            None
-        )
-
-        if target_row is not None:
-            rows.append(target_row)
+    rows = _collect_rows(RECENT_MATCHES)
+    if len(rows) < RECENT_MATCHES:
+        rows = _collect_rows(RECENT_MATCHES * 3)[:RECENT_MATCHES]
 
     if len(rows) == 0:
         raise ValueError(f"{name} 최근 경기 없음")
