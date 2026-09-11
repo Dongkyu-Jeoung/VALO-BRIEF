@@ -219,6 +219,10 @@ def _build_prompt(context: dict, roster: list[dict], details: dict[str, dict]) -
         f'이 팀의 정식 이름은 "{team_name}"이다 - intro/strengths/weaknesses/tactic에서 '
         f'팀을 가리킬 때는 항상 이름 뒤에 "팀"을 붙여서 써라(예: "{team_name} 팀은 ...", '
         f'"{team_name} 팀의 ..." - 빈 괄호나 플레이스홀더 없이, "팀" 없이 이름만 쓰지도 말 것).\n'
+        "intro/strengths/weaknesses/tactic 안에서 로스터의 특정 선수 이름을 언급할 때도 "
+        '마찬가지로 이름 뒤에 "선수"를 붙여서 써라(예: "duk3 선수는 ...", "SacR1ficE 선수의 '
+        '..." - 이름만 단독으로 쓰지 말 것). playerFeedback은 name/role 필드가 이미 '
+        "따로 있으니 그 안의 strength/weakness 문장에서는 이름을 반복해서 부르지 않아도 된다.\n"
         "숫자 사용 규칙(intro/strengths/weaknesses/tactic은 물론 playerFeedback의 "
         "strength/weakness에도 예외 없이 똑같이 적용):\n"
         "- 절대 쓰면 안 되는 것: ACS, K/D나 KD 비율(예: \"1.05\", \"0.71\", \"5.0 KD\"), "
