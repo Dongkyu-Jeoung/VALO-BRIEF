@@ -376,7 +376,11 @@ def _insert_match(
         stat_row.adr = round((player.get("damage_made") or 0) / rounds_played) if rounds_played else None
         stat_row.acs = round((stats.get("score") or 0) / rounds_played) if rounds_played else None
 
-        agent = agent_meta.get(str(player.get("character") or "").lower())
+        # .replace("/", "") - Henrik이 "KAY/O"처럼 슬래시 포함 이름을 주는데 ref_agents엔
+        # "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(2026-09-11, KAY/O 참가
+        # 매치에서 agent_uuid가 계속 NULL로 저장되던 버그의 원인으로 실측 확인 -
+        # services/team_profile.py의 동일 주석 참고).
+        agent = agent_meta.get(str(player.get("character") or "").lower().replace("/", ""))
         stat_row.agent_uuid = (agent or {}).get("uuid")
         stat_row.role_type = ROLE_LABELS.get((agent or {}).get("role_type"))
 

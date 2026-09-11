@@ -32,7 +32,6 @@ routers/teams.py가 이미 받아온 match_details를 그 자리에서 넘기면
 from datetime import datetime, timezone
 
 from sqlalchemy import func, text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
     
 from ml import engagement_predictor
@@ -188,18 +187,6 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     if match_row is None:
         match_row = Match(match_id=match_id)
         db.add(match_row)
-        try:
-            # 같은 매치를 다른 세션이 거의 동시에 처음 저장하는 경우(예: /api/teams/{team}/{tag}와
-            # /api/teams/{team}/{tag}/analysis가 같은 상대팀을 거의 동시에 조회) 여기서 미리
-            # 충돌을 확인한다 - 늦게 commit 시점에 알면 선수별 upsert까지 다 한 뒤라 그 작업이
-            # 통째로 낭비된다(team_engagement_cache.upsert_match_engagement가 이미 겪었던 것과
-            # 같은 종류의 경합 - services/team_engagement_cache.py 참고).
-            db.flush()
-        except IntegrityError:
-            db.rollback()
-            match_row = db.get(Match, match_id)
-            if match_row is None:
-                raise  # 중복 키가 아닌 다른 문제였다면 그대로 전파
 
     # 이미 알고 있던 팀 id를 이번 조회 결과(예: 조회 실패)로 덮어써서 None으로 되돌리지 않는다
     match_row.team_a_id = proposed_a if proposed_a is not None else match_row.team_a_id
@@ -258,7 +245,11 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             team_id, mvp_puuid = None, None
 
         character = player.get("character") or ""
-        agent_meta = agent_info.get(character.lower())
+        # .replace("/", "") - Henrik이 "KAY/O"처럼 슬래시 포함 이름을 주는데 ref_agents엔
+        # "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(2026-09-11, KAY/O 참가
+        # 매치에서 agent_uuid가 계속 NULL로 저장되던 버그의 원인으로 실측 확인 -
+        # services/team_profile.py의 동일 주석 참고).
+        agent_meta = agent_info.get(character.lower().replace("/", ""))
         stats = player.get("stats") or {}
         heads = stats.get("headshots") or 0
         bodies = stats.get("bodyshots") or 0
