@@ -325,6 +325,10 @@ def _insert_match(
     opp_team = _find_registered_team(db, opp_roster.get("name"), opp_roster.get("tag"))
     opp_team_id = opp_team.team_id if opp_team else None
     winner_team_id = our_team_id if our_info.get("has_won") else opp_team_id
+    # team_engagement_cache 전용 id - services/match_history.py의 동일 처리와 같은 이유
+    # (matches.team_b_id는 teams FK가 걸려 있어 미가입 팀이면 None이어야 하지만,
+    # team_engagement_cache.team_id는 FK가 없어 Henrik roster.id를 그대로 써도 된다).
+    opp_engagement_id = opp_roster.get("id")
 
     game_start = _parse_game_start(metadata.get("game_start"))
 
@@ -400,14 +404,14 @@ def _insert_match(
     # 바로 채운다(services/team_engagement_cache.py 모듈 docstring 참고).
     team_engagement_cache.upsert_match_engagement(
         db, our_team_id, match_id,
-        opponent_team_id=opp_team_id,
+        opponent_team_id=opp_engagement_id,
         game_start=game_start,
         trade_rate=engagement_predictor.trade_rate_from_matches([match], team_name, team_tag),
         duelist_acs=engagement_predictor.duelist_acs_from_matches([match], team_name, team_tag),
     )
-    if opp_team_id:
+    if opp_engagement_id:
         team_engagement_cache.upsert_match_engagement(
-            db, opp_team_id, match_id,
+            db, opp_engagement_id, match_id,
             opponent_team_id=our_team_id,
             game_start=game_start,
             trade_rate=engagement_predictor.trade_rate_from_matches(

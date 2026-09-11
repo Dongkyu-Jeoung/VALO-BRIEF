@@ -88,7 +88,7 @@ export default function MyTeamAnalysisPage() {
         ) : <LoadingText />
       ) : null}
 
-      {activeTab === 'AI 리포트' ? (aiReport ? <AiReportTab report={aiReport} teamName={myTeamProfileMock.name} /> : <LoadingText />) : null}
+      {activeTab === 'AI 리포트' ? (aiReport ? <AiReportTab report={aiReport} teamName={stats?.name ?? myTeamProfileMock.name} /> : <LoadingText />) : null}
     </div>
   );
 }

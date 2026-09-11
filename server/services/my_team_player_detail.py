@@ -33,6 +33,8 @@ import math
 from datetime import datetime
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, defer
 
 from ml.engagement_predictor import _duelist_matchup_from_acs
@@ -114,19 +116,14 @@ def _aggregate_player_round_phase(records: list[dict]) -> dict:
 
 
 def _upsert_summary_row(db: Session, puuid: str, stat_type: str, dimension_key: str, metrics: dict) -> None:
-    row = (
-        db.query(PlayerStatsSummary)
-        .filter(
-            PlayerStatsSummary.puuid == puuid,
-            PlayerStatsSummary.stat_type == stat_type,
-            PlayerStatsSummary.dimension_key == dimension_key,
-        )
-        .first()
+    """(puuid, stat_type, dimension_key) 한 행을 원자적으로 upsert한다 -
+    services/my_team_analysis.py::_upsert_summary_row와 동일한 이유(TOCTOU 경합
+    실측 확인, uq_player_stats 중복 키 IntegrityError)로 원자적 upsert로 바꿨다."""
+    stmt = mysql_insert(PlayerStatsSummary).values(
+        puuid=puuid, stat_type=stat_type, dimension_key=dimension_key, metrics_json=metrics,
     )
-    if row is None:
-        row = PlayerStatsSummary(puuid=puuid, stat_type=stat_type, dimension_key=dimension_key)
-        db.add(row)
-    row.metrics_json = metrics
+    stmt = stmt.on_duplicate_key_update(metrics_json=stmt.inserted.metrics_json)
+    db.execute(stmt)
 
 
 def _kill_weapon_uuid(kill_event: dict, fallback_uuid: str | None) -> str | None:
@@ -432,7 +429,18 @@ def build_my_team_player_detail(db: Session, team_id: str, puuid: str) -> dict |
 
     rows = db.query(PlayerStatsSummary).filter(PlayerStatsSummary.puuid == puuid).all()
     if not rows:
-        _compute_and_cache(db, team_id, puuid)
+        # services/my_team_analysis.py::build_my_team_analysis와 동일한 이유(원자적
+        # upsert로도 여러 행 upsert가 한 트랜잭션에 몰리면 데드락이 날 수 있음, 실측
+        # 재현 확인) - 롤백 후 재조회, 그래도 비어있으면 한 번 더 시도.
+        for attempt in range(2):
+            try:
+                _compute_and_cache(db, team_id, puuid)
+                break
+            except (IntegrityError, OperationalError):
+                db.rollback()
+                rows = db.query(PlayerStatsSummary).filter(PlayerStatsSummary.puuid == puuid).all()
+                if rows or attempt == 1:
+                    break
         rows = db.query(PlayerStatsSummary).filter(PlayerStatsSummary.puuid == puuid).all()
 
     round_info_by_map: dict = {}

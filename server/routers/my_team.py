@@ -1,6 +1,6 @@
 """
-로그인한 팀 전용 "우리팀 분석" 페이지. 통계/팀 분석/개인 분석(목록+상세) 탭이 구현되어
-있다 - AI 리포트 탭은 아직 이 라우터에 없음(front도 그 부분은 기존 mock 경로를 그대로 쓴다).
+로그인한 팀 전용 "우리팀 분석" 페이지. 통계/팀 분석/개인 분석(목록+상세)/AI 리포트
+탭이 모두 구현되어 있다 - AI 리포트는 AI_리포트_개발_설계.md, services/ai_report.py 참고.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.team import Team
 from routers.auth import get_current_team
-from services import my_team_analysis, my_team_player_detail, my_team_players, my_team_stats
+from services import ai_report, my_team_analysis, my_team_player_detail, my_team_players, my_team_stats
 
 router = APIRouter(prefix="/api/my-team", tags=["my-team"])
 
@@ -44,3 +44,11 @@ def get_my_team_analysis(current: Team = Depends(get_current_team), db: Session 
     """team_stats_summary에 캐싱된 값을 읽어 응답한다. 캐시가 비어있으면(첫 진입)
     matches/match_player_stats에서 라운드 단위로 계산해 채운 뒤 응답한다."""
     return my_team_analysis.build_my_team_analysis(db, current.team_id)
+
+
+@router.get("/ai-report")
+async def get_my_team_ai_report(current: Team = Depends(get_current_team), db: Session = Depends(get_db)):
+    """다른 탭이 이미 집계한 통계를 모아 OpenAI로 팀 전술 리포트를 생성(insights
+    테이블에 캐싱됨 - 새 매치가 안 쌓이면 재호출하지 않는다). OPENAI_API_KEY가
+    없거나 호출이 실패해도 폴백 템플릿으로 항상 200을 응답한다(services/ai_report.py 참고)."""
+    return await ai_report.build_my_team_ai_report(db, current)

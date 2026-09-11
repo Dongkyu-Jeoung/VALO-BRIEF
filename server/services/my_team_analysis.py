@@ -29,6 +29,8 @@ import json as json_module
 from datetime import datetime
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, defer
 
 from ml.engagement_predictor import _duelist_matchup_from_acs
@@ -226,21 +228,23 @@ def _aggregate_round_phase(records: list[dict]) -> dict:
 def _upsert_summary_row(
     db: Session, team_id: str, stat_type: str, dimension_key: str, wins: int, losses: int, metrics: dict
 ) -> None:
-    row = (
-        db.query(TeamStatsSummary)
-        .filter(
-            TeamStatsSummary.team_id == team_id,
-            TeamStatsSummary.stat_type == stat_type,
-            TeamStatsSummary.dimension_key == dimension_key,
-        )
-        .first()
+    """(team_id, stat_type, dimension_key) 한 행을 원자적으로 upsert한다.
+
+    2026-09-11 실측 확인: 기존에는 "조회 후 없으면 add"(TOCTOU) 방식이라, 이 팀의
+    "팀 분석"/"AI 리포트" 탭을 거의 동시에 두 번 조회하면(우리팀 분석 페이지가
+    stats/analysis를 병렬로 불러오는 것처럼) 두 세션이 동시에 "없음"을 보고 동시에
+    INSERT를 시도해 uq_team_stats 중복 키 IntegrityError가 실제로 발생했다
+    (services/team_engagement_cache.py::upsert_match_engagement가 2026-09-08에
+    겪었던 것과 같은 종류의 경합). MySQL 네이티브 INSERT ... ON DUPLICATE KEY UPDATE로
+    바꿔 그 경합 자체를 없앤다."""
+    stmt = mysql_insert(TeamStatsSummary).values(
+        team_id=team_id, stat_type=stat_type, dimension_key=dimension_key,
+        wins=wins, losses=losses, metrics_json=metrics,
     )
-    if row is None:
-        row = TeamStatsSummary(team_id=team_id, stat_type=stat_type, dimension_key=dimension_key)
-        db.add(row)
-    row.wins = wins
-    row.losses = losses
-    row.metrics_json = metrics
+    stmt = stmt.on_duplicate_key_update(
+        wins=stmt.inserted.wins, losses=stmt.inserted.losses, metrics_json=stmt.inserted.metrics_json,
+    )
+    db.execute(stmt)
 
 
 def _compute_and_cache(db: Session, team_id: str) -> None:
@@ -448,10 +452,27 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
 
 def build_my_team_analysis(db: Session, team_id: str) -> dict:
     """캐시(team_stats_summary)가 있으면 그대로 읽고, 없으면(첫 진입) 계산해서 채운 뒤
-    읽는다."""
+    읽는다.
+
+    _compute_and_cache는 한 팀당 여러 행(round_phase/engagement/맵별)을 한 트랜잭션
+    안에서 upsert한다 - _upsert_summary_row가 원자적 upsert로 바뀌어(위 함수 참고)
+    중복 키 에러는 없어졌지만, 같은 팀을 거의 동시에 두 세션이 계산하면(예: "팀 분석"
+    탭과 "AI 리포트" 탭이 동시에 이 팀을 처음 조회) 여러 행에 걸친 잠금 순서 차이로
+    데드락(OperationalError 1213)이 날 수 있다(실측 재현 확인). 데드락이든 그 사이
+    다른 세션이 먼저 채워서 생기는 나머지 충돌이든, 롤백 후 캐시를 다시 읽어보면 대부분
+    이미 채워져 있어 재계산 없이 바로 해결된다 - 그래도 비어있으면 한 번 더 계산을
+    시도한다(진짜 일시적 데드락이었던 경우)."""
     rows = db.query(TeamStatsSummary).filter(TeamStatsSummary.team_id == team_id).all()
     if not rows:
-        _compute_and_cache(db, team_id)
+        for attempt in range(2):
+            try:
+                _compute_and_cache(db, team_id)
+                break
+            except (IntegrityError, OperationalError):
+                db.rollback()
+                rows = db.query(TeamStatsSummary).filter(TeamStatsSummary.team_id == team_id).all()
+                if rows or attempt == 1:
+                    break
         rows = db.query(TeamStatsSummary).filter(TeamStatsSummary.team_id == team_id).all()
 
     round_info: dict = {}
