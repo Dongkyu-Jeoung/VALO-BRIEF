@@ -26,6 +26,14 @@ import requests
 _MAPS_API_URL = "https://valorant-api.com/v1/maps"
 _REQUEST_TIMEOUT = 5
 
+# 프론트 gameData.js에 정의된 맵 id와 동일하게 맞춘 목록. valorant-api.com은 "The Range",
+# "Piazza"(연습용) 같은 실제 화면에 없는 맵도 같이 내려주므로, 응답을 프론트가 실제로
+# 아는 맵으로만 필터링하는 데 쓴다.
+_KNOWN_MAP_IDS = {
+    "abyss", "ascent", "bind", "breeze", "corrode", "fracture", "haven",
+    "icebox", "lotus", "pearl", "split", "summit", "sunset",
+}
+
 _coords_by_uuid: dict[str, dict] | None = None
 _coords_by_name: dict[str, dict] | None = None
 
@@ -50,8 +58,9 @@ def _ensure_loaded() -> None:
                 "yMultiplier": m.get("yMultiplier"),
                 "xScalarToAdd": m.get("xScalarToAdd"),
                 "yScalarToAdd": m.get("yScalarToAdd"),
+                "displayIcon": m.get("displayIcon"),  # 미니맵 이미지 URL - get_map_minimaps용
             }
-            if any(v is None for v in coeffs.values()):
+            if any(coeffs[k] is None for k in ("xMultiplier", "yMultiplier", "xScalarToAdd", "yScalarToAdd")):
                 continue  # 이 맵은 계수가 불완전 - 방어적으로 스킵(예: 로테이션 삭제된 구맵)
 
             uuid = str(m.get("uuid") or "").lower()
@@ -93,3 +102,20 @@ def normalize_location(
     nx = y * coeffs["xMultiplier"] + coeffs["xScalarToAdd"]
     ny = x * coeffs["yMultiplier"] + coeffs["yScalarToAdd"]
     return {"x": round(nx * 100, 2), "y": round(ny * 100, 2)}
+
+
+def get_map_minimaps() -> dict[str, str]:
+    """알려진 맵 id(영문 소문자, gameData.js 기준)별 공식 미니맵 이미지 URL 딕셔너리.
+    프론트가 좌표 계산(normalize_location)과 항상 같은 소스(valorant-api.com)의
+    이미지를 쓰도록 하기 위함 - 로컬 이미지와 계수 기준 이미지가 서로 다른 버전이면
+    좌표가 맞아도 화면에서 어긋나 보이는 문제가 있었다(2026-09-11, 스플릿 맵에서 실측
+    확인 - 로컬 파일이 공식 이미지와 다른 구도/크롭이었음). 서버 시작 후 첫 호출에서만
+    valorant-api.com을 부르고(_ensure_loaded), 이후는 캐시만 읽는다."""
+    _ensure_loaded()
+    result = {}
+    for name, coeffs in _coords_by_name.items():
+        if name in _KNOWN_MAP_IDS:
+            icon = coeffs.get("displayIcon")
+            if icon:
+                result[name] = icon
+    return result
