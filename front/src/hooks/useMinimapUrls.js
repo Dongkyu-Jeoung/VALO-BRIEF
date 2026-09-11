@@ -10,7 +10,11 @@ let inflightPromise = null;
 async function fetchMinimapUrls() {
   if (cachedUrls) return cachedUrls;
   if (!inflightPromise) {
-    inflightPromise = fetch('/api/maps/minimaps')
+    // 다른 API 호출들과 동일하게 VITE_API_BASE_URL을 붙인다 - 상대 경로("/api/...")로
+    // 요청하면 프론트 개발 서버(Vite) 자신에게 요청이 가서 index.html이 돌아오는
+    // 문제가 있었다(2026-09-11 확인, vite.config.js에 프록시 설정이 없음).
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    inflightPromise = fetch(`${baseUrl}/api/maps/minimaps`)
       .then((res) => {
         if (!res.ok) throw new Error(`minimap url fetch failed: ${res.status}`);
         return res.json();
