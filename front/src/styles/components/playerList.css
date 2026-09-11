@@ -133,7 +133,10 @@
 }
 
 .user-select {
-  padding: 0 4px 12px 4px;
+  display: flex;
+  align-items: center;
+  margin-top: 20px; 
+  padding: 4px 4px 12px 4px;
   font-size: 13px;
   color: var(--text-2);
 }
