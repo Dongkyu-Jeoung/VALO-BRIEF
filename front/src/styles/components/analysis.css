@@ -324,3 +324,53 @@
   text-align: center;
   padding: 12px 0;
 }
+
+/* ===== 팀원 사망 위치 분석 (DeathMapTracker) ===== */
+.death-map-wrap {
+  background: var(--bg-panel-2);
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  display: flex;
+  justify-content: center;
+}
+
+.death-map-box {
+  position: relative;
+  width: 400px;
+  height: 400px;
+  background: var(--bg-panel-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.death-map-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  max-width: none; /* reset.css의 img{max-width:100%} 무력화 */
+  display: block;
+}
+
+.death-map-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--lose, #ff4655);
+  border-radius: 50%;
+  border: 1px solid #fff;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: transform var(--transition-fast, 0.15s ease);
+}
+
+.death-map-dot:hover {
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+@media (max-width: 480px) {
+  .death-map-box {
+    width: 260px;
+    height: 260px;
+  }
+}

@@ -37,6 +37,7 @@ export default function AnalysisSection({
         data={engagementData ?? analysis?.engagementInfo}
         ourLabel={ourLabel}
         theirLabel={theirLabel}
+        selectedMapId={selectedMapId}
       />
     </>
   );

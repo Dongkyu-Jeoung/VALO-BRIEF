@@ -1,22 +1,21 @@
+import React from 'react';
 import StatInlineGrid from '../common/StatInlineGrid';
 import DuelCompareBar from '../common/DuelCompareBar';
+import DeathMapTracker from './DeathMapTracker';
 
 export default function EngagementInfoBlock({ 
   data, 
   title = '③ 교전 정보', 
   tradeTitle = '트레이드 성공률', 
   ourLabel = '우리팀', 
-  theirLabel = '상대팀' 
+  theirLabel = '상대팀',
+  selectedMapId 
 }) {
-  // 데이터 자체가 없으면 여기서 안전하게 종료
   if (!data) return null;
 
   const duel = data.duelistVsDuelist ?? data.duelistCompare ?? { us: 50, them: 50 };
   const leftPct = duel.us ?? duel.me ?? 50;
   const rightPct = duel.them ?? duel.opponent ?? 50;
-
-  // 스킬 배열도 없을 수 있으니 기본값 처리
-  const skills = data.skills ?? [];
 
   return (
     <div className="analysis-row">
@@ -24,7 +23,6 @@ export default function EngagementInfoBlock({
         <h5>{title}</h5>
       </div>
 
-      {/* 트레이드 성공률 */}
       <div className="duel-compare-block">
         <div className="duel-compare-title">{tradeTitle}</div>
         <StatInlineGrid
@@ -36,27 +34,14 @@ export default function EngagementInfoBlock({
         />
       </div>
 
-      {/* 스킬 사용 유효성 */}
       <div className="duel-compare-block">
-        <div className="duel-compare-title">스킬 사용 유효성 (스킬명 · 교전 성사율 · 성공률)</div>
-        <div className="skill-box-row">
-          {skills.length > 0 ? (
-            skills.map((s) => (
-              <div className="skill-box" key={s.name}>
-                <div className="sk-name">{s.name}</div>
-                <div className="sk-metrics">
-                  <div>교전 성사율<b>{s.engageRate}%</b></div>
-                  <div>성공률<b>{s.successRate}%</b></div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="empty-text">스킬 데이터가 없습니다.</div>
-          )}
-        </div>
+        <div className="duel-compare-title">팀원 사망 위치 분석</div>
+        <DeathMapTracker 
+          selectedMapId={selectedMapId} 
+          deathData={data.deaths ?? []} 
+        />
       </div>
 
-      {/* 타격대 vs 타격대 비교 */}
       <div className="duel-compare-block">
         <div className="duel-compare-title">타격대 vs 타격대 비교</div>
         <DuelCompareBar 
