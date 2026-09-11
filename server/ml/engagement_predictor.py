@@ -8,6 +8,13 @@ modelVersion="heuristic-v0"로 표시해 내려준다. 학습된 모델의 입�
 계산과 완전히 같은 함수(_trade_success_rate/_duelist_avg_acs)로 만든다 - ml/train_
 engagement_model.py가 학습에 쓰는 피처와 여기 추론에 쓰는 피처가 어긋나면 안 되기 때문.
 
+추가로 models/engagement_meta_model.pkl이 있으면(ml/train_engagement_meta_model.py가
+생성하는 스태킹 메타 모델) base 모델 두 개(trade_model/duelist_model)의 예측치를 다시
+입력으로 받아 "최종 교전 승률"(finalPrediction)을 하나 더 계산해 응답에 얹는다 - 두
+base 모델 출력에 얼마나 가중치를 줄지는 이 메타 모델이 실제 매치 승패로 학습해서 정한다
+(교전매치업_예측_분석.md 8번 참고). 메타 모델이 없으면 이 키 자체가 응답에 없다(하위 호환 - 기존 프론트 계약을
+깨지 않음).
+
 주의(중요): 트레이드 성공률 계산은 v2/match 스키마(services/henrik_api.py::get_match_detail
 가 주는 형태 - killer_puuid/victim_puuid/kill_time_in_round가 최상위 평면 필드)를 전제로
 한다. ml/valorant_git.py(별도의 v4/match 기반 승률 예측 파이프라인)의 킬 이벤트는 스키마가
@@ -35,12 +42,19 @@ TRADE_WINDOW_MS = 5000
 RECENT_MATCHES = 5
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_model.pkl"
+# 스태킹 메타 모델(ml/train_engagement_meta_model.py) - trade_model/duelist_model(위 두 base
+# 모델)의 예측치를 입력으로 받아 "최종 교전 승률" 하나로 합치는 로지스틱 회귀. base 모델과
+# 마찬가지로 파일이 없으면(아직 학습 전) 조용히 건너뛴다 - 8번(VALO-BRIEF 루트의 교전매치업_예측_분석.md)
+# 참고.
+META_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_meta_model.pkl"
 
 # model_loader.py처럼 모듈 임포트 시점에 joblib.load()를 바로 하면, 파일이 아직 없는
 # 지금 상태에서 서버 전체가 임포트 에러로 못 뜬다 - 그래서 여기서는 첫 호출 때 지연 로드하고,
 # 파일이 없으면 조용히 None으로 남겨서 "모델 학습 전" 상태를 정상 동작으로 처리한다.
 _artifact = None
 _artifact_loaded = False
+_meta_artifact = None
+_meta_artifact_loaded = False
 
 
 def _get_artifact():
@@ -52,6 +66,19 @@ def _get_artifact():
         _artifact = joblib.load(MODEL_PATH) if MODEL_PATH.exists() else None
         _artifact_loaded = True
     return _artifact
+
+
+def _get_meta_artifact():
+    """스태킹 메타 모델 아티팩트(dict: meta_model/model_version, ml/train_engagement_
+    meta_model.py가 저장하는 형식). base 모델(_get_artifact)이 있어야만 의미가 있지만,
+    base 모델 유무와 별개로 그냥 파일 존재 여부만 본다 - 메타 모델이 아직 없으면(표본
+    부족 등) None이고, 이때 _predict_with_model은 finalPrediction 없이 기존 trade/
+    duelistMatchup만 내려준다(하위 호환)."""
+    global _meta_artifact, _meta_artifact_loaded
+    if not _meta_artifact_loaded:
+        _meta_artifact = joblib.load(META_MODEL_PATH) if META_MODEL_PATH.exists() else None
+        _meta_artifact_loaded = True
+    return _meta_artifact
 
 
 def _team_roster(match: dict, team_name: str, team_tag: str) -> tuple[str | None, set[str]]:
@@ -159,7 +186,7 @@ def duelist_acs_from_matches(matches: list[dict], team_name: str, team_tag: str)
     return sum(acs_values) / len(acs_values)
 
 
-def _normalize_to_100(our_value: float, their_value: float) -> tuple[float, float]:
+def normalize_to_100(our_value: float, their_value: float) -> tuple[float, float]:
     """두 팀의 원본 관측치(각자 독립적으로 계산된 값 - team_engagement_cache.trade_rate처럼
     서로 다른 표본에서 나와 합이 100일 필요가 없는 값)를 "우리 vs 상대" 대결 구도의 0~100
     스코어 쌍으로 정규화한다 - 프론트 DuelCompareBar가 항상 합이 100인 두 값을 그린다고
@@ -173,7 +200,7 @@ def _normalize_to_100(our_value: float, their_value: float) -> tuple[float, floa
 
 def _duelist_matchup_from_acs(our_acs: float, their_acs: float) -> dict:
     """두 팀의 듀얼리스트 평균 ACS를 0~100 스코어로 정규화해서 비교."""
-    our_score, their_score = _normalize_to_100(our_acs, their_acs)
+    our_score, their_score = normalize_to_100(our_acs, their_acs)
 
     # ±5%p 이내는 "팽팽함"으로 본다 - 표본이 적을 때 근소한 차이로 유/불리를 단정하지
     # 않기 위한 안전마진(임의로 정한 임계값 - 데이터가 쌓이면 재검토 대상, 7번 참고).
@@ -210,16 +237,36 @@ def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs,
     predicted_duelist_acs = max(predicted_duelist_acs, 0.0)
     # 학습된 모델은 "team_a(우리팀) 관점 트레이드 성공률"만 예측한다 - 상대팀을 team_a로
     # 놓고 한 번 더 예측하는 게 정확하지만, 지금은 대칭 근사로 (100 - 우리팀 예측치)를
-    # 상대팀 값으로 쓴다(_normalize_to_100과 동일하게 "합이 100인 대결 구도"로 맞추기
+    # 상대팀 값으로 쓴다(normalize_to_100과 동일하게 "합이 100인 대결 구도"로 맞추기
     # 위함 - 데이터가 쌓여 모델이 안정되면 상대팀도 별도로 추론하도록 개선 가능, 7-4번 참고).
-    return {
+    duelist_matchup = _duelist_matchup_from_acs(predicted_duelist_acs, their_duelist_acs or 0.0)
+
+    result = {
         "trade": {
             "ourWinRate": round(predicted_trade, 1),
             "theirWinRate": round(100 - predicted_trade, 1),
         },
-        "duelistMatchup": _duelist_matchup_from_acs(predicted_duelist_acs, their_duelist_acs or 0.0),
+        "duelistMatchup": duelist_matchup,
         "modelVersion": artifact.get("model_version", "engagement-v1"),
     }
+
+    # 스태킹 메타 모델 - 위 두 base 모델의 예측치(P_trade=트레이드 성공률, P_match=듀얼리스트
+    # 매치업 정규화 점수)를 입력으로 받아 "최종 교전 승률" 하나로 합친다. 두 입력에 실제로
+    # 얼마나 가중치를 주는지는 하드코딩이 아니라 ml/train_engagement_meta_model.py가 실제
+    # 매치 승패(label_win)로 학습해서 정한다 - 8번(VALO-BRIEF 루트의 교전매치업_예측_분석.md) 참고.
+    meta_artifact = _get_meta_artifact()
+    if meta_artifact is not None:
+        p_trade = result["trade"]["ourWinRate"]
+        p_match = duelist_matchup["ourScore"]
+        meta_X = pd.DataFrame([{"p_trade": p_trade, "p_match": p_match}])[meta_artifact["feature_columns"]]
+        our_final = float(meta_artifact["meta_model"].predict_proba(meta_X)[0][1]) * 100
+        result["finalPrediction"] = {
+            "ourWinRate": round(our_final, 1),
+            "theirWinRate": round(100 - our_final, 1),
+            "modelVersion": meta_artifact.get("model_version", "engagement-meta-v1"),
+        }
+
+    return result
 
 
 def build_engagement_prediction_from_features(
@@ -246,7 +293,7 @@ def build_engagement_prediction_from_features(
         return _predict_with_model(artifact, team_trade_rate, opponent_trade_rate, team_duelist_acs, opponent_duelist_acs)
 
     duelist_matchup = _duelist_matchup_from_acs(team_duelist_acs or 0.0, opponent_duelist_acs or 0.0)
-    our_trade_pct, their_trade_pct = _normalize_to_100(team_trade_rate or 0.0, opponent_trade_rate or 0.0)
+    our_trade_pct, their_trade_pct = normalize_to_100(team_trade_rate or 0.0, opponent_trade_rate or 0.0)
     return {
         "trade": {
             "ourWinRate": our_trade_pct,

@@ -25,6 +25,7 @@ from database.connection import SessionLocal
 from ml import engagement_predictor
 from models.match import Match
 from models.match_player_stat import MatchPlayerStat
+from models.riot_account import RiotAccount
 from models.team import Team
 from services import henrik_api, team_engagement_cache
 from services.player_profile import ROLE_LABELS
@@ -46,6 +47,18 @@ _map_uuid_cache: dict | None = None
 
 def _now_kst() -> datetime:
     return datetime.now(_KST).replace(tzinfo=None)
+
+
+def _ensure_riot_account_placeholder(db: Session, puuid: str, name: str | None, tag: str | None) -> None:
+    """match_player_stats.puuid FK(NOT NULL, riot_accounts 참조)를 만족시키기 위한 최소
+    placeholder. services/match_history.py::_ensure_riot_account_placeholder와 동일한
+    용도(두 모듈이 같은 테이블에 쓰므로 컨벤션을 맞춤, private 함수라 독립적으로 재구현).
+    이미 있으면 건드리지 않는다. name/tag가 비어 있어도(비공개 계정 등) "-"로 채워서
+    이 선수의 매치 스탯이 손실되지 않게 한다 - 나중에 직접 검색되면 upsert_riot_account가
+    정확한 값으로 갱신한다."""
+    if db.get(RiotAccount, puuid) is not None:
+        return
+    db.add(RiotAccount(puuid=puuid, riot_name=name or "-", riot_tag=tag or "-", region="kr", platform="pc"))
 
 
 def _parse_game_start(value) -> datetime | None:
@@ -340,7 +353,11 @@ def _insert_match(
         puuid = player.get("puuid")
         if not puuid:
             continue
-        upsert_riot_account(db, player)  # match_player_stats.puuid FK 보장
+        # name/tag가 비어 있으면(비공개 계정 등) 정식 upsert가 None을 반환한다 - 이 경우
+        # match_history.py와 동일하게 최소 placeholder라도 넣어서 FK를 만족시키고, 이
+        # 선수의 매치 스탯도 손실 없이 그대로 저장되게 한다.
+        if upsert_riot_account(db, player) is None:
+            _ensure_riot_account_placeholder(db, puuid, player.get("name"), player.get("tag"))
 
         stat_row = MatchPlayerStat(match_id=match_id, puuid=puuid)
         stat_row.team_id = our_team_id if puuid in our_puuids else opp_team_id

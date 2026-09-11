@@ -2,7 +2,7 @@
 .env
 .venv
 .venv/__pychache__
-*.pkl
+#*.pkl
 *.csv
 __pycache__/
 *.__pycache__

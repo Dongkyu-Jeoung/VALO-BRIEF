@@ -1,16 +1,21 @@
 import EmptyImageBox from '../common/EmptyImageBox';
 
+// 부동소수점 뺄셈(100 - 80.2 등)이 19.799999999999997 같은 오차를 만들 수 있어
+// 화면에 보여주기 전에 소수 첫째 자리로 반올림한다.
+const round1 = (n) => Math.round(n * 10) / 10;
+
 export default function PredictBox({
   ourTeam,
   opponentTeam,
-  ourWinChance = 0
+  ourWinChance: ourWinChanceRaw = 0
 }) {
 
   if (!ourTeam || !opponentTeam) {
     return null;
   }
 
-  const theirWinChance = 100 - ourWinChance;
+  const ourWinChance = round1(ourWinChanceRaw);
+  const theirWinChance = round1(100 - ourWinChance);
   const isOurWinHigh = ourWinChance >= theirWinChance;
 
   const total = ourWinChance + theirWinChance;
