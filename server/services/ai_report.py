@@ -47,11 +47,8 @@ ANTHROPIC_API_KEY가 없거나 호출/파싱이 실패하면 서버가 죽지 �
 같은 철학 - AI_리포트_개발_설계.md 6번).
 """
 import json
-import os
-import re
 from datetime import datetime, timedelta, timezone
 
-from anthropic import Anthropic
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -59,35 +56,13 @@ from models.insight import Insight
 from models.match import Match
 from models.team import Team
 from services import my_team_analysis, my_team_player_detail, my_team_players, my_team_stats
-from services.environment import load_environment
+from services.claude_client import generate_with_retry
 
-load_environment()
-
-# 미정 사항(AI_리포트_개발_설계.md 7번) - 비용/응답 품질을 보고 조정 가능하도록 상수로 분리.
-# gpt-4o-mini와 비슷한 비용/속도대의 모델 - 품질을 더 원하면 claude-sonnet-5로 교체.
-MODEL_NAME = "claude-haiku-4-5-20251001"
-MAX_TOKENS = 4096
-# LLM 응답이 스키마를 못 맞추면(로스터 일부 누락 등, 실사용 관찰) 폴백 전에 재시도할 횟수.
-CLAUDE_MAX_ATTEMPTS = 3
 # tactic 항목 개수 범위(우선순위 높은 순서로 2~3개) - 5차 변경.
 TACTIC_MIN_ITEMS = 2
 TACTIC_MAX_ITEMS = 3
 
 _KST = timezone(timedelta(hours=9))
-
-# ml/engagement_predictor.py와 동일한 지연 로드 패턴 - 모듈 임포트 시점에 클라이언트를
-# 만들면 키가 없는 환경(로컬 개발 등)에서 서버 전체가 못 뜬다.
-_client = None
-_client_loaded = False
-
-
-def _get_client():
-    global _client, _client_loaded
-    if not _client_loaded:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        _client = Anthropic(api_key=api_key) if api_key else None
-        _client_loaded = True
-    return _client
 
 
 def _now_kst() -> datetime:
@@ -397,30 +372,6 @@ def _build_prompt(context: dict, roster: list[dict], details: dict[str, dict]) -
     return system_prompt, user_prompt
 
 
-_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
-
-
-def _strip_code_fence(text: str) -> str:
-    """Anthropic Messages API는 OpenAI의 response_format={"type":"json_object"}같은
-    JSON 강제 모드가 없다 - 프롬프트로 "JSON만 응답하라"고 지시해도 가끔 ```json ... ```
-    코드펜스로 감싸서 줄 수 있어(실사용 관찰) json.loads 전에 방어적으로 벗겨낸다."""
-    return _CODE_FENCE_RE.sub("", text.strip()).strip()
-
-
-def _call_claude(system_prompt: str, user_prompt: str) -> str | None:
-    client = _get_client()
-    if client is None:
-        return None
-    response = client.messages.create(
-        model=MODEL_NAME,
-        max_tokens=MAX_TOKENS,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-    text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
-    return _strip_code_fence(text)
-
-
 def _validate_stat_item(item, label: str) -> dict:
     """strengths/weaknesses/tactic/playerFeedback.strength/weakness 공통 shape
     검증({stat,title,detail} - stat은 비어 있어도 되지만 title과 detail은 필수).
@@ -585,18 +536,12 @@ async def build_my_team_ai_report(db: Session, team: Team) -> dict:
         return cached
 
     system_prompt, user_prompt = _build_prompt(context, roster, details)
-    report = None
     # LLM 응답은 확률적이라 가끔 로스터 중 한두 명이 playerFeedback에서 누락되는 등
-    # 스키마를 못 맞출 때가 있다(실사용 관찰 - 같은 프롬프트를 재시도하면 보통 성공함).
-    # 폴백으로 바로 넘어가기 전에 몇 번 더 시도한다.
-    for attempt in range(CLAUDE_MAX_ATTEMPTS):
-        try:
-            raw = _call_claude(system_prompt, user_prompt)
-            if raw is not None:
-                report = _parse_and_validate(raw, roster)
-            break
-        except Exception as e:  # noqa: BLE001 - Claude 호출/JSON 파싱 등 다양한 실패를 전부 흡수
-            print(f"[ai_report] Claude 생성 실패(시도 {attempt + 1}/{CLAUDE_MAX_ATTEMPTS}): {e}")
+    # 스키마를 못 맞출 때가 있다(실사용 관찰 - 같은 프롬프트를 재시도하면 보통 성공함) -
+    # services/claude_client.py::generate_with_retry가 폴백 전에 몇 번 더 시도해준다.
+    report = generate_with_retry(
+        system_prompt, user_prompt, lambda raw: _parse_and_validate(raw, roster), log_prefix="ai_report"
+    )
 
     source = "claude"
     if report is None:
