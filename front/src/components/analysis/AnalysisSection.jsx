@@ -20,6 +20,15 @@ export default function AnalysisSection({
   EngagementComponent = EngagementInfoBlock,
   engagementData,
 }) {
+  // 팀원 사망 위치 분석(히트맵)은 선택된 맵 기준 데이터라 currentMapStats
+  // (analysis.mapInfoByMap[selectedMapId], services/team_profile.py·my_team_analysis.py
+  // 에서 deathLocations로 내려줌)에 들어있다 - engagementInfo 쪽엔 없으므로 여기서 합쳐서
+  // EngagementComponent(DeathMapTracker가 기대하는 data.deaths)로 전달한다.
+  const engagementDisplayData = {
+    ...(engagementData ?? analysis?.engagementInfo),
+    deaths: currentMapStats?.deathLocations ?? [],
+  };
+
   return (
     <>
       <RoundInfoBlock data={analysis?.roundInfo} />
@@ -34,7 +43,7 @@ export default function AnalysisSection({
         comboWeakness={currentMapStats?.comboWeakness || currentMapStats?.worstCombo}
       />
       <EngagementComponent
-        data={engagementData ?? analysis?.engagementInfo}
+        data={engagementDisplayData}
         ourLabel={ourLabel}
         theirLabel={theirLabel}
         selectedMapId={selectedMapId}

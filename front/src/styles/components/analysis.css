@@ -352,20 +352,72 @@
   display: block;
 }
 
+/* X자 마커 - ::before/::after 두 개의 막대를 45도씩 반대로 회전시켜 X 모양을 만든다.
+   기존엔 background+border-radius로 동그란 점이었으나, 팀원별 대표 위치가 이제 최대
+   5개뿐이라(server/services/death_hotspot_service.py::compute_player_hotspots) 더
+   잘 보이는 X자로 교체. */
 .death-map-dot {
   position: absolute;
-  width: 12px;
-  height: 12px;
-  background: var(--lose, #ff4655);
-  border-radius: 50%;
-  border: 1px solid #fff;
+  width: 14px;
+  height: 14px;
   transform: translate(-50%, -50%);
   cursor: pointer;
+}
+
+.death-map-dot::before,
+.death-map-dot::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 3px;
+  background: var(--lose, #ff4655);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #fff;
   transition: transform var(--transition-fast, 0.15s ease);
 }
 
-.death-map-dot:hover {
-  transform: translate(-50%, -50%) scale(1.25);
+.death-map-dot::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.death-map-dot::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.death-map-dot:hover::before {
+  transform: translate(-50%, -50%) rotate(45deg) scale(1.25);
+}
+
+.death-map-dot:hover::after {
+  transform: translate(-50%, -50%) rotate(-45deg) scale(1.25);
+}
+
+/* 커스텀 툴팁 - 네이티브 title 속성은 브라우저마다 뜨기까지 1~2초 걸리고 커스텀
+   툴팁과 겹쳐 뜨는 문제도 있어서(DeathMapTracker.jsx 참고) title은 안 쓰고 이걸로만
+   보여준다. 배경/글자색은 var(--bg-panel-3) 등 테마 변수가 이 위치에서 해석 안 되는
+   경우가 있어(흰 배경으로 깨짐, 2026-09-11 확인) 고정값을 직접 지정한다. */
+.death-map-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: #1a1d24;
+  color: #fff;
+  border: 1px solid #333844;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 5;
+}
+
+.death-map-dot:hover .death-map-tooltip {
+  opacity: 1;
 }
 
 @media (max-width: 480px) {

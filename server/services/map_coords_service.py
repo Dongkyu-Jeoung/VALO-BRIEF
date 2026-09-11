@@ -83,6 +83,13 @@ def normalize_location(
     if coeffs is None:
         return None
 
-    nx = x * coeffs["xMultiplier"] + coeffs["xScalarToAdd"]
-    ny = y * coeffs["yMultiplier"] + coeffs["yScalarToAdd"]
+    # 주의: 라이엇 게임 내 좌표계는 게임 X축이 미니맵의 세로(Y) 방향에, 게임 Y축이
+    # 미니맵의 가로(X) 방향에 대응한다 - Valorant 좌표 변환 자료들이 공통으로 언급하는
+    # 잘 알려진 함정. 그래서 xMultiplier/xScalarToAdd는 게임 y좌표에, yMultiplier/
+    # yScalarToAdd는 게임 x좌표에 적용해야 한다(축을 안 바꾸면 xMultiplier와
+    # yMultiplier가 우연히 비슷한 맵은 그럴듯해 보이다가, 두 값이 크게 다른 맵에서
+    # 좌표가 0~100 범위를 벗어나 미니맵 밖으로 튀는 형태로 드러난다 - 2026-09-11 실측
+    # 확인).
+    nx = y * coeffs["xMultiplier"] + coeffs["xScalarToAdd"]
+    ny = x * coeffs["yMultiplier"] + coeffs["yScalarToAdd"]
     return {"x": round(nx * 100, 2), "y": round(ny * 100, 2)}

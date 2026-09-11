@@ -14,6 +14,7 @@ season/act는 player_profile.py와 다르게 달력 기반 추정치를 쓴다 -
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
+from services.death_hotspot_service import compute_player_hotspots
 from services.map_coords_service import normalize_location
 from services.player_profile import ROLE_LABELS, _load_ref_agents, _load_ref_maps
 
@@ -96,18 +97,21 @@ def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
 
 
 def _death_locations(match: dict, our_puuids: set[str], map_name_en: str) -> list[dict]:
-    """우리 팀 로스터가 사망한 위치 좌표 리스트(0~100 정규화). 히트맵(팀원 사망 위치 분석)용.
+    """우리 팀 로스터가 사망한 위치 좌표(0~100 정규화) + puuid 리스트. 매치 하나 단위의
+    원본 포인트로, _map_info_by_map이 맵별로 모아 선수별 최다 사망 위치(히트맵)를
+    계산하는 재료로 쓴다(services/death_hotspot_service.py::compute_player_hotspots).
     v2/match의 kills[].victim_death_location({x, y})은 게임 월드 좌표라 그대로는 미니맵
     위에 못 찍는다 - services/map_coords_service.py::normalize_location으로 변환한다.
     변환 계수를 못 찾은 좌표(신규/구버전 맵 등)는 조용히 스킵한다."""
     locations = []
     for k in match.get("kills") or []:
-        if k.get("victim_puuid") in our_puuids:
+        puuid = k.get("victim_puuid")
+        if puuid in our_puuids:
             loc = k.get("victim_death_location") or {}
             if loc.get("x") is not None and loc.get("y") is not None:
                 normalized = normalize_location(loc["x"], loc["y"], map_name_en=map_name_en)
                 if normalized:
-                    locations.append(normalized)
+                    locations.append({**normalized, "puuid": puuid})
     return locations
 
 
@@ -295,7 +299,10 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         map_name = r["map"]
         b = buckets.setdefault(
             map_name,
-            {"win": 0, "lose": 0, "games": 0, "combos": [], "plantSiteCounts": {}, "plantTimes": [], "players": {}},
+            {
+                "win": 0, "lose": 0, "games": 0, "combos": [], "plantSiteCounts": {}, "plantTimes": [],
+                "players": {}, "death_locations": [],
+            },
         )
         b["games"] += 1
         b["win" if r["result"] == "win" else "lose"] += 1
@@ -303,6 +310,7 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
         for site, cnt in r.get("plantSiteCounts", {}).items():
             b["plantSiteCounts"][site] = b["plantSiteCounts"].get(site, 0) + cnt
         b["plantTimes"].extend(r.get("plantTimes", []))
+        b["death_locations"].extend(r.get("deathLocations", []))
 
         for ps in r.get("playerStats", []):
             puuid = ps.get("puuid")
@@ -361,6 +369,13 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             if worst_player else []
         )
 
+        # 팀원 사망 위치 분석(히트맵) - 로스터 5명 기준으로 선수당 대표 위치 1개씩만 뽑는다.
+        # compute_player_hotspots는 puuid만 알고 이름은 몰라 여기서 b["players"](같은
+        # 루프에서 이미 채워짐)로 이름을 붙인다.
+        death_hotspots = compute_player_hotspots(b["death_locations"])
+        for h in death_hotspots:
+            h["playerName"] = (b["players"].get(h["playerId"]) or {}).get("name", "-")
+
         result[map_name] = {
             "mapWinRate": win_rate,
             "sampleGames": games,
@@ -371,6 +386,7 @@ def _map_info_by_map(records: list, agents: dict) -> dict:
             "combos": game_combos,         # "요원 조합" 섹션에서 경기별 한 줄씩 사용
             "comboAce": best_players,      # BEST 섹션에서 사용 (선수 1명)
             "comboWeakness": worst_players, # WORST 섹션에서 사용 (선수 1명)
+            "deathLocations": death_hotspots,  # 팀원 사망 위치 분석 섹션 - 선수당 1개(최대 5개)
         }
     return result
 
