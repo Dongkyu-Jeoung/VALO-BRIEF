@@ -55,44 +55,45 @@ export default function EngagementPredictionBlock({
         {/* <span className="tag">AI</span> */}
       </div>
 
-      <div className="duel-compare-block">
-        <div className="duel-compare-title">트레이드 성공률 예측 (1대1 교전 기준)</div>
-        <div className="duel-compare-spacer" />
-        <DuelCompareBar
-          leftLabel={ourLabel}
-          leftPct={trade.ourWinRate}
-          rightLabel={theirLabel}
-          rightPct={trade.theirWinRate}
-        />
-      </div>
-
-      <div className="duel-compare-block">
-        <div className="duel-compare-title">듀얼리스트 매치업 유불리 예측</div>
-        <div className="duel-compare-spacer" />
-        <DuelCompareBar
-          leftLabel={ourLabel}
-          leftPct={duel.ourScore}
-          rightLabel={theirLabel}
-          rightPct={duel.theirScore}
-        />
-      </div>
-
+      {/* 최종 교전 승률(스태킹 메타 모델) - 이 블록의 headline이라 카드로 강조하고
+          트레이드/듀얼리스트 매치업(그 결과를 만든 두 근거)보다 먼저 보여준다. */}
       {data.finalPrediction ? (
-        <div className="duel-compare-block">
-          <div className="duel-compare-title">최종 교전 승률 (트레이드 + 듀얼리스트 매치업 종합)</div>
-          <div className="duel-compare-spacer" />
+        <div className="duel-hero">
+          <div className="duel-hero-label">최종 교전 승률 (트레이드 + 듀얼리스트 매치업 종합)</div>
           <DuelCompareBar
+            size="lg"
             leftLabel={ourLabel}
             leftPct={data.finalPrediction.ourWinRate}
             rightLabel={theirLabel}
             rightPct={data.finalPrediction.theirWinRate}
           />
           <div className={`matchup-favor-text ${favorClass}`.trim()}>
-            예상 결과: <span>{favorText}</span>
+            예상 결과 <span className="favor-badge">{favorText}</span>
           </div>
         </div>
-
       ) : null}
+
+      <div className="duel-compare-grid">
+        <div className="duel-compare-block">
+          <div className="duel-compare-title">트레이드 성공률 예측 (1대1 교전 기준)</div>
+          <DuelCompareBar
+            leftLabel={ourLabel}
+            leftPct={trade.ourWinRate}
+            rightLabel={theirLabel}
+            rightPct={trade.theirWinRate}
+          />
+        </div>
+
+        <div className="duel-compare-block">
+          <div className="duel-compare-title">듀얼리스트 매치업 유불리 예측</div>
+          <DuelCompareBar
+            leftLabel={ourLabel}
+            leftPct={duel.ourScore}
+            rightLabel={theirLabel}
+            rightPct={duel.theirScore}
+          />
+        </div>
+      </div>
 
       {/* {data.modelVersion ? (
         <div className="empty-text model-version-note">모델 버전: {data.modelVersion}</div>

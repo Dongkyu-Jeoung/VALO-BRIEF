@@ -25,11 +25,11 @@ export function fetchPrediction(teamName, teamTag) {
   if (FORCE_MOCK_PREDICTION) return delay(MOCK_DELAY_MS).then(() => predictionMock);
 
   return withFallback(
-    // 라운드/맵별 상세 분석(analysis)·AI 리포트(aiReport)는 백엔드 모델이 아직 만들지
-    // 않는 데이터라 당분간 mock으로 채운다 - 승률(ourWinChance)/팀 요약만 실제 값.
+    // 라운드/맵별 상세 분석(analysis)은 이 응답이 아니라 fetchTeamAnalysis가 따로 채운다
+    // (teams.js). AI 리포트(aiReport)도 이제 fetchTeamAiReport로 따로 받아온다(teams.js
+    // 참고, services/opponent_ai_report.py) - 여기서는 더 이상 mock으로 덮어쓰지 않는다.
     async () => ({
       analysis: predictionMock.analysis,
-      aiReport: predictionMock.aiReport,
       ...(await httpClient.get(ENDPOINTS.prediction(teamName, teamTag))),
     }),
     predictionMock,

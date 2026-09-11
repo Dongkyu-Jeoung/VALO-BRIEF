@@ -42,103 +42,15 @@ from models.riot_account import RiotAccount
 from models.team_stats_summary import TeamStatsSummary
 from services.my_team_stats import MATCH_HISTORY_LIMIT, _load_map_name_by_uuid
 from services.player_profile import ROLE_LABELS, _load_ref_agents
-
-# 팀 평균 loadout_value(경제력)가 이 아래면 에코 라운드로 판정하는 휴리스틱 임계값.
-# 공식 정의가 아니며, 다운스케일 무기(사이드암 위주) 구간을 대략 겨냥한 값이다.
-ECO_THRESHOLD = 2000
+from services.round_phase_analysis import (
+    aggregate_round_phase,
+    analyze_rounds,
+    determine_team_color,
+    pct,
+    round_kill_events,
+)
 
 _DUELIST_LABEL = ROLE_LABELS["Duelist"]
-
-
-def _round_segments(round_count: int) -> list[tuple[int, int]]:
-    """공격/수비가 바뀌지 않는 구간 경계. 정규시간은 12라운드씩(0-11, 12-23), 연장은
-    2라운드씩(24-25, 26-27, ...) 스왑하는 표준 룰을 따른다."""
-    segments = []
-    idx = 0
-    while idx < round_count:
-        end = min(idx + 12, 24, round_count) if idx < 24 else min(idx + 2, round_count)
-        segments.append((idx, end))
-        idx = end
-    return segments
-
-
-def _determine_our_color(rounds: list, our_puuids: set[str]) -> str | None:
-    """rounds[i].player_stats[].player_team/player_puuid로 우리 팀이 이 매치에서
-    "Red"/"Blue" 중 어느 색이었는지 확인. 라운드마다 전체 로스터의 player_stats가 항상
-    있어서(액션 여부와 무관) 첫 라운드에서 대부분 바로 확정된다."""
-    for rnd in rounds:
-        for ps in (rnd.get("player_stats") or []):
-            if ps.get("player_puuid") in our_puuids and ps.get("player_team"):
-                return ps["player_team"]
-    return None
-
-
-def _segment_attackers(rounds: list, segments: list[tuple[int, int]]) -> dict[tuple[int, int], str | None]:
-    result: dict[tuple[int, int], str | None] = {}
-    for seg in segments:
-        attacker = None
-        for i in range(seg[0], seg[1]):
-            rnd = rounds[i]
-            if rnd.get("bomb_planted"):
-                planted_by = (rnd.get("plant_events") or {}).get("planted_by") or {}
-                if planted_by.get("team"):
-                    attacker = planted_by["team"]
-                    break
-        result[seg] = attacker
-    return result
-
-
-def _round_kill_events(rnd: dict) -> list[dict]:
-    """라운드 하나의 모든 킬 이벤트를 시간순으로. player_stats[].kill_events는 그
-    선수 본인이 낸 킬만 담고 있어 전체를 모으려면 로스터 전원의 목록을 합쳐야 한다."""
-    events: list[dict] = []
-    for ps in (rnd.get("player_stats") or []):
-        events.extend(ps.get("kill_events") or [])
-    return sorted(events, key=lambda k: k.get("kill_time_in_round") or 0)
-
-
-def _analyze_rounds(rounds: list, our_color: str) -> list[dict]:
-    segments = _round_segments(len(rounds))
-    attackers = _segment_attackers(rounds, segments)
-
-    records = []
-    for i, rnd in enumerate(rounds):
-        seg = next(s for s in segments if s[0] <= i < s[1])
-        attacker = attackers[seg]
-        we_attacked = None if attacker is None else (attacker == our_color)
-
-        winning_team = rnd.get("winning_team")
-        we_won = None if not winning_team else (winning_team == our_color)
-
-        our_loadouts = [
-            (ps.get("economy") or {}).get("loadout_value")
-            for ps in (rnd.get("player_stats") or [])
-            if ps.get("player_team") == our_color and (ps.get("economy") or {}).get("loadout_value") is not None
-        ]
-        is_eco = (sum(our_loadouts) / len(our_loadouts) < ECO_THRESHOLD) if our_loadouts else None
-
-        kills = _round_kill_events(rnd)
-        opening = kills[0] if kills else None
-        got_fb = (opening.get("killer_team") == our_color) if opening else None
-        got_fd = (opening.get("victim_team") == our_color) if opening else None
-
-        plant = rnd.get("plant_events") or {}
-        planted_by = plant.get("planted_by") or {}
-        we_planted = bool(planted_by.get("team")) and planted_by.get("team") == our_color
-        plant_site = plant.get("plant_site") if we_planted else None
-        plant_time = plant.get("plant_time_in_round") if we_planted else None
-
-        records.append({
-            "we_won": we_won,
-            "we_attacked": we_attacked,
-            "is_pistol": i in (0, 12),
-            "is_eco": is_eco,
-            "got_fb": got_fb,
-            "got_fd": got_fd,
-            "plant_site": plant_site,
-            "plant_time_ms": plant_time,
-        })
-    return records
 
 
 def _clutch_tally(rounds: list, our_puuids: set[str], opp_puuids: set[str], our_color: str) -> dict[int, dict]:
@@ -146,7 +58,7 @@ def _clutch_tally(rounds: list, our_puuids: set[str], opp_puuids: set[str], our_
     분류하고, 그 라운드의 승패를 클러치 성공/실패로 집계."""
     result = {1: {"win": 0, "loss": 0}, 2: {"win": 0, "loss": 0}}
     for rnd in rounds:
-        kills = _round_kill_events(rnd)
+        kills = round_kill_events(rnd)
         if not kills:
             continue
         our_alive = set(our_puuids)
@@ -175,7 +87,7 @@ def _death_locations_for_match(rounds: list, our_puuids: set[str], map_uuid: str
     맵)는 조용히 스킵한다."""
     locations: list[dict] = []
     for rnd in rounds:
-        for k in _round_kill_events(rnd):
+        for k in round_kill_events(rnd):
             puuid = k.get("victim_puuid")
             if puuid in our_puuids:
                 loc = k.get("victim_death_location") or {}
@@ -184,45 +96,6 @@ def _death_locations_for_match(rounds: list, our_puuids: set[str], map_uuid: str
                     if normalized:
                         locations.append({**normalized, "puuid": puuid})
     return locations
-
-
-def _pct(wins: int, losses: int) -> int:
-    total = wins + losses
-    return round(wins / total * 100) if total else 0
-
-
-def _aggregate_round_phase(records: list[dict]) -> dict:
-    atk_w = atk_l = def_w = def_l = pistol_w = pistol_l = eco_w = eco_l = 0
-    fb_rounds = fb_wins = fd_rounds = fd_losses = 0
-    for r in records:
-        if r["we_won"] is not None:
-            if r["we_attacked"] is True:
-                atk_w += r["we_won"]
-                atk_l += not r["we_won"]
-            elif r["we_attacked"] is False:
-                def_w += r["we_won"]
-                def_l += not r["we_won"]
-            if r["is_pistol"]:
-                pistol_w += r["we_won"]
-                pistol_l += not r["we_won"]
-            if r["is_eco"]:
-                eco_w += r["we_won"]
-                eco_l += not r["we_won"]
-        if r["got_fb"]:
-            fb_rounds += 1
-            fb_wins += bool(r["we_won"])
-        if r["got_fd"]:
-            fd_rounds += 1
-            fd_losses += r["we_won"] is False
-
-    return {
-        "atkWinRate": _pct(atk_w, atk_l),
-        "defWinRate": _pct(def_w, def_l),
-        "pistolWinRate": _pct(pistol_w, pistol_l),
-        "ecoWinRate": _pct(eco_w, eco_l),
-        "fbWinPct": round(fb_wins / fb_rounds * 100) if fb_rounds else 0,
-        "fdLosePct": round(fd_losses / fd_rounds * 100) if fd_rounds else 0,
-    }, atk_w + def_w, atk_l + def_l
 
 
 def _upsert_summary_row(
@@ -302,11 +175,11 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
         our_puuids = {r.puuid for r in our_rows}
         opp_puuids = {r.puuid for r in opp_rows}
 
-        our_color = _determine_our_color(rounds, our_puuids)
+        our_color = determine_team_color(rounds, our_puuids)
         if our_color is None:
             continue  # 방어적 스킵 - 이 매치는 공수/승패 판정 불가
 
-        records = _analyze_rounds(rounds, our_color)
+        records = analyze_rounds(rounds, our_color)
         all_records.extend(records)
 
         clutch = _clutch_tally(rounds, our_puuids, opp_puuids, our_color)
@@ -383,7 +256,7 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
         }
 
     # --- ① 라운드 정보(전체) 캐싱 ---
-    round_phase_metrics, overall_wins, overall_losses = _aggregate_round_phase(all_records)
+    round_phase_metrics, overall_wins, overall_losses = aggregate_round_phase(all_records)
     _upsert_summary_row(db, team_id, "round_phase", "overall", overall_wins, overall_losses, round_phase_metrics)
 
     # --- ③ 교전 정보 캐싱 ---
@@ -391,8 +264,8 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
     opp_duelist_avg = sum(opp_duelist_acs) / len(opp_duelist_acs) if opp_duelist_acs else 0.0
     matchup = _duelist_matchup_from_acs(our_duelist_avg, opp_duelist_avg)
     engagement_metrics = {
-        "trade1v1": _pct(clutch_totals[1]["win"], clutch_totals[1]["loss"]),
-        "trade1v2": _pct(clutch_totals[2]["win"], clutch_totals[2]["loss"]),
+        "trade1v1": pct(clutch_totals[1]["win"], clutch_totals[1]["loss"]),
+        "trade1v2": pct(clutch_totals[2]["win"], clutch_totals[2]["loss"]),
         "duelistVsDuelist": {"us": matchup["ourScore"], "them": matchup["theirScore"]},
     }
     _upsert_summary_row(db, team_id, "engagement", "overall", 0, 0, engagement_metrics)
@@ -433,9 +306,9 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
 
         metrics = {
             "mapName": map_names.get(map_uuid_key, "-"),
-            "mapWinRate": _pct(b["win"], b["lose"]),
-            "atkWinRate": _pct(b["atk_w"], b["atk_l"]),
-            "defWinRate": _pct(b["def_w"], b["def_l"]),
+            "mapWinRate": pct(b["win"], b["lose"]),
+            "atkWinRate": pct(b["atk_w"], b["atk_l"]),
+            "defWinRate": pct(b["def_w"], b["def_l"]),
             "preferredSite": preferred_site,
             "avgSpikePlantTime": avg_plant_sec,
             "matchSample": games,

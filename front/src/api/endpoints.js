@@ -29,6 +29,8 @@ export const ENDPOINTS = {
 
   // [추가] 상대 팀 분석 및 승부 예측 탭 전용 엔드포인트 (백엔드 teams.py /analysis와 연동)
   teamAnalysis: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}/analysis`,
+  // 승부예측 "AI 리포트" 탭(상대팀 인사이트, 로그인 필요) - services/opponent_ai_report.py.
+  teamAiReport: (teamName, teamTag) => `/api/teams/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}/ai-report`,
 
   // 승부 예측 (기존 유지)
   prediction: (teamName, teamTag) => `/api/predict/${encodeURIComponent(teamName)}/${encodeURIComponent(teamTag)}`,

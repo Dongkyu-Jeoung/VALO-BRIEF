@@ -8,10 +8,11 @@ player_stats_summary가 채워지지 않은 선수(=이 페이지 첫 방문)에
 cache-aside, 이후 조회는 캐시만 읽음. 나중에 "갱신" 버튼이 생기면 그때 재계산 트리거를
 추가하면 됨 - 지금은 신경쓰지 않는다).
 
-라운드 단위 파생값은 my_team_analysis.py와 최대한 같은 정의를 재사용한다(공격/수비 구간,
-피스톨, Eco, 클러치 판정 등 - _determine_our_color/_round_segments/_segment_attackers/
-_round_kill_events/ECO_THRESHOLD를 그대로 가져다 쓴다). 다만 팀 분석은 "라운드 승/패"를
-집계하는 반면 여기는 "이 선수의 K/D·ACS"를 라운드 상황별로 집계한다는 점이 다르다.
+라운드 단위 파생값은 services/round_phase_analysis.py(my_team_analysis.py/team_profile.py와
+공유하는 모듈)와 최대한 같은 정의를 재사용한다(공격/수비 구간, 피스톨, Eco, 클러치 판정
+등 - determine_team_color/round_segments/segment_attackers/round_kill_events/
+ECO_THRESHOLD를 그대로 가져다 쓴다). 다만 팀 분석은 "라운드 승/패"를 집계하는 반면 여기는
+"이 선수의 K/D·ACS"를 라운드 상황별로 집계한다는 점이 다르다.
 
 2026-09-10 사용자 확인 후 진행하기로 한 부분(이 페이지에서만 새로 필요했던 정의 - 문서화):
   - 무기별 K/D: 그 무기로 낸 킬 수 / 그 무기를 들고 있다가 죽은 라운드 수(죽은 적이 없으면
@@ -42,12 +43,12 @@ from models.match import Match
 from models.match_player_stat import MatchPlayerStat
 from models.player_stats_summary import PlayerStatsSummary
 from models.riot_account import RiotAccount
-from services.my_team_analysis import (
+from services.round_phase_analysis import (
     ECO_THRESHOLD,
-    _determine_our_color,
-    _round_kill_events,
-    _round_segments,
-    _segment_attackers,
+    determine_team_color,
+    round_kill_events,
+    round_segments,
+    segment_attackers,
 )
 from services.my_team_stats import MATCH_HISTORY_LIMIT, _load_map_name_by_uuid
 
@@ -192,7 +193,7 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
         our_puuids = {r.puuid for r in our_rows}
         opp_puuids = {r.puuid for r in opp_rows}
 
-        our_color = _determine_our_color(rounds, our_puuids)
+        our_color = determine_team_color(rounds, our_puuids)
         if our_color is None:
             continue
 
@@ -206,8 +207,8 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
         map_key = (match.map_uuid or "").lower()
         map_name_by_key[map_key] = map_names.get(map_key, "-")
 
-        segments = _round_segments(len(rounds))
-        attackers = _segment_attackers(rounds, segments)
+        segments = round_segments(len(rounds))
+        attackers = segment_attackers(rounds, segments)
 
         for i, rnd in enumerate(rounds):
             ps_list = rnd.get("player_stats") or []
@@ -219,7 +220,7 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
             attacker = attackers[seg]
             we_attacked = None if attacker is None else (attacker == our_color)
 
-            kills_merged = _round_kill_events(rnd)
+            kills_merged = round_kill_events(rnd)
             died_this_round = any(k.get("victim_puuid") == puuid for k in kills_merged)
             opening = kills_merged[0] if kills_merged else None
             got_fb = bool(opening and opening.get("killer_puuid") == puuid)

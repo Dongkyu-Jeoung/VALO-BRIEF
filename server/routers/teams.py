@@ -14,7 +14,7 @@ from database.connection import SessionLocal, get_db
 from ml import engagement_predictor
 from models.team import Team
 from routers.auth import get_current_team
-from services import henrik_api, match_history, team_engagement_cache
+from services import henrik_api, match_history, opponent_ai_report, team_engagement_cache
 from services.team_profile import (
     MATCH_HISTORY_LIMIT,
     QUICK_ANALYSIS_MATCH_LIMIT,
@@ -285,3 +285,16 @@ async def get_team_analysis(
         "mapInfoByMap": filtered_map_info,
         "engagementPrediction": engagement_prediction,
     }
+
+
+@router.get("/{team_name}/{team_tag}/ai-report")
+async def get_team_ai_report(
+    team_name: str, team_tag: str, current: Team = Depends(get_current_team), db: Session = Depends(get_db)
+):
+    """승부예측 페이지 "AI 리포트" 탭(상대팀 인사이트) - services/opponent_ai_report.py 참고.
+    상대팀 기준정보(team_engagement_cache)가 아직 DB에 없으면(한 번도 검색/조회된 적
+    없는 팀) None을 그대로 200으로 내려준다 - 이건 에러가 아니라 "아직 준비 안 됨"인
+    정상 상태라, HTTPException으로 던지면 withFallback이 실패로 착각해 mock으로
+    대체해버린다(진짜 "준비 중" 안내 대신 가짜 데이터가 보이게 됨). front가 null이면
+    안내 문구를 보여준다(AiReportTab.jsx)."""
+    return await opponent_ai_report.build_opponent_ai_report(db, current, team_name, team_tag)
