@@ -32,6 +32,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session, defer
 
 from ml.engagement_predictor import _duelist_matchup_from_acs
+from services.map_coords_service import normalize_location
 from models.match import Match
 from models.match_player_stat import MatchPlayerStat
 from models.riot_account import RiotAccount
@@ -158,6 +159,25 @@ def _clutch_tally(rounds: list, our_puuids: set[str], opp_puuids: set[str], our_
             won = rnd.get("winning_team") == our_color
             result[clutch_n]["win" if won else "loss"] += 1
     return result
+
+
+def _death_locations_for_match(rounds: list, our_puuids: set[str], map_uuid: str | None) -> list[dict]:
+    """매치 하나의 모든 라운드에서 우리 팀 로스터가 사망한 위치 좌표 리스트(0~100 정규화).
+    round_detail_json에 rounds 원본이 그대로 저장돼 있어(services/match_history.py::
+    upsert_match_history 참고) Henrik의 kill_events[].victim_death_location을 꺼낼 수
+    있지만, 이건 게임 월드 좌표라 그대로는 미니맵 위에 못 찍는다 - services/map_coords_
+    service.py::normalize_location으로 변환한다. 팀원 사망 위치 분석(히트맵) 섹션용.
+    변환 계수를 못 찾은 좌표(map_uuid가 없거나 신규/구버전 맵)는 조용히 스킵한다."""
+    locations: list[dict] = []
+    for rnd in rounds:
+        for k in _round_kill_events(rnd):
+            if k.get("victim_puuid") in our_puuids:
+                loc = k.get("victim_death_location") or {}
+                if loc.get("x") is not None and loc.get("y") is not None:
+                    normalized = normalize_location(loc["x"], loc["y"], map_uuid=map_uuid)
+                    if normalized:
+                        locations.append(normalized)
+    return locations
 
 
 def _pct(wins: int, losses: int) -> int:
@@ -300,6 +320,7 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
             "atk_w": 0, "atk_l": 0, "def_w": 0, "def_l": 0,
             "site_counts": {}, "plant_times": [],
             "combos": [], "players": {},
+            "death_locations": [],
         })
 
         is_team_a = match.team_a_id == team_id
@@ -323,6 +344,9 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
                     bucket["plant_times"].append(int(rec["plant_time_ms"]))
                 except (TypeError, ValueError):
                     pass
+
+        # 우리 로스터 사망 좌표 - 맵별로 누적해 히트맵 데이터로 쓴다. _death_locations_for_match 참고.
+        bucket["death_locations"].extend(_death_locations_for_match(rounds, our_puuids, match.map_uuid))
 
         agent_names = [
             (agents["by_uuid"].get((r.agent_uuid or "").lower()) or {}).get("name_ko") or "-"
@@ -403,6 +427,8 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
             "combos": game_combos,
             "comboAce": [{"name": best["name"], "acs": best["acs"]}] if best else [],
             "comboWeakness": [{"name": worst["name"], "fd": worst["fd"], "acs": worst["acs"]}] if worst else [],
+            # 팀원 사망 위치 분석(히트맵) 섹션용 - _death_locations_for_match 참고.
+            "deathLocations": b["death_locations"],
         }
         _upsert_summary_row(db, team_id, "map_side", map_uuid_key, b["win"], b["lose"], metrics)
 

@@ -14,6 +14,7 @@ season/act는 player_profile.py와 다르게 달력 기반 추정치를 쓴다 -
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
+from services.map_coords_service import normalize_location
 from services.player_profile import ROLE_LABELS, _load_ref_agents, _load_ref_maps
 
 # 매치 상세(v2/match) 1건이 ~1.3MB로 무거워서(실측), 최근 몇 건까지 불러올지 제한한다.
@@ -92,6 +93,22 @@ def _first_death_counts(match: dict, our_puuids: set[str]) -> dict[str, int]:
         if victim in our_puuids:
             counts[victim] = counts.get(victim, 0) + 1
     return counts
+
+
+def _death_locations(match: dict, our_puuids: set[str], map_name_en: str) -> list[dict]:
+    """우리 팀 로스터가 사망한 위치 좌표 리스트(0~100 정규화). 히트맵(팀원 사망 위치 분석)용.
+    v2/match의 kills[].victim_death_location({x, y})은 게임 월드 좌표라 그대로는 미니맵
+    위에 못 찍는다 - services/map_coords_service.py::normalize_location으로 변환한다.
+    변환 계수를 못 찾은 좌표(신규/구버전 맵 등)는 조용히 스킵한다."""
+    locations = []
+    for k in match.get("kills") or []:
+        if k.get("victim_puuid") in our_puuids:
+            loc = k.get("victim_death_location") or {}
+            if loc.get("x") is not None and loc.get("y") is not None:
+                normalized = normalize_location(loc["x"], loc["y"], map_name_en=map_name_en)
+                if normalized:
+                    locations.append(normalized)
+    return locations
 
 
 def _sorted_roster_agents(characters: list[str], agents: dict) -> list[str]:
@@ -239,6 +256,8 @@ def _parse_team_match(match: dict, team_name: str, team_tag: str, maps: dict, ag
         "adr": adr,
         "acs": acs,
         "firstBlood": _first_blood_count(match, our_puuids),
+        # 우리 로스터 사망 좌표 리스트 - 팀원 사망 위치 분석(히트맵) 섹션용. _death_locations 참고.
+        "deathLocations": _death_locations(match, our_puuids, map_name_en),
         "mvp": mvp,
         "season": season,
         "act": act,
