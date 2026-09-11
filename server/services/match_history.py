@@ -166,6 +166,16 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     blue_team_id = _find_team_id(db, blue_roster.get("name", ""), blue_roster.get("tag", ""))
     winner_team_id = red_team_id if red.get("has_won") else blue_team_id if blue.get("has_won") else None
 
+    # team_engagement_cache 전용 id - matches.team_a_id/b_id/winner_team_id(위 red_team_id/
+    # blue_team_id)는 teams.team_id FK가 걸려 있어(models/match.py) 가입 팀이 아니면 반드시
+    # None이어야 하지만, team_engagement_cache.team_id는 FK가 없다(models/team_engagement_
+    # cache.py 참고). roster.id는 Henrik이 매기는 프리미어 팀 고유 id로, 가입 시 그대로
+    # teams.team_id로 쓰므로(routers/auth.py) 가입 팀이면 red_team_id와 항상 같은 값이고,
+    # 미가입 팀이어도 항상 값이 있다 - 그래서 여기서는 가입 여부와 무관하게 이 id로
+    # team_engagement_cache를 쌓는다("팀 전적 검색"으로 본 모든 팀이 학습 데이터에 반영되게).
+    red_engagement_id = red_roster.get("id")
+    blue_engagement_id = blue_roster.get("id")
+
     map_uuid = _load_map_uuid_by_name(db).get(str(metadata.get("map") or "").lower())
     game_start = _parse_game_start(metadata.get("game_start"))
     started_at = _parse_started_at(started_at_raw)
@@ -291,14 +301,14 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
 
     db.commit()
 
-    # write-through - 이 매치에 가입 팀이 껴 있으면(red_team_id/blue_team_id) 그 팀의
-    # team_engagement_cache를 바로 이 매치 값으로 upsert한다(services/team_engagement_
-    # cache.py 모듈 docstring 참고). ENGAGEMENT_CACHE_ENABLED가 False면 내부에서 조용히
-    # 스킵된다.
-    if red_team_id:
+    # write-through - 가입 여부와 무관하게 이 매치에 나온 두 팀 다 team_engagement_cache에
+    # 쌓는다(위 red_engagement_id/blue_engagement_id 참고 - services/team_engagement_
+    # cache.py 모듈 docstring도 같이 참고). ENGAGEMENT_CACHE_ENABLED가 False면 내부에서
+    # 조용히 스킵된다.
+    if red_engagement_id:
         team_engagement_cache.upsert_match_engagement(
-            db, red_team_id, match_id,
-            opponent_team_id=blue_team_id,
+            db, red_engagement_id, match_id,
+            opponent_team_id=blue_engagement_id,
             game_start=game_start,
             trade_rate=engagement_predictor.trade_rate_from_matches(
                 [match], red_roster.get("name", ""), red_roster.get("tag", "")
@@ -307,10 +317,10 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
                 [match], red_roster.get("name", ""), red_roster.get("tag", "")
             ),
         )
-    if blue_team_id:
+    if blue_engagement_id:
         team_engagement_cache.upsert_match_engagement(
-            db, blue_team_id, match_id,
-            opponent_team_id=red_team_id,
+            db, blue_engagement_id, match_id,
+            opponent_team_id=red_engagement_id,
             game_start=game_start,
             trade_rate=engagement_predictor.trade_rate_from_matches(
                 [match], blue_roster.get("name", ""), blue_roster.get("tag", "")

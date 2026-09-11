@@ -536,8 +536,14 @@ CREATE TABLE predictions (
 
 -- ---------------------------------------------------------------------
 -- 9. INSIGHTS  (AI 리포트 - 팀/개인 서술형 결과, Layer2)
---    my-team 분석/AI 리포트 화면(front MyTeamAnalysisPage, AiReportCard 등)은 이미
---    스캐폴딩돼 있으나 백엔드 연동 전이라 아직 이 테이블에 쓰지 않는다.
+--    2026-09-11: services/ai_report.py가 "우리팀 분석 > AI 리포트" 탭용으로 실제 사용
+--    시작(AI_리포트_개발_설계.md 참고). 리포트 하나 = 여러 행(문장 단위):
+--      target_type='team', opponent_team_id=NULL  → insight_type
+--        'summary'(팀 개요 1행) / 'strength'(3행) / 'weakness'(3행) / 'strategy'(전술 제안 1행)
+--      target_type='player', target_puuid=로스터 puuid → insight_type
+--        'strength'(1행) / 'weakness'(1행)
+--    upsert 키가 없어 재생성 시 해당 팀의 opponent_team_id IS NULL 행 전체를 지우고
+--    새로 넣는 방식으로 "교체"한다. agent_comment/personal_feedback은 아직 미사용.
 -- ---------------------------------------------------------------------
 CREATE TABLE insights (
     insight_id          INT             NOT NULL AUTO_INCREMENT,

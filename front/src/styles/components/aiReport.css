@@ -221,6 +221,7 @@
   border-radius: 8px;
   background: var(--bg-panel-3);
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .ai-feedback-name {
