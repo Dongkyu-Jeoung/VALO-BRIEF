@@ -11,7 +11,14 @@ export default function AiReportCard({ report, heading, strengthTitle = '강점 
           <div className="ai-strength-title win">{strengthTitle}</div>
           {report.strengths.map((s, i) => (
             <div className="ai-list-item" key={i}>
-              <span className="num">{String(i + 1).padStart(2, '0')}</span>{s}
+              <span className="num win">{String(i + 1).padStart(2, '0')}</span>
+              <div className="ai-list-body">
+                {s.stat && <span className="stat-badge win">{s.stat}</span>}
+                <b className="ai-list-title">{s.title}</b>
+                {s.detail.map((line, j) => (
+                  <p className="ai-list-detail" key={j}>{line}</p>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -19,7 +26,14 @@ export default function AiReportCard({ report, heading, strengthTitle = '강점 
           <div className="ai-strength-title lose">{weaknessTitle}</div>
           {report.weaknesses.map((w, i) => (
             <div className="ai-list-item" key={i}>
-              <span className="num">{String(i + 1).padStart(2, '0')}</span>{w}
+              <span className="num lose">{String(i + 1).padStart(2, '0')}</span>
+              <div className="ai-list-body">
+                {w.stat && <span className="stat-badge lose">{w.stat}</span>}
+                <b className="ai-list-title">{w.title}</b>
+                {w.detail.map((line, j) => (
+                  <p className="ai-list-detail" key={j}>{line}</p>
+                ))}
+              </div>
             </div>
           ))}
         </div>

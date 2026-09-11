@@ -11,11 +11,19 @@ export default function PlayerFeedbackCard({ feedback }) {
         <div className="ai-feedback-cols">
           <div>
             <div className="lbl text-win">강점</div>
-            <p>{feedback.strength}</p>
+            {feedback.strength.stat && <span className="stat-badge win">{feedback.strength.stat}</span>}
+            <b className="ai-list-title">{feedback.strength.title}</b>
+            {feedback.strength.detail.map((line, i) => (
+              <p className="ai-list-detail" key={i}>{line}</p>
+            ))}
           </div>
           <div>
             <div className="lbl text-lose">보완점</div>
-            <p>{feedback.weakness}</p>
+            {feedback.weakness.stat && <span className="stat-badge lose">{feedback.weakness.stat}</span>}
+            <b className="ai-list-title">{feedback.weakness.title}</b>
+            {feedback.weakness.detail.map((line, i) => (
+              <p className="ai-list-detail" key={i}>{line}</p>
+            ))}
           </div>
         </div>
       </div>
