@@ -19,16 +19,19 @@ export default function DuelCompareBar({
 
   const displayLeft = Number(leftPct).toFixed(1);
   const displayRight = Number(rightPct).toFixed(1);
+  // PredictBox(위쪽 "예상 승률")의 pv-percent.is-high/is-low와 같은 규칙 - 우세한 쪽
+  // 퍼센트 글자를 더 크고 진하게, 열세한 쪽은 더 작고 흐리게 표시한다.
+  const isLeftHigh = leftPct >= rightPct;
 
   return (
     <div className={`duel-compare duel-compare--${size}`}>
       <div className="duel-compare-labels">
         <div className="duel-compare-label us">
           <span className="team-name">{leftLabel}</span>
-          <b className="team-pct">{displayLeft}%</b>
+          <b className={`team-pct ${isLeftHigh ? 'is-high' : 'is-low'}`}>{displayLeft}%</b>
         </div>
         <div className="duel-compare-label them">
-          <b className="team-pct">{displayRight}%</b>
+          <b className={`team-pct ${!isLeftHigh ? 'is-high' : 'is-low'}`}>{displayRight}%</b>
           <span className="team-name">{rightLabel}</span>
         </div>
       </div>

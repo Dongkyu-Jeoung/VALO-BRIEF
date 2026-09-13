@@ -37,6 +37,20 @@
 -- 이미 RDS에 생성되어 있는 DB에는 이 파일 맨 아래 "마이그레이션" 섹션의 SQL을
 -- 실행하세요 (team_id 타입이 바뀌면서 여러 테이블의 FK를 순서대로 내렸다 올리는
 -- 다단계 마이그레이션입니다 - 실행 전 꼭 검토하세요).
+--
+-- 운영 RDS 직접 대조(SHOW CREATE TABLE 전체 테이블) 후 정정:
+--   - matches/match_player_stats/predictions/insights/team_stats_summary의 teams
+--     참조 FK(fk_matches_team_a/b/winner, fk_mps_team, fk_predictions_team_a/b,
+--     fk_insights_team/opponent, fk_tss_team)는 이 파일의 마이그레이션 7)/10)번이
+--     의도했던 것과 달리 운영 RDS에 실제로는 하나도 존재하지 않았다(전부 인덱스만
+--     있고 FK 제약은 없음). 특히 insights.opponent_team_id는 비가입 상대팀을 가리키는
+--     행이 실제로 28건 있어(승부예측/AI 리포트가 비가입 팀도 검색 대상으로 삼기 때문)
+--     FK를 걸면 그 자체로 위반이다 - "FK 없음"이 최종 설계로 확정되었으므로 이 파일도
+--     그에 맞춰 정정했다(해당 CREATE TABLE/마이그레이션 섹션의 2026-09-14 주석 참고).
+--   - 그 외 컬럼 구성(테이블 12개: ref_maps/ref_agents/ref_weapons/ref_player_cards/
+--     ref_player_titles/teams/riot_accounts/player_rolling_cache/team_engagement_cache/
+--     matches/match_player_stats/team_stats_summary/player_stats_summary/predictions/
+--     insights)은 운영 RDS와 이 파일이 이미 정확히 일치함을 확인했다.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -325,11 +339,12 @@ CREATE TABLE team_engagement_cache (
     game_start               DATETIME        NULL     COMMENT '정렬/최근 N경기 선정 기준',
     trade_rate              FLOAT           NULL     COMMENT '이 매치에서의 트레이드 성공률(%) - 계산 불가 시 NULL',
     duelist_acs             FLOAT           NULL     COMMENT '이 매치에서의 듀얼리스트 로스터 평균 ACS - 계산 불가 시 NULL',
+    win                     BOOLEAN         NULL     COMMENT '이 매치의 실제 승패(Henrik teams.{side}.has_won) - 최근 승률 피처(diff_win_rate)와 메타 모델 라벨(label_win)의 원천',
     computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                             ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (team_id, match_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='팀x매치당 교전 매치업(트레이드 성공률/듀얼리스트 ACS) 값 - 캐시 + 학습 데이터 겸용';
+  COMMENT='팀x매치당 교전 매치업(트레이드 성공률/듀얼리스트 ACS/승패) 값 - 캐시 + 학습 데이터 겸용';
 
 -- ---------------------------------------------------------------------
 -- 4. MATCHES  (매치 메타데이터 캐시)
@@ -363,17 +378,14 @@ CREATE TABLE matches (
     KEY idx_matches_team_b (team_b_id),
     KEY idx_matches_winner (winner_team_id),
     KEY idx_matches_game_start (game_start),
+    -- 2026-09-14 운영 RDS 대조 후 정정: team_a_id/team_b_id/winner_team_id는 FK를
+    -- 걸지 않는다(과거엔 걸려 있었으나 실제 운영 RDS에는 한 번도 반영된 적이 없었음 -
+    -- 아래 "마이그레이션" 섹션 7번 참고). 매치의 상대팀은 이 서비스에 가입하지 않은
+    -- 임의의 프리미어 팀일 수 있어(team_engagement_cache 주석의 "기존 관례"와 동일
+    -- 이유), 강한 FK를 걸면 그런 매치를 저장할 때마다 실패한다. 조회 성능은 아래
+    -- 일반 인덱스(idx_matches_team_a/b/winner)로 확보한다.
     CONSTRAINT fk_matches_map
         FOREIGN KEY (map_uuid) REFERENCES ref_maps (uuid)
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT fk_matches_team_a
-        FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT fk_matches_team_b
-        FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT fk_matches_winner
-        FOREIGN KEY (winner_team_id) REFERENCES teams (team_id)
         ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='매치 메타데이터 캐시';
@@ -418,9 +430,8 @@ CREATE TABLE match_player_stats (
     CONSTRAINT fk_mps_puuid
         FOREIGN KEY (puuid) REFERENCES riot_accounts (puuid)
         ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_mps_team
-        FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+    -- team_id는 matches.team_a_id/team_b_id와 같은 이유로 FK 없음(위 4번 주석 참고) -
+    -- idx_mps_team 인덱스만 유지.
     CONSTRAINT fk_mps_agent
         FOREIGN KEY (agent_uuid) REFERENCES ref_agents (uuid)
         ON DELETE SET NULL ON UPDATE CASCADE,
@@ -457,10 +468,11 @@ CREATE TABLE team_stats_summary (
     updated_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                         ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (summary_id),
-    UNIQUE KEY uq_team_stats (team_id, stat_type, dimension_key),
-    CONSTRAINT fk_tss_team
-        FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
+    UNIQUE KEY uq_team_stats (team_id, stat_type, dimension_key)
+    -- 2026-09-14 운영 RDS 대조 후 정정: fk_tss_team(teams FK)은 마이그레이션 7번에서
+    -- 재생성하려 했으나 실제 운영 RDS에는 반영된 적이 없다. 이 컬럼은 항상 가입 팀만
+    -- 가리키므로(비가입 상대팀 케이스 없음) 나중에 FK를 걸어도 안전하지만, 우선
+    -- 실제 운영 상태와 이 문서를 일치시킨다.
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='팀 단위 집계 통계';
 
@@ -522,12 +534,9 @@ CREATE TABLE predictions (
     KEY idx_predictions_team_a (team_a_id),
     KEY idx_predictions_team_b (team_b_id),
     KEY idx_predictions_map (map_uuid),
-    CONSTRAINT fk_predictions_team_a
-        FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_predictions_team_b
-        FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+    -- 2026-09-14 운영 RDS 대조 후 정정: team_a_id/team_b_id도 FK 없음(4번 matches
+    -- 주석과 동일 사유 - 마이그레이션 10번에서 team_b_id용 FK를 재생성하려 했으나
+    -- 실제 운영 RDS에는 반영된 적이 없다). idx_predictions_team_a/b 인덱스만 유지.
     CONSTRAINT fk_predictions_map
         FOREIGN KEY (map_uuid) REFERENCES ref_maps (uuid)
         ON DELETE SET NULL ON UPDATE CASCADE
@@ -558,12 +567,11 @@ CREATE TABLE insights (
     KEY idx_insights_team (team_id),
     KEY idx_insights_opponent (opponent_team_id),
     KEY idx_insights_target_puuid (target_puuid),
-    CONSTRAINT fk_insights_team
-        FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_insights_opponent
-        FOREIGN KEY (opponent_team_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+    -- 2026-09-14 운영 RDS 대조 후 정정: team_id/opponent_team_id는 FK 없음. 특히
+    -- opponent_team_id는 services/opponent_ai_report.py가 Henrik에서 조회한 상대팀의
+    -- id를 가입 여부와 무관하게 그대로 저장하므로(승부예측/AI 리포트는 비가입 팀도
+    -- 검색 대상) teams에 없는 값이 정상적으로 존재한다 - 실측 결과 운영 RDS에 28건
+    -- 존재(2026-09-14 기준). FK를 걸면 이 정상 케이스마다 저장이 실패한다.
     CONSTRAINT fk_insights_target_puuid
         FOREIGN KEY (target_puuid) REFERENCES riot_accounts (puuid)
         ON DELETE SET NULL ON UPDATE CASCADE
@@ -581,7 +589,6 @@ CREATE TABLE insights (
 -- 위 CREATE TABLE 문들은 "새 DB를 처음부터 만들 때" 기준 최종 스키마입니다.
 -- 이미 예전 스키마로 생성되어 데이터가 들어있는 RDS에는 파일 맨 위 DROP DATABASE부터
 -- 다시 실행하면 안 되고, 아래 ALTER/DROP 문만 한 번 실행해서 같은 상태로 맞추면 됩니다.
--- (분석 근거: server/우리팀_기능_구현_가이드.md)
 -- #######################################################################
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -613,17 +620,17 @@ ALTER TABLE insights
 
 -- 4) teams: premier_team_id/tier_id/season/conference 컬럼 제거(팀 인증을
 --    team_name/team_tag 기준으로만 하기로 하면서 외부 프리미어 팀 ID를 별도로 안
---    들고 있어도 됨 - division/ranking_points는 유지), team_image 컬럼 추가(Henrik
---    customization.image 팀 로고 URL), team_id를 AUTO_INCREMENT INT에서 애플리케이션이
---    직접 채우는 VARCHAR(64)로 변경. premier_team_id/tier_id/season/conference는 현재
---    운영 RDS에서 팀 4개 전부 NULL인 것을 확인했으므로 안전합니다.
+--    들고 있어도 됨 - division/ranking_points는 유지), team_id를 AUTO_INCREMENT
+--    INT에서 애플리케이션이 직접 채우는 VARCHAR(64)로 변경. premier_team_id/tier_id/
+--    season/conference는 현재 운영 RDS에서 팀 4개 전부 NULL인 것을 확인했으므로
+--    안전합니다. (team_image 컬럼 추가는 위 CREATE TABLE 섹션에 이미 반영되어 있어
+--    여기서는 생략 - 2026-09-14 정리)
 ALTER TABLE teams
     DROP FOREIGN KEY fk_teams_tier,
     DROP COLUMN premier_team_id,
     DROP COLUMN tier_id,
     DROP COLUMN season,
     DROP COLUMN conference,
-    ADD COLUMN team_image VARCHAR(255) NULL COMMENT '팀 로고 - Henrik 프리미어 API customization.image 원격 URL' AFTER team_tag,
     MODIFY COLUMN team_id VARCHAR(64) NOT NULL COMMENT 'Henrik 프리미어 팀 API(get_premier_team) 응답의 id를 그대로 사용 (회원가입 시 team_name/team_tag로 조회)';
 -- team_id는 INT -> VARCHAR 전환이라 기존 값(예: 3)은 MySQL이 문자열('3')로 그대로
 -- 보존합니다 - 기존 4개 팀 행이 사라지지 않습니다. 다만 이후 신규 가입 팀부터는
@@ -649,132 +656,81 @@ ALTER TABLE insights
     MODIFY COLUMN team_id VARCHAR(64) NOT NULL,
     MODIFY COLUMN opponent_team_id VARCHAR(64) NULL;
 
--- 7) 3)에서 내렸던 FK들을 새 타입 기준으로 다시 겁니다.
-ALTER TABLE team_stats_summary
-    ADD CONSTRAINT fk_tss_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE matches
-    ADD CONSTRAINT fk_matches_team_a FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    ADD CONSTRAINT fk_matches_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE,
-    ADD CONSTRAINT fk_matches_winner FOREIGN KEY (winner_team_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE match_player_stats
-    ADD CONSTRAINT fk_mps_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE predictions
-    ADD CONSTRAINT fk_predictions_team_a FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE insights
-    ADD CONSTRAINT fk_insights_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    ADD CONSTRAINT fk_insights_opponent FOREIGN KEY (opponent_team_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE;
+-- 7) [2026-09-14 정정] 원래는 3)에서 내렸던 FK들을 새 타입 기준으로 다시 걸 계획이었지만,
+--    운영 RDS를 직접 대조한 결과 아래 ADD CONSTRAINT 문들은 실제로 한 번도 실행된 적이
+--    없었다(운영 RDS의 team_stats_summary/matches/match_player_stats/predictions/insights
+--    어디에도 teams를 참조하는 FK가 존재하지 않음, 2026-09-14 SHOW CREATE TABLE로 확인).
+--    게다가 insights.opponent_team_id는 승부예측/AI 리포트가 비가입 상대팀도 검색 대상으로
+--    삼기 때문에(services/opponent_ai_report.py) teams에 없는 값이 실제로 28건 존재해
+--    fk_insights_opponent를 걸면 그 자체로 실패한다. 즉 "FK 없음"이 사고가 아니라 이
+--    스키마의 실제 최종 상태다 - 이 파일 위쪽 CREATE TABLE 섹션도 이에 맞춰 정정했다.
+--    아래 문장들은 실행하지 말 것(기록 보존 목적으로만 남겨둠).
+-- ALTER TABLE team_stats_summary
+--     ADD CONSTRAINT fk_tss_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
+--         ON DELETE CASCADE ON UPDATE CASCADE;
+-- ALTER TABLE matches
+--     ADD CONSTRAINT fk_matches_team_a FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
+--         ON DELETE SET NULL ON UPDATE CASCADE,
+--     ADD CONSTRAINT fk_matches_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
+--         ON DELETE SET NULL ON UPDATE CASCADE,
+--     ADD CONSTRAINT fk_matches_winner FOREIGN KEY (winner_team_id) REFERENCES teams (team_id)
+--         ON DELETE SET NULL ON UPDATE CASCADE;
+-- ALTER TABLE match_player_stats
+--     ADD CONSTRAINT fk_mps_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
+--         ON DELETE SET NULL ON UPDATE CASCADE;
+-- ALTER TABLE predictions
+--     ADD CONSTRAINT fk_predictions_team_a FOREIGN KEY (team_a_id) REFERENCES teams (team_id)
+--         ON DELETE CASCADE ON UPDATE CASCADE,
+--     ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
+--         ON DELETE CASCADE ON UPDATE CASCADE;
+-- ALTER TABLE insights
+--     ADD CONSTRAINT fk_insights_team FOREIGN KEY (team_id) REFERENCES teams (team_id)
+--         ON DELETE CASCADE ON UPDATE CASCADE,
+--     ADD CONSTRAINT fk_insights_opponent FOREIGN KEY (opponent_team_id) REFERENCES teams (team_id)
+--         ON DELETE SET NULL ON UPDATE CASCADE;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 8) riot_accounts.verification_status/verified_at은 원래 "팀 대표 계정" 인증용이었는데
 --    team_members가 없어지면서 그 근거가 사라졌습니다. 팀 인증은 team_name/team_tag를
 --    Henrik 프리미어 팀 API로 조회하는 방식(teams.verified/verified_at)으로 옮깁니다
---    (우리팀_기능_구현_가이드.md 4-3번 참고).
-ALTER TABLE teams
-    ADD COLUMN verified BOOLEAN NOT NULL DEFAULT FALSE
-        COMMENT 'team_name/team_tag가 실제 Henrik 프리미어 팀으로 확인됐는지 (팀 단위 인증 - 우리팀_기능_구현_가이드.md 4-3번)' AFTER team_image,
-    ADD COLUMN verified_at DATETIME NULL AFTER verified;
+--    (우리팀_기능_구현_가이드.md 4-3번 참고). (teams.verified/verified_at 추가는 위
+--    CREATE TABLE 섹션에 이미 반영되어 있어 여기서는 생략 - 2026-09-14 정리)
 ALTER TABLE riot_accounts
     DROP COLUMN verification_status,
     DROP COLUMN verified_at;
 
 -- 9) 프론트 TeamMatchRow.jsx가 라운드 스코어(match.roundScore)와 매치별 MVP
 --    (match.mvp)를 표시하는데 대응하는 컬럼이 없었습니다 (우리팀_기능_구현_가이드.md
---    4-2번 참고).
-ALTER TABLE matches
-    ADD COLUMN rounds_won_a INT NULL COMMENT 'team_a_id 팀이 획득한 라운드 수' AFTER winner_team_id,
-    ADD COLUMN rounds_won_b INT NULL COMMENT 'team_b_id 팀이 획득한 라운드 수' AFTER rounds_won_a;
-ALTER TABLE match_player_stats
-    ADD COLUMN is_mvp BOOLEAN NOT NULL DEFAULT FALSE COMMENT '그 매치에서 team_id 로스터 내 MVP였는지' AFTER team_id;
+--    4-2번 참고). matches.rounds_won_a/b, match_player_stats.is_mvp 추가는 위
+--    CREATE TABLE 섹션에 이미 반영되어 있어 여기서는 생략(추가할 ALTER 없음) -
 
 -- 10) predictions.team_b_id(상대팀)를 NOT NULL FK로 두면, 이 서비스에 가입 안 한 임의의
 --     프리미어 팀을 상대로 예측할 때(원래 이 기능의 정상적인 주 사용 케이스 - 팀 검색과
---     동일한 패턴) FK 위반으로 저장 자체가 실패합니다. team_b_id를 nullable로 바꾸고
---     (가입 팀이면 채워짐, 아니면 NULL) opponent_team_name/opponent_team_tag를 추가해
---     가입 여부와 무관하게 상대팀을 항상 식별할 수 있게 합니다 (routers/predict.py 연동).
+--     동일한 패턴) FK 위반으로 저장 자체가 실패합니다. team_b_id를 nullable로 바꿉니다
+--     (가입 팀이면 채워짐, 아니면 NULL - opponent_team_name/opponent_team_tag가 가입
+--     여부와 무관하게 상대팀을 항상 식별하며, 이 두 컬럼 추가는 위 CREATE TABLE
+--     섹션에 이미 반영되어 있어 여기서는 생략 - 2026-09-14 정리).
 ALTER TABLE predictions
-    DROP FOREIGN KEY fk_predictions_team_b,
-    MODIFY COLUMN team_b_id VARCHAR(64) NULL COMMENT '상대팀이 가입 계정일 때만 채워짐(teams.team_id)',
-    ADD COLUMN opponent_team_name VARCHAR(50) NOT NULL COMMENT '상대팀 가입 여부와 무관하게 항상 채워짐' AFTER team_b_id,
-    ADD COLUMN opponent_team_tag VARCHAR(10) NOT NULL AFTER opponent_team_name,
-    ADD CONSTRAINT fk_predictions_team_b FOREIGN KEY (team_b_id) REFERENCES teams (team_id)
-        ON DELETE SET NULL ON UPDATE CASCADE;
+    MODIFY COLUMN team_b_id VARCHAR(64) NULL COMMENT '상대팀이 가입 계정일 때만 채워짐(teams.team_id)';
 
 -- 11) match_player_stats.side(Attack/Defense 등 - 실제로는 services/match_history.py가
 --     red/blue 색상으로 채우고 있었음) 제거. 하프타임마다 공/수가 바뀌어서 매치당 값
 --     1개로는 의미가 없는 컬럼이었고, side를 읽던 유일한 소비처(ml/engagement_training.py)도
 --     이제 match_player_stats.team_id로 로스터를 가르도록 바뀌었다(services/match_sync.py/
---     match_history.py 모듈 docstring 참고). 대신 started_at을 추가 - Henrik 프리미어
---     히스토리 API(league_matches[].started_at)에서 가져오는 매치 시각으로,
---     matches.game_start(v2/match metadata.game_start)와는 소스가 다른 별도 값이다.
+--     match_history.py 모듈 docstring 참고). (대체로 추가된 started_at 컬럼은 위 CREATE
+--     TABLE 섹션에 이미 반영되어 있어 여기서는 생략 - 2026-09-14 정리)
 ALTER TABLE match_player_stats
-    DROP COLUMN side,
-    ADD COLUMN started_at DATETIME NULL
-        COMMENT 'Henrik 프리미어 히스토리 API(GET /valorant/v1/premier/{team}/{tag}/history) league_matches[].started_at'
-        AFTER role_type;
+    DROP COLUMN side;
 
--- 11) 승부예측 Rolling Feature 캐싱(ml/predictor.py, ml/rolling.py) - 신규 테이블이라
---     기존 데이터/FK에 영향 없음.
-CREATE TABLE IF NOT EXISTS player_rolling_cache (
-    puuid                   VARCHAR(64)     NOT NULL COMMENT 'Riot PUUID (고정키)',
-    agent                   VARCHAR(30)     NULL COMMENT '최근 경기 중 가장 최근 매치의 요원',
-    recent_acs              FLOAT           NOT NULL,
-    recent_kd               FLOAT           NOT NULL,
-    recent_kast             FLOAT           NOT NULL,
-    recent_headshot_pct     FLOAT           NOT NULL,
-    recent_winrate          FLOAT           NOT NULL,
-    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
-                                            ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (puuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='선수별 Rolling Feature(최근 N경기 평균) 캐시 - TTL은 애플리케이션에서 관리';
+-- 11)~13) player_rolling_cache 최초 생성, team_engagement_cache
+--     최초 생성(팀당 1행 구버전), team_engagement_cache 재설계(팀×매치당 1행 신버전)
+--     세 단계가 원래 여기 각각 CREATE TABLE로 남아있었는데, 두 테이블 모두 위 3-1/3-2번
+--     섹션에 이미 최종 형태(win 컬럼까지 포함)로 정의돼 있어 중복이라 제거했다. 운영
+--     RDS도 이미 최종 형태로 존재한다(2026-09-14 SHOW CREATE TABLE로 확인). 재설계
+--     배경(팀당 1행 → 팀×매치당 1행으로 바꾼 이유)은 3-2번 섹션 주석 참고.
 
--- 12) 팀별 교전 매치업 Rolling Feature 캐싱(ml/engagement_predictor.py, ml/
---     engagement_training.py) - 신규 테이블이라 기존 데이터/FK에 영향 없음. 3-2번과
---     동일 정의.
-CREATE TABLE IF NOT EXISTS team_engagement_cache (
-    team_id                 VARCHAR(64)     NOT NULL COMMENT 'teams.team_id (Henrik 프리미어 팀 id)',
-    recent_trade_rate       FLOAT           NOT NULL COMMENT '최근 N경기 트레이드 성공률(%) 평균',
-    recent_duelist_acs      FLOAT           NOT NULL COMMENT '최근 N경기 듀얼리스트 로스터 평균 ACS',
-    sample_matches          INT             NOT NULL DEFAULT 0 COMMENT '평균 계산에 실제로 반영된 매치 수',
-    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
-                                            ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (team_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='팀별 교전 매치업(트레이드 성공률/듀얼리스트 ACS) Rolling Feature 캐시 - TTL은 애플리케이션에서 관리';
-
--- 13) 2026-09-08 재설계: team_engagement_cache를 "팀당 한 행(덮어쓰기)"에서 "팀×매치당
---     한 행(append-only 로그)"으로 바꾼다 - matches/match_player_stats에 원본을 더 이상
---     저장하지 않기로 하면서, 이 표 하나가 캐시 + 학습 데이터 원본을 겸하도록 하기 위함
---     (server/승부예측_성능_분석.md 11번). 위 12)에서 만든 구버전 정의를 그대로 대체.
---     주의: 이미 저장된 행이 있다면 새 컬럼(match_id 등)이 없어 전부 버려진다 - 운영에서
---     이 값은 다시 write-through로 채워지므로(팀 페이지 조회/회원가입 때마다) 데이터
---     유실이 아니라 재계산일 뿐이지만, 실행 전 필요하면 백업하세요.
-DROP TABLE IF EXISTS team_engagement_cache;
-CREATE TABLE team_engagement_cache (
-    team_id                 VARCHAR(64)     NOT NULL COMMENT 'teams.team_id (Henrik 프리미어 팀 id)',
-    match_id                VARCHAR(64)     NOT NULL COMMENT '이 팀이 이 매치에서 기록한 값',
-    opponent_team_id        VARCHAR(64)     NULL     COMMENT '상대도 가입 팀이면 그 team_id (학습 데이터 페어링용)',
-    game_start               DATETIME        NULL     COMMENT '정렬/최근 N경기 선정 기준',
-    trade_rate              FLOAT           NULL     COMMENT '이 매치에서의 트레이드 성공률(%) - 계산 불가 시 NULL',
-    duelist_acs             FLOAT           NULL     COMMENT '이 매치에서의 듀얼리스트 로스터 평균 ACS - 계산 불가 시 NULL',
-    computed_at             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
-                                            ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (team_id, match_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='팀x매치당 교전 매치업(트레이드 성공률/듀얼리스트 ACS) 값 - 캐시 + 학습 데이터 겸용';
-
--- 14) 2026-09-10: 개인 분석 > 선수 상세 페이지(①라운드 정보 - 맵별 공격/수비/피스톨/Eco
+-- 14) 개인 분석 > 선수 상세 페이지(①라운드 정보 - 맵별 공격/수비/피스톨/Eco
 --     K·D·ACS)를 player_stats_summary에 캐싱하기로 했는데, stat_type ENUM에 대응하는
 --     값이 없었다(team_stats_summary는 round_phase/map_side가 있지만 player 쪽엔 없음).
 --     선수 개인 단위로는 맵별/전체 구분을 dimension_key 하나로 합쳐도 되므로 round_phase
@@ -782,9 +738,29 @@ CREATE TABLE team_engagement_cache (
 ALTER TABLE player_stats_summary
     MODIFY COLUMN stat_type ENUM('weapon','hitbox','clutch','role_matchup','engagement','round_phase') NOT NULL;
 
--- 참고: insights, ref_weapons, team_stats_summary, player_stats_summary는 현재
--- 코드에서 아직 안 쓰지만 이미 스캐폴딩되었거나(AI 리포트 프론트 컴포넌트) mock 데이터
--- 구조가 그대로 대응되는(무기별 스탯, 3초 상대분석/우리팀 분석/전략 제안) 기능과 바로
--- 연결되므로 남겨둡니다. predictions는 routers/predict.py가, matches/match_player_stats는
--- services/match_history.py·services/match_sync.py가 실제로 저장하기 시작했습니다.
--- 각 테이블이 실제로 어느 화면에 연결될지는 우리팀_기능_구현_가이드.md 1번 항목 참고.
+-- 15) team_engagement_cache에 win 컬럼 추가 - 이 매치의 실제 승패(Henrik
+--     teams.{side}.has_won)를 그대로 저장한다. diff_win_rate(팀×매치 로그의 win으로 만든
+--     "최근 승률 차이")가 실제 승패와의 상관계수 0.493으로 diff_trade_rate(0.276)보다도
+--     강한 신호였다(1286건 기준 실측) - ml/engagement_training.py 참고. (win 컬럼 추가는
+--     위 CREATE TABLE 섹션에 이미 반영되어 있어 여기서는 생략 - 2026-09-14 정리. 운영
+--     RDS에 이미 이 컬럼이 존재하며, 과거 행은 win이 NULL로 남고 write-through가 다시
+--     될 때 채워진다)
+
+-- 원래 이 자리에 있던 "참고: insights, ref_weapons, team_stats_summary,
+-- player_stats_summary는 현재 코드에서 아직 안 쓰지만... predictions는 routers/predict.py가...
+-- 실제로 저장하기 시작했습니다" 문단은 코드 대조 결과 더 이상 사실이 아니어서 정정합니다:
+--   - insights, team_stats_summary, player_stats_summary는 "아직 미사용 스캐폴딩"이
+--     아니라 이미 실제로 읽고/쓰는 서비스가 있습니다 - team_stats_summary는
+--     services/my_team_analysis.py, player_stats_summary는 services/my_team_
+--     player_detail.py가 각각 "캐시 조회 → 없으면 matches/match_player_stats 원본으로
+--     계산 → 결과를 다시 캐싱"하는 write-through 패턴으로 쓰고 있고, insights는
+--     services/ai_report.py("우리팀 분석" 리포트)와 services/opponent_ai_report.py
+--     ("승부예측" 상대팀 리포트) 둘 다 실제로 읽기/삭제/쓰기에 씁니다.
+--   - 반대로 predictions는 이 문단의 설명과 달리 실제로는 저장되지 않습니다 -
+--     services/predict_service.py::save_prediction() 함수 자체는 있지만 이 함수를
+--     호출하는 곳이 코드 전체에 하나도 없습니다(routers/predict.py 포함). 즉 모델/
+--     서비스 코드만 있고 실제로는 연결이 안 된 상태입니다.
+--   - matches/match_player_stats는 이 문단 설명대로 services/match_history.py·
+--     services/match_sync.py가 실제로 씁니다(정정 사항 없음).
+--   - ref_weapons는 ORM 모델 없이 raw SQL로만 조회됩니다(services/my_team_player_
+--     detail.py, services/match_sync.py) - agent/map 참조 테이블과 같은 방식.

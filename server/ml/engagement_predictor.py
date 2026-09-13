@@ -68,12 +68,18 @@ def _get_artifact():
 def _team_roster(match: dict, team_name: str, team_tag: str) -> tuple[str | None, set[str]]:
     """매치에서 team_name/team_tag 로스터가 red/blue 중 어느 쪽인지와 puuid 집합을 찾는다.
     services/team_profile.py::_match_our_side와 동일한 판정 방식(이름/태그 대소문자 무시
-    일치) - 이 모듈은 team_profile.py의 private 함수에 의존하지 않고 독립적으로 재구현한다."""
+    일치) - 이 모듈은 team_profile.py의 private 함수에 의존하지 않고 독립적으로 재구현한다.
+
+    2026-09-14 버그 수정: roster.get("name")도 team_name과 똑같이 strip()해야 한다 -
+    Henrik이 내려주는 roster.name에 공백이 붙어 있는 팀이 실제로 있었다(예: "XLA  ").
+    입력값만 strip하고 roster 쪽은 안 하면 둘 다 사실상 같은 팀인데 비교가 실패해서
+    trade_rate/duelist_acs가 계산 가능한 매치인데도 계속 None으로 나왔다(team_engagement_
+    cache 백필 중 실제 사례로 발견 - scripts/backfill_engagement_cache.py)."""
     teams = match.get("teams") or {}
     name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
     for side in ("red", "blue"):
         roster = (teams.get(side) or {}).get("roster") or {}
-        if str(roster.get("name", "")).lower() == name_l and str(roster.get("tag", "")).lower() == tag_l:
+        if str(roster.get("name", "")).strip().lower() == name_l and str(roster.get("tag", "")).strip().lower() == tag_l:
             return side, set(roster.get("members") or [])
     return None, set()
 
@@ -170,6 +176,30 @@ def duelist_acs_from_matches(matches: list[dict], team_name: str, team_tag: str)
     return sum(acs_values) / len(acs_values)
 
 
+def win_rate_from_matches(matches: list[dict], team_name: str, team_tag: str) -> float | None:
+    """team_name/team_tag 로스터의 최근 매치 승률(%) - teams.{side}.has_won을 그대로
+    집계한다. diff_win_rate(이 값의 우리팀-상대팀 차이)가 실제 승패와의
+    상관계수 0.493으로 diff_trade_rate(0.276)보다도 강한 신호였다 - services/
+    team_engagement_cache.py가 write-through 시점에 저장하는 win 컬럼과 정확히 같은
+    계산(ml/engagement_training.py 참고), 여기서는 DB 캐시가 없는 쪽(주로 상대팀,
+    아직 검색 이력이 없는 미가입 팀 등)을 위해 라이브 match_details로 직접 집계한다."""
+    wins = 0
+    total = 0
+    for match in matches:
+        if not match:
+            continue
+        side, our_puuids = _team_roster(match, team_name, team_tag)
+        if side is None:
+            continue
+        total += 1
+        if (match.get("teams") or {}).get(side, {}).get("has_won"):
+            wins += 1
+
+    if total == 0:
+        return None
+    return round(wins / total * 100, 1)
+
+
 def normalize_to_100(our_value: float, their_value: float) -> tuple[float, float]:
     """두 팀의 원본 관측치(각자 독립적으로 계산된 값 - team_engagement_cache.trade_rate처럼
     서로 다른 표본에서 나와 합이 100일 필요가 없는 값)를 "우리 vs 상대" 대결 구도의 0~100
@@ -198,7 +228,10 @@ def _duelist_matchup_from_acs(our_acs: float, their_acs: float) -> dict:
     return {"ourScore": our_score, "theirScore": their_score, "favor": favor}
 
 
-def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs, their_duelist_acs) -> dict:
+def _predict_with_model(
+    artifact: dict, our_trade, their_trade, our_duelist_acs, their_duelist_acs,
+    our_win_rate=None, their_win_rate=None,
+) -> dict:
     """학습된 XGBRegressor 2개(트레이드 성공률/듀얼리스트 ACS)로 예측. 입력 피처는
     ml/train_engagement_model.py가 학습에 쓴 것과 정확히 같은 컬럼 순서로 조립해야
     한다(artifact["feature_columns"]) - ml/team_feature.py::build_team_feature와 같은
@@ -212,23 +245,38 @@ def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs,
     row["diff_trade_rate"] = row["team_recent_trade_rate"] - row["opponent_recent_trade_rate"]
     row["diff_duelist_acs"] = row["team_recent_duelist_acs"] - row["opponent_recent_duelist_acs"]
 
-    X = pd.DataFrame([row])[artifact["feature_columns"]]
+    # 상대팀 관점 피처(우리/상대를 서로 바꿔치기) - 2026-09-13: 화면에 보여주는 상대팀
+    # 값이 "우리팀 예측치를 100에서 뺀 것"일 뿐 상대팀의 실제 기록과 무관해서(예: 상대
+    # 실제 트레이드 22.5%인데 화면엔 74.9%로 표시되는 등) 실제 근거와 화면이 어긋난다는
+    # 지적이 있었다(2026-09-13 실사용 사례 - Spicy Nuguri vs SYSTEM SEOUL). 상대팀도
+    # 같은 모델로 독립적으로 한 번 더 예측해서 화면에 실제 근거가 있는 값을 보여준다.
+    their_row = {
+        "team_recent_trade_rate": row["opponent_recent_trade_rate"],
+        "opponent_recent_trade_rate": row["team_recent_trade_rate"],
+        "team_recent_duelist_acs": row["opponent_recent_duelist_acs"],
+        "opponent_recent_duelist_acs": row["team_recent_duelist_acs"],
+        "diff_trade_rate": -row["diff_trade_rate"],
+        "diff_duelist_acs": -row["diff_duelist_acs"],
+    }
 
-    predicted_trade = float(artifact["trade_model"].predict(X)[0])
-    predicted_duelist_acs = float(artifact["duelist_model"].predict(X)[0])
+    X_ours = pd.DataFrame([row])[artifact["feature_columns"]]
+    X_theirs = pd.DataFrame([their_row])[artifact["feature_columns"]]
 
-    predicted_trade = min(max(predicted_trade, 0.0), 100.0)
-    predicted_duelist_acs = max(predicted_duelist_acs, 0.0)
-    # 학습된 모델은 "team_a(우리팀) 관점 트레이드 성공률"만 예측한다 - 상대팀을 team_a로
-    # 놓고 한 번 더 예측하는 게 정확하지만, 지금은 대칭 근사로 (100 - 우리팀 예측치)를
-    # 상대팀 값으로 쓴다(normalize_to_100과 동일하게 "합이 100인 대결 구도"로 맞추기
-    # 위함 - 데이터가 쌓여 모델이 안정되면 상대팀도 별도로 추론하도록 개선 가능, 7-4번 참고).
-    duelist_matchup = _duelist_matchup_from_acs(predicted_duelist_acs, their_duelist_acs or 0.0)
+    predicted_trade_ours = min(max(float(artifact["trade_model"].predict(X_ours)[0]), 0.0), 100.0)
+    predicted_trade_theirs = min(max(float(artifact["trade_model"].predict(X_theirs)[0]), 0.0), 100.0)
+    predicted_duelist_ours = max(float(artifact["duelist_model"].predict(X_ours)[0]), 0.0)
+    predicted_duelist_theirs = max(float(artifact["duelist_model"].predict(X_theirs)[0]), 0.0)
+
+    # 화면 표시용 - 독립적으로 나온 두 예측치를 normalize_to_100으로 합이 100%가 되게
+    # 맞춘다(heuristic-v0/듀얼리스트 비교와 동일한 방식) - 더 이상 "100에서 빼기"가 아니라
+    # 상대팀도 실제로 예측된 값을 근거로 화면에 나간다.
+    trade_our_pct, trade_their_pct = normalize_to_100(predicted_trade_ours, predicted_trade_theirs)
+    duelist_matchup = _duelist_matchup_from_acs(predicted_duelist_ours, predicted_duelist_theirs)
 
     result = {
         "trade": {
-            "ourWinRate": round(predicted_trade, 1),
-            "theirWinRate": round(100 - predicted_trade, 1),
+            "ourWinRate": trade_our_pct,
+            "theirWinRate": trade_their_pct,
         },
         "duelistMatchup": duelist_matchup,
         "modelVersion": artifact.get("model_version", "engagement-v2"),
@@ -241,9 +289,35 @@ def _predict_with_model(artifact: dict, our_trade, their_trade, our_duelist_acs,
     # 표본 부족으로 메타 단계가 아직 안 됐으면 artifact["meta_model"]이 None이다.
     meta_model = artifact.get("meta_model")
     if meta_model is not None:
-        p_trade = result["trade"]["ourWinRate"]
-        p_match = duelist_matchup["ourScore"]
-        meta_X = pd.DataFrame([{"p_trade": p_trade, "p_match": p_match}])[artifact["meta_feature_columns"]]
+        # 주의: 메타 모델은 학습 때 정확히 이 정의로 만들어진 p_trade/p_match를 봤다
+        # (ml/train_engagement_meta_model.py::_out_of_fold_meta_features) - p_trade는
+        # "우리팀 예측치 원본"(방금 위에서 화면용으로 정규화한 값이 아님), p_match는
+        # "우리팀 예측 듀얼리스트 vs 상대팀 실측(원본 입력값) 듀얼리스트"다. 화면 표시가
+        # 상대팀도 예측치로 바뀌었다고 해서 메타 입력까지 같이 바꾸면 학습 때 본 분포와
+        # 어긋나(train/inference 피처 불일치) 메타 모델이 엉뚱하게 작동한다 - 그래서 이
+        # 둘은 화면용 값과 별개로 예전 정의 그대로 계산한다.
+        p_trade = predicted_trade_ours
+        p_match = normalize_to_100(predicted_duelist_ours, their_duelist_acs or 0.0)[0]
+        # diff_trade_rate/diff_duelist_acs를 p_trade/p_match와 같이 메타 피처에 넣는다 -
+        # p_trade는 우리팀의 절대적인 예측 트레이드 성공률일 뿐 상대와의 비교가 아닌데
+        # 승패는 상대적 우위로 갈려서(2026-09-12 실측 - diff_trade_rate가 실제 승패와의
+        # 상관계수 0.276로 base 모델의 어떤 예측치보다 큼), 학습 때 이미 이 두 값을 추가로
+        # 넣게 바꿨다(ml/train_engagement_meta_model.py 참고) - 추론도 반드시 같은 피처
+        # 구성을 써야 한다.
+        # diff_win_rate(최근 승률 차이)도 같이 넣는다 - 2026-09-12(2차) 실측 상관계수
+        # 0.493으로 diff_trade_rate(0.276)보다도 강한 신호였다. our_win_rate/their_win_rate가
+        # 없으면(집계 실패 등) 50.0(무승부 가정)으로 대체 - team_recent_trade_rate 등과
+        # 동일한 fallback 관례.
+        diff_win_rate = (our_win_rate if our_win_rate is not None else 50.0) - (
+            their_win_rate if their_win_rate is not None else 50.0
+        )
+        meta_X = pd.DataFrame([{
+            "p_trade": p_trade,
+            "p_match": p_match,
+            "diff_trade_rate": row["diff_trade_rate"],
+            "diff_duelist_acs": row["diff_duelist_acs"],
+            "diff_win_rate": diff_win_rate,
+        }])[artifact["meta_feature_columns"]]
         our_final = float(meta_model.predict_proba(meta_X)[0][1]) * 100
         result["finalPrediction"] = {
             "ourWinRate": round(our_final, 1),
@@ -260,14 +334,17 @@ def build_engagement_prediction_from_features(
     opponent_trade_rate: float | None,
     team_duelist_acs: float | None,
     opponent_duelist_acs: float | None,
+    team_win_rate: float | None = None,
+    opponent_win_rate: float | None = None,
 ) -> dict | None:
-    """이미 계산된 트레이드 성공률/듀얼리스트 ACS 4개로 engagementPrediction shape을
-    조립한다(server/승부예측_성능_분석.md 7-5번 API 계약, 9-4번 참고). 이 4개 값을 어디서
-    구했는지는 이 함수가 신경 안 쓴다 - routers/teams.py가 우리팀은
+    """이미 계산된 트레이드 성공률/듀얼리스트 ACS(+승률) 6개로 engagementPrediction
+    shape을 조립한다(server/승부예측_성능_분석.md 7-5번 API 계약, 9-4번 참고). 이 값들을
+    어디서 구했는지는 이 함수가 신경 안 쓴다 - routers/teams.py가 우리팀은
     services/team_engagement_cache.py(DB 캐시, Henrik 호출 없음), 상대팀은 그 순간
-    라이브로 받은 match_details(trade_rate_from_matches/duelist_acs_from_matches)처럼
-    서로 다른 소스에서 얻어 여기로 넘긴다 - 두 소스 다 결국 같은 trade_success_from_kills
-    계산식을 쓰므로 값 자체는 어긋나지 않는다."""
+    라이브로 받은 match_details(trade_rate_from_matches/duelist_acs_from_matches/
+    win_rate_from_matches)처럼 서로 다른 소스에서 얻어 여기로 넘긴다.
+    team_win_rate/opponent_win_rate는 메타 모델(최종 교전 승률)에만 쓰인다 - trade/
+    duelistMatchup 자체의 계산에는 관여하지 않는다."""
     if team_trade_rate is None and opponent_trade_rate is None and team_duelist_acs is None and opponent_duelist_acs is None:
         # 넷 다 없으면 굳이 50:50 가짜 값을 내려 "예측"인 척하지 않는다 - None을 반환해
         # 프론트(EngagementPredictionBlock)가 "모델 학습 전" 안내를 보여주게 한다.
@@ -275,7 +352,10 @@ def build_engagement_prediction_from_features(
 
     artifact = _get_artifact()
     if artifact is not None:
-        return _predict_with_model(artifact, team_trade_rate, opponent_trade_rate, team_duelist_acs, opponent_duelist_acs)
+        return _predict_with_model(
+            artifact, team_trade_rate, opponent_trade_rate, team_duelist_acs, opponent_duelist_acs,
+            team_win_rate, opponent_win_rate,
+        )
 
     duelist_matchup = _duelist_matchup_from_acs(team_duelist_acs or 0.0, opponent_duelist_acs or 0.0)
     our_trade_pct, their_trade_pct = normalize_to_100(team_trade_rate or 0.0, opponent_trade_rate or 0.0)
@@ -307,4 +387,6 @@ def build_engagement_prediction(
         opponent_trade_rate=trade_rate_from_matches(opponent_matches, opponent_name, opponent_tag),
         team_duelist_acs=duelist_acs_from_matches(team_matches, team_name, team_tag),
         opponent_duelist_acs=duelist_acs_from_matches(opponent_matches, opponent_name, opponent_tag),
+        team_win_rate=win_rate_from_matches(team_matches, team_name, team_tag),
+        opponent_win_rate=win_rate_from_matches(opponent_matches, opponent_name, opponent_tag),
     )

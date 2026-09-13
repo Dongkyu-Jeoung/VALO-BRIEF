@@ -1,18 +1,31 @@
 import { httpClient } from './httpClient';
 import { ENDPOINTS } from './endpoints';
 import { withFallback } from './withFallback';
+import { MOCK_DELAY_MS } from './config';
 import { playerProfileMock } from '../mocks/player.mock';
 import { episodeToYearLabel, yearLabelToEpisode } from '../utils/episodeYear';
+import { DEMO_PLAYER_NAME, DEMO_PLAYER_TAG } from '../constants/demoPlayer';
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 백엔드 actOptions는 "Episode 11" 형식(Riot 공식 표기)으로 온다. 화면에는 "2026"처럼
 // 연도로 보여주고 싶어서, 여기(API 경계)에서 한 번만 변환해둔다 - 이후 훅/컴포넌트는
 // "연도" 라벨만 알면 되고 Episode 표기를 신경 쓸 필요가 없다.
 export function fetchPlayerProfile(riotId, tag) {
-  return withFallback(
-    () => httpClient.get(ENDPOINTS.playerProfile(riotId, tag)),
-    playerProfileMock,
-    'fetchPlayerProfile'
-  ).then((data) => ({
+  // DEMO_PLAYER(example#0000)는 실제로 존재하지 않는 계정이라 백엔드가 항상 404를
+  // 낸다(withFallback이 잡아서 어차피 mock으로 대체하지만, 그 전에 뻔한 404 요청이
+  // 매번 나가는 게 문제였다 - 2026-09-14). 이 값이면 네트워크를 아예 타지 않고 바로
+  // mock을 반환한다(constants/demoTeam.js 쪽 팀 API들과 동일 처리, api/teams.js 참고).
+  const isDemoPlayer = (riotId || '').trim().toLowerCase() === DEMO_PLAYER_NAME
+    && (tag || '').trim().toLowerCase() === DEMO_PLAYER_TAG.toLowerCase();
+  const request = isDemoPlayer
+    ? delay(MOCK_DELAY_MS).then(() => playerProfileMock)
+    : withFallback(
+        () => httpClient.get(ENDPOINTS.playerProfile(riotId, tag)),
+        playerProfileMock,
+        'fetchPlayerProfile'
+      );
+  return request.then((data) => ({
     ...data,
     actOptions: (data.actOptions ?? []).map((o) => ({ ...o, season: episodeToYearLabel(o.season) })),
   }));

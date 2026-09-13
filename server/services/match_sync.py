@@ -120,12 +120,16 @@ def _load_map_uuid_by_name(db: Session) -> dict:
 
 def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
     """teams.red/blue 중 roster.name/tag가 조회 대상 팀과 일치하는 쪽을 "red"/"blue"로
-    반환 (services/team_profile.py의 동명 함수와 동일 로직)."""
+    반환 (services/team_profile.py의 동명 함수와 동일 로직).
+
+    2026-09-14 버그 수정: roster.get("name")도 strip() 처리 - Henrik roster.name에
+    공백이 붙은 팀이 실제로 있어(예: "XLA  ") 입력값만 strip하면 비교가 항상 실패했다
+    (ml/engagement_predictor.py::_team_roster의 동일 수정 참고)."""
     teams = match.get("teams") or {}
     name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
     for side in ("red", "blue"):
         roster = (teams.get(side) or {}).get("roster") or {}
-        if str(roster.get("name", "")).lower() == name_l and str(roster.get("tag", "")).lower() == tag_l:
+        if str(roster.get("name", "")).strip().lower() == name_l and str(roster.get("tag", "")).strip().lower() == tag_l:
             return side
     return None
 
@@ -402,12 +406,15 @@ def _insert_match(
 
     # write-through - services/match_history.py와 동일한 컨벤션으로 team_engagement_cache도
     # 바로 채운다(services/team_engagement_cache.py 모듈 docstring 참고).
+    our_won = our_info.get("has_won")
+    opp_won = opp_info.get("has_won")
     team_engagement_cache.upsert_match_engagement(
         db, our_team_id, match_id,
         opponent_team_id=opp_engagement_id,
         game_start=game_start,
         trade_rate=engagement_predictor.trade_rate_from_matches([match], team_name, team_tag),
         duelist_acs=engagement_predictor.duelist_acs_from_matches([match], team_name, team_tag),
+        win=our_won if isinstance(our_won, bool) else None,
     )
     if opp_engagement_id:
         team_engagement_cache.upsert_match_engagement(
@@ -420,6 +427,7 @@ def _insert_match(
             duelist_acs=engagement_predictor.duelist_acs_from_matches(
                 [match], opp_roster.get("name", ""), opp_roster.get("tag", "")
             ),
+            win=opp_won if isinstance(opp_won, bool) else None,
         )
 
 

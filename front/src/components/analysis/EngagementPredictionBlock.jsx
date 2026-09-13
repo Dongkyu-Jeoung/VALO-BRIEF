@@ -44,9 +44,22 @@ export default function EngagementPredictionBlock({
   const trade = data.trade ?? { ourWinRate: 50, theirWinRate: 50 };
   const duel = data.duelistMatchup ?? { ourScore: 50, theirScore: 50, favor: 'even' };
 
+  // "예상 결과" 배지는 최종 교전 승률(finalPrediction) 바로 아래 붙는 문구이므로 그
+  // 값을 기준으로 판정해야 한다 - 이전엔 duelistMatchup.favor(듀얼리스트 매치업이라는
+  // 하위 지표 하나)로만 판정해서, 트레이드 성공률까지 종합한 최종 예측은 우리팀 열세인데
+  // 듀얼리스트만 우리팀이 근소 우위면 "우리팀 우세"로 잘못 표시되는 버그가 있었다.
+  // ±5%p 이내는 "팽팽함"으로 본다(백엔드 _duelist_matchup_from_acs와 동일한 여유값).
+  const final = data.finalPrediction;
+  const favor = final
+    ? final.ourWinRate - final.theirWinRate > 5
+      ? 'us'
+      : final.theirWinRate - final.ourWinRate > 5
+        ? 'them'
+        : 'even'
+    : duel.favor;
   const favorText =
-    duel.favor === 'us' ? `${ourLabel} 우세` : duel.favor === 'them' ? `${theirLabel} 우세` : '팽팽함';
-  const favorClass = duel.favor === 'us' ? 'text-win' : duel.favor === 'them' ? 'text-lose' : '';
+    favor === 'us' ? `${ourLabel} 우세` : favor === 'them' ? `${theirLabel} 우세` : '팽팽함';
+  const favorClass = favor === 'us' ? 'text-win' : favor === 'them' ? 'text-lose' : '';
 
   return (
     <div className="analysis-row">

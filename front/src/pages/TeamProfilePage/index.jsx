@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchTeamProfile } from '../../api/teams';
+import { fetchRecentOpponent } from '../../api/prediction';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import MiniRankTable from '../../components/common/MiniRankTable';
 import MapWinrateList from './MapWinrateList';
@@ -9,6 +10,9 @@ import DonutChart from '../../components/common/DonutChart';
 import LoadingText from '../../components/common/LoadingText';
 import { useSeasonActFilter } from '../../hooks/useSeasonActFilter';
 import { useListFilter } from '../../hooks/useListFilter';
+import { useAuth } from '../../context/AuthContext';
+import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
+import { ROUTES } from '../../constants/routes';
 
 /**
  * 이 페이지의 바디는 승부예측 페이지의 '통계' 탭에서도 그대로 재사용됩니다.
@@ -24,20 +28,37 @@ import { useListFilter } from '../../hooks/useListFilter';
  */
 export default function TeamProfilePage() {
   const { teamName, teamTag } = useParams();
+  const { isAuthenticated } = useAuth();
   const [team, setTeam] = useState(null);
 
   useEffect(() => {
     let active = true;
     setTeam(null);
-    fetchTeamProfile(teamName, teamTag).then((data) => { if (active) setTeam(data); });
+
+    // 헤더/메뉴의 "상대팀 전적 검색"은 항상 데모 팀(team-ascend#ASC)으로 연결돼 있다.
+    // 로그인 상태에서 그 데모 링크로 들어온 경우에만 MatchPredictionPage와 동일한
+    // 규칙으로 우리 팀이 가장 최근에 매치했던 상대팀으로 자동 대체한다 - 최근 상대를
+    // 못 찾으면(매치 이력 없음 등) URL의 팀으로 그냥 둔다. 헤더 검색으로 실제 팀을
+    // 검색해 들어온 경우(URL이 데모 링크가 아님)는 이 자동 대체를 건너뛴다.
+    async function resolveTeam() {
+      const isDemoLink = teamName === DEMO_TEAM_NAME && teamTag === DEMO_TEAM_TAG;
+      if (!isAuthenticated || !isDemoLink) return { name: teamName, tag: teamTag };
+      const recent = await fetchRecentOpponent();
+      return recent ? { name: recent.teamName, tag: recent.teamTag } : { name: teamName, tag: teamTag };
+    }
+
+    resolveTeam().then(({ name, tag }) => {
+      fetchTeamProfile(name, tag).then((data) => { if (active) setTeam(data); });
+    });
+
     return () => { active = false; };
-  }, [teamName, teamTag]);
+  }, [teamName, teamTag, isAuthenticated]);
 
   if (!team) return <LoadingText full />;
 
   return (
     <div className="page-container">
-      <TeamProfileBody team={team} />
+      <TeamProfileBody team={team} showPredictCta />
     </div>
   );
 }
@@ -63,9 +84,10 @@ function summarizeMatches(matches, fallback) {
   };
 }
 
-export function TeamProfileBody({ team }) {
+export function TeamProfileBody({ team, showPredictCta = false }) {
   // actOptions: team_profile.py가 실제 데이터 기준으로 내려주는 [{season, acts}] (없으면
   // 기존 고정 SEASONS/ACTS로 자동 폴백 - useSeasonActFilter 참고).
+  const { user, isAuthenticated } = useAuth();
   const { season, setSeason, act, setAct, seasons, acts } = useSeasonActFilter(team.actOptions);
   const filteredHistory = useListFilter(
     team.matchHistory,
@@ -73,6 +95,13 @@ export function TeamProfileBody({ team }) {
   );
   const recentSummary = summarizeMatches(filteredHistory, team.recentSummary);
   const isComputedSummary = recentSummary !== team.recentSummary;
+  // 검색된 팀이 로그인한 내 팀 자신이면(자기 팀 이름으로 검색해 들어온 경우) "승부 예측"은
+  // 의미가 없으므로 CTA를 숨긴다.
+  const isOwnTeam = user?.teamName === team.name && user?.teamTag === team.tag;
+  // 비로그인 상태면 버튼을 아예 숨긴다 - /predict/*가 ProtectedRoute라 눌러도 로그인
+  // 페이지로 리다이렉트될 뿐이지만, 그 전에 "누를 수 있는데 로그인 페이지로 튕기는"
+  // 어색한 흐름 대신 애초에 안 보이는 쪽이 낫다는 요청(2026-09-14).
+  const showPredictButton = showPredictCta && isAuthenticated && !isOwnTeam;
 
   return (
     <>
@@ -88,6 +117,7 @@ export function TeamProfileBody({ team }) {
         onActChange={setAct}
         seasons={seasons}
         acts={acts}
+        predictTo={showPredictButton ? ROUTES.predict(team.name, team.tag) : undefined}
       />
 
       <div className="mh-grid">

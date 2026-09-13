@@ -296,6 +296,8 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     # 쌓는다(위 red_engagement_id/blue_engagement_id 참고 - services/team_engagement_
     # cache.py 모듈 docstring도 같이 참고). ENGAGEMENT_CACHE_ENABLED가 False면 내부에서
     # 조용히 스킵된다.
+    red_won = red.get("has_won")
+    blue_won = blue.get("has_won")
     if red_engagement_id:
         team_engagement_cache.upsert_match_engagement(
             db, red_engagement_id, match_id,
@@ -307,6 +309,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             duelist_acs=engagement_predictor.duelist_acs_from_matches(
                 [match], red_roster.get("name", ""), red_roster.get("tag", "")
             ),
+            win=red_won if isinstance(red_won, bool) else None,
         )
     if blue_engagement_id:
         team_engagement_cache.upsert_match_engagement(
@@ -319,4 +322,5 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             duelist_acs=engagement_predictor.duelist_acs_from_matches(
                 [match], blue_roster.get("name", ""), blue_roster.get("tag", "")
             ),
+            win=blue_won if isinstance(blue_won, bool) else None,
         )

@@ -1,4 +1,4 @@
-export default function AiReportCard({ report, heading, strengthTitle = '강점 3', weaknessTitle = '약점 3' }) {
+export default function AiReportCard({ report, heading, strengthTitle = '강점 3', weaknessTitle = '약점 3', children }) {
   return (
     <div className="ai-report-card">
       <div className="popup-head plain">
@@ -56,6 +56,7 @@ export default function AiReportCard({ report, heading, strengthTitle = '강점 
           ))}
         </div>
       </div>
+      {children}
     </div>
   );
 }

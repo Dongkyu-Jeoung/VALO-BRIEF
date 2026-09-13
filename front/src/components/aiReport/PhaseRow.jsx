@@ -6,7 +6,11 @@ export default function PhaseRow({ phases }) {
         {phases.map((p) => (
           <div className="ai-phase-box" key={p.label}>
             <div className="phase-label">{p.label}</div>
-            <p>{p.text}</p>
+            <b className="ai-list-title">{p.title}</b>
+            {p.stat && <span className="stat-badge accent">{p.stat}</span>}
+            {p.detail.map((line, j) => (
+              <p className="ai-list-detail" key={j}>{line}</p>
+            ))}
           </div>
         ))}
       </div>

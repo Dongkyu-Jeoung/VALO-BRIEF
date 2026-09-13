@@ -7,6 +7,7 @@ prefix/파일명/함수명을 전부 팀 전용으로 분리했다 (players.py/p
 """
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ from database.connection import SessionLocal, get_db
 from ml import engagement_predictor
 from models.team import Team
 from routers.auth import get_current_team
-from services import henrik_api, match_history, opponent_ai_report, team_engagement_cache
+from services import henrik_api, match_history, opponent_ai_report, predict_service, team_engagement_cache
 from services.team_profile import (
     MATCH_HISTORY_LIMIT,
     QUICK_ANALYSIS_MATCH_LIMIT,
@@ -66,6 +67,7 @@ def _accumulate_match_history_task(
 
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/{team_name}/{team_tag}")
@@ -267,9 +269,10 @@ async def get_team_analysis(
     # (Henrik 호출 없음, DB 쿼리 한 번)를 쓴다 - 우리팀 매치 이력을 여기서 다시 Henrik으로
     # 조회하지 않는 이유는 services/match_sync.py가 회원가입 시점에, services/
     # match_history.py가 팀 프로필/분석 조회 때마다 각각 write-through로 이 캐시를 이미
-    # 채워뒀기 때문 - 그 값을 그대로 재사용한다(server/승부예측_성능_분석.md 11번).
+    # 채워뒀기 때문 - 그 값을 그대로 재사용한다
     opponent_trade = engagement_predictor.trade_rate_from_matches(list(match_details), clean_name, clean_tag)
     opponent_duelist = engagement_predictor.duelist_acs_from_matches(list(match_details), clean_name, clean_tag)
+    opponent_win_rate = engagement_predictor.win_rate_from_matches(list(match_details), clean_name, clean_tag)
     our_engagement = team_engagement_cache.get_recent_team_engagement(db, current.team_id)
 
     engagement_prediction = engagement_predictor.build_engagement_prediction_from_features(
@@ -277,7 +280,30 @@ async def get_team_analysis(
         opponent_trade_rate=opponent_trade,
         team_duelist_acs=our_engagement["duelist_acs"] if our_engagement else None,
         opponent_duelist_acs=opponent_duelist,
+        team_win_rate=our_engagement["win_rate"] if our_engagement else None,
+        opponent_win_rate=opponent_win_rate,
     )
+
+    # 교전 매치업 예측도 predictions 테이블에 남긴다(승부예측/predict.py 쪽과 같은 이유 -
+    # 지금까지는 save_prediction()을 아무도 안 불러서 이 테이블이 비어 있었다). trade/
+    # duelistMatchup만으로는 "승률"이라 부를 값이 없어서, 실제 승률 추정치인
+    # finalPrediction(메타 모델 출력)이 있을 때만 저장한다 - 메타 모델이 아직 없으면
+    # (표본 부족) 조용히 건너뛴다. 저장 실패가 화면 응답을 막으면 안 되므로 예외를 삼킨다.
+    if engagement_prediction and "finalPrediction" in engagement_prediction:
+        try:
+            final = engagement_prediction["finalPrediction"]
+            predict_service.save_prediction(
+                db,
+                team_a_id=current.team_id,
+                opponent_team_name=clean_name,
+                opponent_team_tag=clean_tag,
+                predicted_winrate_a=final["ourWinRate"],
+                predicted_winrate_b=final["theirWinRate"],
+                model_version=final["modelVersion"],
+                feature_snapshot=engagement_prediction,
+            )
+        except Exception:
+            logger.exception("교전 예측 결과 저장 실패(predictions 테이블) - 응답에는 영향 없음")
 
     return {
         "roundInfo": profile.get("roundInfo", {}),
@@ -289,12 +315,18 @@ async def get_team_analysis(
 
 @router.get("/{team_name}/{team_tag}/ai-report")
 async def get_team_ai_report(
-    team_name: str, team_tag: str, current: Team = Depends(get_current_team), db: Session = Depends(get_db)
+    team_name: str,
+    team_tag: str,
+    background_tasks: BackgroundTasks,
+    current: Team = Depends(get_current_team),
+    db: Session = Depends(get_db),
 ):
     """승부예측 페이지 "AI 리포트" 탭(상대팀 인사이트) - services/opponent_ai_report.py 참고.
-    상대팀 기준정보(team_engagement_cache)가 아직 DB에 없으면(한 번도 검색/조회된 적
-    없는 팀) None을 그대로 200으로 내려준다 - 이건 에러가 아니라 "아직 준비 안 됨"인
-    정상 상태라, HTTPException으로 던지면 withFallback이 실패로 착각해 mock으로
-    대체해버린다(진짜 "준비 중" 안내 대신 가짜 데이터가 보이게 됨). front가 null이면
-    안내 문구를 보여준다(AiReportTab.jsx)."""
-    return await opponent_ai_report.build_opponent_ai_report(db, current, team_name, team_tag)
+    실제 Claude 생성은 20~45초 걸려이 요청 안에서 기다리지 않는다 -
+    캐시가 있으면 {"status":"ready","report":{...}}를 바로 주고, 없으면 백그라운드로
+    생성을 시작시키고 {"status":"generating"}을(를) 바로 준다(front가 몇 초 간격으로
+    다시 호출해 폴링). 상대팀 기준정보(team_engagement_cache)가 아직 DB에 없으면(한 번도
+    검색/조회된 적 없는 팀) {"status":"not_ready"}를 200으로 내려준다 - 이건 에러가
+    아니라 "아직 준비 안 됨"인 정상 상태라, HTTPException으로 던지면 withFallback이
+    실패로 착각해 mock으로 대체해버린다(진짜 "준비 중" 안내 대신 가짜 데이터가 보이게 됨)."""
+    return await opponent_ai_report.get_or_start_opponent_ai_report(db, current, team_name, team_tag, background_tasks)

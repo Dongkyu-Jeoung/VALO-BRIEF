@@ -99,6 +99,28 @@
   padding: 10px;
 }
 
+/* ===== 승부 예측 CTA (ProfileHeader의 profile-side, TeamProfilePage 전용) ===== */
+.predict-cta-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 7px 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.predict-cta-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* ===== 리프레시 버튼 ===== */
 .refresh-btn {
   display: flex;

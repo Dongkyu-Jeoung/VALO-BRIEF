@@ -56,12 +56,16 @@ def _format_datetime(dt: datetime | None) -> tuple[str, str]:
 
 def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
     """teams.red/blue 중 roster.name/tag가 조회 대상 팀과 일치하는 쪽을 "red"/"blue"로 반환.
-    일치하는 쪽이 없으면(다른 팀 매치가 섞여 들어온 경우 방어) None."""
+    일치하는 쪽이 없으면(다른 팀 매치가 섞여 들어온 경우 방어) None.
+
+    2026-09-14 버그 수정: roster.get("name")도 strip() 처리 - Henrik roster.name에
+    공백이 붙은 팀이 실제로 있어(예: "XLA  ") 입력값만 strip하면 비교가 항상 실패했다
+    (ml/engagement_predictor.py::_team_roster의 동일 수정 참고)."""
     teams = match.get("teams") or {}
     name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
     for side in ("red", "blue"):
         roster = (teams.get(side) or {}).get("roster") or {}
-        if str(roster.get("name", "")).lower() == name_l and str(roster.get("tag", "")).lower() == tag_l:
+        if str(roster.get("name", "")).strip().lower() == name_l and str(roster.get("tag", "")).strip().lower() == tag_l:
             return side
     return None
 
