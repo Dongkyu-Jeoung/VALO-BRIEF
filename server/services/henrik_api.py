@@ -123,10 +123,22 @@ async def _get_uncached(path: str, params: dict | None) -> dict | list | None:
         await _API.limiter.throttle_async()
         try:
             res = await client.get(path, params=params)
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning("[HENRIK REQUEST FAILED] path=%s reason=%s attempt=%d", path, type(exc).__name__, attempt + 1)
             return None
         if res.status_code != 429:
-            return res.json().get("data") if res.status_code == 200 else None
+            if res.status_code != 200:
+                logger.warning("[HENRIK RESPONSE FAILED] path=%s status=%d", path, res.status_code)
+                return None
+            try:
+                payload = res.json()
+            except ValueError:
+                logger.warning("[HENRIK RESPONSE FAILED] path=%s status=200 reason=INVALID_JSON", path)
+                return None
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if data is None:
+                logger.warning("[HENRIK RESPONSE FAILED] path=%s status=200 reason=MISSING_DATA", path)
+            return data
         wait = _API.limiter.register_rate_limit(res.headers)
         logger.warning("[HENRIK 429] key=%s async attempt=%d/2 key_wait=%.2fs", _API.name, attempt + 1, wait)
         if attempt == 1:

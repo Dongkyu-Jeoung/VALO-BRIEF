@@ -174,21 +174,21 @@ def _compute_player_round_stats(kills_by_round: dict[int, list], puuid: str, rou
             if opening.get("victim_puuid") == puuid:
                 first_deaths += 1
 
-        my_kills = [k for k in round_kills if k.get("killer_puuid") == puuid]
-        my_death = next((k for k in round_kills if k.get("victim_puuid") == puuid), None)
+        my_kills = [k for k in round_kills if k.get("killer_puuid") == puuid and k.get("_credit_kill", True)]
+        my_death = next((k for k in round_kills if k.get("victim_puuid") == puuid and k.get("_credit_death", True)), None)
         got_assist = any(
             puuid in [a.get("assistant_puuid") for a in (k.get("assistants") or [])]
-            for k in round_kills
+            for k in round_kills if k.get("_credit_kill", True)
         )
         survived = my_death is None
 
         # 트레이드 판정: 내가 죽었다면, 나를 죽인 사람이 곧바로(TRADE_WINDOW_MS 이내) 처치됐는지 확인
         traded = False
-        if my_death is not None:
+        if my_death is not None and my_death.get("_credit_kill", True):
             killer_of_me = my_death.get("killer_puuid")
             death_time = my_death.get("kill_time_in_round", 0)
             for k in round_kills:
-                if k.get("victim_puuid") == killer_of_me:
+                if k.get("victim_puuid") == killer_of_me and k.get("_credit_kill", True):
                     revenge_time = k.get("kill_time_in_round", 0)
                     if 0 <= (revenge_time - death_time) <= TRADE_WINDOW_MS:
                         traded = True
@@ -249,43 +249,88 @@ def _backfill_if_needed(db: Session, match_row: Match, our_team_id: str) -> None
     db.commit()
 
 
-def calculate_match_kast(match: dict) -> dict[str, float]:
+def calculate_match_kast(match: dict, report=None, reconcile_special=False) -> dict[str, float]:
     """완전한 v2 이벤트가 있는 경우에만 KAST를 계산한다. 없으면 보간하지 않는다."""
+    def reject(reason):
+        if report is not None:
+            report(reason)
+        return {}
+
     rounds = match.get("rounds")
     kills = match.get("kills")
     players = (match.get("players") or {}).get("all_players") or []
     if not isinstance(rounds, list) or not rounds or not isinstance(kills, list) or not players:
-        return {}
+        return reject(f"MISSING_DATA rounds_type={type(rounds).__name__} kills_type={type(kills).__name__} players={len(players)}")
     teams = match.get("teams") or {}
     scores = [(teams.get(side) or {}).get("rounds_won") for side in ("red", "blue")]
     if any(not isinstance(score, int) or score < 0 for score in scores) or sum(scores) != len(rounds):
-        return {}
+        return reject(f"ROUND_SCORE_MISMATCH scores={scores} rounds={len(rounds)}")
     for event in kills:
         if not isinstance(event, dict):
-            return {}
+            return reject("INVALID_KILL_EVENT")
         rnd, when = event.get("round"), event.get("kill_time_in_round")
         if not isinstance(rnd, int) or not 0 <= rnd < len(rounds):
-            return {}
+            return reject(f"INVALID_ROUND round={rnd} rounds={len(rounds)}")
         if not isinstance(when, (int, float)) or not 0 <= when < float("inf"):
-            return {}
+            return reject(f"INVALID_KILL_TIME round={rnd} time={when}")
         if not event.get("killer_puuid") or not event.get("victim_puuid"):
-            return {}
+            return reject(f"MISSING_KILLER_OR_VICTIM round={rnd}")
         if not isinstance(event.get("assistants"), list) or any(
             not isinstance(a, dict) or not a.get("assistant_puuid") for a in event["assistants"]
         ):
-            return {}
+            return reject(f"INVALID_ASSISTANTS round={rnd}")
+    if reconcile_special:
+        sides = {p.get("puuid"): str(p.get("team") or "").lower() for p in players}
+        normalized = []
+        for event in kills:
+            killer, victim = event["killer_puuid"], event["victim_puuid"]
+            if killer not in sides or victim not in sides:
+                return reject(f"UNKNOWN_EVENT_PLAYER round={event['round']} killer={killer} victim={victim}")
+            special = killer == victim or (bool(sides[killer]) and sides[killer] == sides[victim])
+            # Work on copies; raw match events remain available for other analyses.
+            normalized.append({**event, "_credit_kill": not special, "_credit_death": True})
+        for player in players:
+            puuid = player.get("puuid")
+            deaths = [k for k in normalized if k["victim_puuid"] == puuid]
+            specials = [k for k in deaths if not k["_credit_kill"]]
+            expected = (player.get("stats") or {}).get("deaths")
+            if specials and expected == len(deaths) - len(specials):
+                for event in specials:
+                    event["_credit_death"] = False
+            elif specials and expected != len(deaths):
+                return reject(f"AMBIGUOUS_SPECIAL_DEATHS puuid={puuid} stats={expected} events={len(deaths)} special={len(specials)} candidates={[(k['round'], k['kill_time_in_round'], k['killer_puuid']) for k in specials]}")
+        adjustments = [k for k in normalized if not k["_credit_kill"]]
+        if adjustments and report is not None:
+            report(f"SPECIAL_EVENTS_NORMALIZED count={len(adjustments)} retained_deaths={sum(k['_credit_death'] for k in adjustments)}")
+        kills = normalized
     # 빈 배열/일부 이벤트 누락을 '전 라운드 생존'으로 오인하지 않도록 집계와 대조한다.
     for player in players:
         puuid, stats = player.get("puuid"), player.get("stats") or {}
         if not puuid:
-            return {}
+            return reject("MISSING_PLAYER_PUUID")
         actual = {
-            "kills": sum(k["killer_puuid"] == puuid for k in kills),
-            "deaths": sum(k["victim_puuid"] == puuid for k in kills),
-            "assists": sum(any(a["assistant_puuid"] == puuid for a in k["assistants"]) for k in kills),
+            "kills": sum(k["killer_puuid"] == puuid and k.get("_credit_kill", True) for k in kills),
+            "deaths": sum(k["victim_puuid"] == puuid and k.get("_credit_death", True) for k in kills),
+            "assists": sum(any(a["assistant_puuid"] == puuid for a in k["assistants"]) and k.get("_credit_kill", True) for k in kills),
         }
         if any(stats.get(key) != value for key, value in actual.items()):
-            return {}
+            if report is not None:
+                sides = {p.get("puuid"): p.get("team") for p in players}
+                seen = set()
+                for index, event in enumerate(kills):
+                    assistants = [a["assistant_puuid"] for a in event["assistants"]]
+                    if puuid not in (event["killer_puuid"], event["victim_puuid"], *assistants):
+                        continue
+                    killer, victim = event["killer_puuid"], event["victim_puuid"]
+                    signature = (event["round"], event["kill_time_in_round"], killer, victim)
+                    report(f"EVENT_DETAIL puuid={puuid} index={index} round={event['round']} "
+                           f"time={event['kill_time_in_round']} killer={killer} victim={victim} "
+                           f"assistants={assistants} weapon={event.get('damage_weapon_id')} "
+                           f"suicide={killer == victim} same_team={bool(sides.get(killer)) and sides.get(killer) == sides.get(victim)} "
+                           f"credit_kill={event.get('_credit_kill', True)} credit_death={event.get('_credit_death', True)} "
+                           f"duplicate_candidate={signature in seen}")
+                    seen.add(signature)
+            return reject(f"EVENT_STATS_MISMATCH puuid={puuid} stats={ {key: stats.get(key) for key in actual} } events={actual}")
     grouped = _group_kills_by_round(kills)
     return {
         p["puuid"]: round(_compute_player_round_stats(grouped, p["puuid"], len(rounds))["kast_rounds"] / len(rounds) * 100, 1)
