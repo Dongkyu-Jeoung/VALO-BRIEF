@@ -20,9 +20,12 @@ ECO_THRESHOLD를 그대로 가져다 쓴다). 다만 팀 분석은 "라운드 �
   - 개인 클러치(1v1/1v2/1v3+): 라운드마다 우리 팀에서 "이 선수"가 마지막 생존자가 된
     순간 상대가 몇 명 남아있었는지로 분류(다른 선수가 마지막 생존자면 이 선수의 클러치
     시도로 안 침). 3명 이상은 1v3plus로 합산.
-  - 트레이드 1v1/1v2: 이 선수가 죽은 시점에 상대가 몇 명 살아있었는지로 상황을 나누고
-    (1명=1v1, 2명=1v2, 3명 이상은 집계 제외), match_sync.py와 같은 TRADE_WINDOW_MS(5초)
-    안에 그 킬러가 처치됐는지로 성공/실패를 센다.
+  - 트레이드 1v1/1v2 (2026-09-14 재정의): 상대 인원수가 아니라 "내가 죽은 교전에서
+    상대가 몇 명 같이 죽었는지"로 정의한다. round_phase_analysis.py::nearby_trade_deaths
+    공유 함수로 계산 - my_team_analysis.py(팀 분석)의 트레이드 성공률도 같은 함수를 쓴다.
+    1v1 = 같은 교전에서 상대가 1명 이상 같이 죽음(기본 트레이드), 1v2 = 2명 이상(가치
+    트레이드) - 두 비율은 서로 배타적이지 않고 각각 전체 사망 횟수 대비 비율이다(1v2
+    상황은 1v1 상황에도 포함됨).
   - 스킬 사용 유효율: Henrik의 ability_casts가 항상 null이라(팀 분석 때 이미 확인됨)
     데이터 소스가 없어 항상 빈 배열로 둔다.
   - 교전 거리 분포: kill_events의 좌표는 실제 미터 단위가 아니라 게임 내 임의 좌표계라,
@@ -46,15 +49,12 @@ from models.riot_account import RiotAccount
 from services.round_phase_analysis import (
     ECO_THRESHOLD,
     determine_team_color,
+    nearby_trade_deaths,
     round_kill_events,
     round_segments,
     segment_attackers,
 )
 from services.my_team_stats import MATCH_HISTORY_LIMIT, _load_map_name_by_uuid
-
-# match_sync.py::TRADE_WINDOW_MS와 같은 값(5초) - 죽은 뒤 이 시간 안에 킬러가 처치되면
-# "트레이드 성공"으로 본다. 스키마가 같은 round_detail_json을 쓰므로 여기선 그대로 재사용.
-TRADE_WINDOW_MS = 5000
 
 # 무기 목록은 킬 수 기준 상위 이만큼만 캐싱(화면이 무한 스크롤 리스트가 아니라 카드 나열이라
 # 너무 많으면 의미 없음 - 나중에 필요하면 조정).
@@ -174,7 +174,9 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
     weapon_rounds: dict[str, int] = {}
 
     clutch_tally = {1: {"win": 0, "loss": 0}, 2: {"win": 0, "loss": 0}, 3: {"win": 0, "loss": 0}}
-    trade_tally = {1: {"win": 0, "loss": 0}, 2: {"win": 0, "loss": 0}}
+    death_total = 0
+    trade1v1_count = 0  # 죽은 교전에서 상대 1명 이상 같이 죽은 횟수
+    trade1v2_count = 0  # 죽은 교전에서 상대 2명 이상 같이 죽은 횟수
 
     distance_buckets = {"0-5m": 0, "5-10m": 0, "10-15m": 0, "15-20m": 0, "20m+": 0}
     distance_total = 0
@@ -282,25 +284,16 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
                 won = rnd.get("winning_team") == our_color
                 clutch_tally[bucket]["win" if won else "loss"] += 1
 
-            # --- 트레이드: 이 선수가 죽은 시점 상대 생존자 수 기준 1v1/1v2 ---
+            # --- 트레이드: 내가 죽은 교전에서 상대가 몇 명 같이 죽었는지로 1v1/1v2 판정
+            # (round_phase_analysis.py::nearby_trade_deaths - 팀 분석 탭과 같은 정의) ---
             if died_this_round:
                 my_death = next(k for k in kills_merged if k.get("victim_puuid") == puuid)
-                alive_our, alive_opp = set(our_puuids), set(opp_puuids)
-                for k in kills_merged:
-                    if k is my_death:
-                        break
-                    alive_our.discard(k.get("victim_puuid"))
-                    alive_opp.discard(k.get("victim_puuid"))
-                opp_alive_at_death = len(alive_opp)
-                if opp_alive_at_death in (1, 2):
-                    killer = my_death.get("killer_puuid")
-                    death_time = my_death.get("kill_time_in_round") or 0
-                    traded = any(
-                        k.get("victim_puuid") == killer
-                        and 0 <= ((k.get("kill_time_in_round") or 0) - death_time) <= TRADE_WINDOW_MS
-                        for k in kills_merged
-                    )
-                    trade_tally[opp_alive_at_death]["win" if traded else "loss"] += 1
+                death_total += 1
+                nearby_opp_deaths = nearby_trade_deaths(kills_merged, my_death, opp_puuids)
+                if nearby_opp_deaths >= 1:
+                    trade1v1_count += 1
+                if nearby_opp_deaths >= 2:
+                    trade1v2_count += 1
 
             # --- 교전 거리(근사) : 이 선수가 낸 킬의 킬러-피격자 좌표 거리 ---
             for ke in ps_target.get("kill_events") or []:
@@ -380,12 +373,12 @@ def _compute_and_cache(db: Session, team_id: str, puuid: str) -> None:
             {"successRate": _pct(clutch_tally[n]["win"], clutch_tally[n]["loss"])},
         )
 
-    # --- ⑤ 트레이드 캐싱 ---
+    # --- ⑤ 트레이드 캐싱 (전체 사망 횟수 대비 비율 - 두 값은 서로 배타적이지 않음) ---
     _upsert_summary_row(
         db, puuid, "engagement", "trade",
         {
-            "trade1v1": _pct(trade_tally[1]["win"], trade_tally[1]["loss"]),
-            "trade1v2": _pct(trade_tally[2]["win"], trade_tally[2]["loss"]),
+            "trade1v1": round(trade1v1_count / death_total * 100) if death_total else 0,
+            "trade1v2": round(trade1v2_count / death_total * 100) if death_total else 0,
         },
     )
 
