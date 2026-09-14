@@ -88,7 +88,27 @@ export default function MyTeamAnalysisPage() {
         ) : <LoadingText />
       ) : null}
 
-      {activeTab === 'AI 리포트' ? (aiReport ? <AiReportTab report={aiReport} teamName={stats?.name ?? myTeamProfileMock.name} /> : <LoadingText />) : null}
+      {activeTab === 'AI 리포트' ? (
+        aiReport ? (
+          <AiReportTab report={aiReport} teamName={stats?.name ?? myTeamProfileMock.name} />
+        ) : (
+          // AI 리포트는 상대팀과 달리 폴링 없이 이 요청 하나가 끝나야 뜬다(Claude 호출이
+          // 요청 안에서 동기로 실행됨 - services/ai_report.py::build_my_team_ai_report 참고,
+          // 20~45초 안팎). 그동안 그냥 LoadingText만 보이면 멈춘 것처럼 보여 상대팀 AI리포트
+          // (MatchPredictionPage/AiReportTab.jsx의 status==='generating' 안내)와 같은 문구를 넣는다.
+          <div className="ai-report-card">
+            <div className="popup-head plain">
+              <div className="bolt" />
+              <div className="popup-title display lg">
+                AI 전술 리포트 — {stats?.name ?? myTeamProfileMock.name} 팀 분석
+              </div>
+            </div>
+            <div className="empty-text">
+              AI가 우리 팀의 전술 리포트를 생성하고 있습니다. 최대 1분 정도 걸릴 수 있어요.
+            </div>
+          </div>
+        )
+      ) : null}
     </div>
   );
 }

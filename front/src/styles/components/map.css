@@ -69,6 +69,12 @@ background:var(--bg-panel-2);
   margin-bottom: 16px;
 }
 
+.roster-refresh-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
 .user-select .user-select-link {
   color: var(--accent);
   font-weight: 600;
