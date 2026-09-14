@@ -24,13 +24,13 @@
 }
 
 /* EngagementPredictionBlock: 최종 교전 승률(스태킹 메타 모델 결과) - 이 화면의
-   headline이라 별도 카드로 감싸 트레이드/듀얼리스트 매치업(보조 지표)보다
-   먼저, 더 눈에 띄게 보여준다. */
+    headline이라 별도 카드로 감싸 트레이드/듀얼리스트 매치업(보조 지표)보다
+    먼저, 더 눈에 띄게 보여준다. */
 .duel-hero {
   background: var(--bg-panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg, 10px);
-  padding: 22px 24px;
+  padding: 26px 28px;
   margin-bottom: 20px;
 }
 
@@ -38,7 +38,7 @@
   font-size: 13px;
   color: var(--text-2);
   font-weight: 600;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
 }
 
 /* 트레이드/듀얼리스트 매치업 - 좁은 화면에서는 위아래로 쌓임 */
@@ -217,11 +217,13 @@
 }
 
 /* ===== part-to-whole 100% 스택 바 (우리팀 vs 상대팀, 두 값의 합=100) =====
-   두 구간을 곧바로 붙이지 않고 2px 서피스 간격(트랙 배경이 비쳐 보임)으로만
-   분리한다 - 테두리를 그려 나누지 않는다. 바깥쪽 끝만 둥글게(pill), 간격과
-   맞닿는 안쪽은 각지게 둬서 "하나의 막대가 둘로 나뉜" 형태를 유지한다. */
+    두 구간을 곧바로 붙이지 않고 2px 서피스 간격(트랙 배경이 비쳐 보임)으로만
+    분리한다 - 테두리를 그려 나누지 않는다. 바깥쪽 끝만 둥글게(pill), 간격과
+    맞닿는 안쪽은 각지게 둬서 "하나의 막대가 둘로 나뉜" 형태를 유지한다. */
 .duel-compare {
   width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .duel-compare-labels {
@@ -229,7 +231,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 .duel-compare-label {
@@ -262,7 +264,7 @@
 }
 
 /* 우세/열세 강조 - 위쪽 "예상 승률"(PredictBox의 pv-percent.is-high/is-low)과 같은
-   규칙: 우세한 쪽은 더 크고 진하게, 열세한 쪽은 더 작고 흐리게. */
+    규칙: 우세한 쪽은 더 크고 진하게, 열세한 쪽은 더 작고 흐리게. */
 .duel-compare-label .team-pct.is-high {
   font-size: 19px;
   opacity: 1;
@@ -280,6 +282,7 @@
   border-radius: var(--radius-pill, 999px);
   overflow: hidden;
   background: var(--bg-panel-3);
+  margin-top: 4px;
 }
 
 .duel-compare-bar .seg {
@@ -297,8 +300,17 @@
 }
 
 /* size="lg" - 화면당 하나, 가장 중요한 결과만 강조(예: 최종 교전 승률). 우세/열세 폰트
-   크기 차이도 PredictBox의 메인 승률(34px/26px)과 동일한 절대값으로 맞춘다 - 이 바가
-   그 화면의 "헤드라인"이라는 위상이 같기 때문. */
+    크기 차이도 PredictBox의 메인 승률(34px/26px)과 동일한 절대값으로 맞춘다 - 이 바가
+    그 화면의 "헤드라인"이라는 위상이 같기 때문. */
+.duel-compare--lg {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.duel-compare--lg .duel-compare-labels {
+  margin-bottom: 16px;
+}
+
 .duel-compare--lg .duel-compare-label .team-pct {
   font-size: 26px;
 }
@@ -314,6 +326,7 @@
 
 .duel-compare--lg .duel-compare-bar {
   height: 14px;
+  margin-top: 6px;
 }
 
 .subsection-title {
@@ -368,8 +381,8 @@
 }
 
 /* EngagementPredictionBlock: AI 예측 매치업 유불리 뱃지 - 라벨("예상 결과")은
-   중립 텍스트로 두고, 실제 결과 값만 작은 뱃지로 강조한다(본문 텍스트에 직접
-   승/패 색을 입히지 않는다 - 색은 항상 뱃지 배경이 대신 들고 있음). */
+    중립 텍스트로 두고, 실제 결과 값만 작은 뱃지로 강조한다(본문 텍스트에 직접
+    승/패 색을 입히지 않는다 - 색은 항상 뱃지 배경이 대신 들고 있음). */
 .matchup-favor-text {
   display: flex;
   align-items: center;
@@ -378,7 +391,7 @@
   font-family: var(--font-body, 'Pretendard', sans-serif);
   font-size: 13px;
   color: var(--text-2);
-  margin-top: 16px;
+  margin-top: 22px;
 }
 
 .matchup-favor-text .favor-badge {
@@ -442,9 +455,9 @@
 }
 
 /* X자 마커 - ::before/::after 두 개의 막대를 45도씩 반대로 회전시켜 X 모양을 만든다.
-   기존엔 background+border-radius로 동그란 점이었으나, 팀원별 대표 위치가 이제 최대
-   5개뿐이라(server/services/death_hotspot_service.py::compute_player_hotspots) 더
-   잘 보이는 X자로 교체. */
+    기존엔 background+border-radius로 동그란 점이었으나, 팀원별 대표 위치가 이제 최대
+    5개뿐이라(server/services/death_hotspot_service.py::compute_player_hotspots) 더
+    잘 보이는 X자로 교체. */
 .death-map-dot {
   position: absolute;
   width: 14px;
@@ -484,9 +497,9 @@
 }
 
 /* 커스텀 툴팁 - 네이티브 title 속성은 브라우저마다 뜨기까지 1~2초 걸리고 커스텀
-   툴팁과 겹쳐 뜨는 문제도 있어서(DeathMapTracker.jsx 참고) title은 안 쓰고 이걸로만
-   보여준다. 배경/글자색은 var(--bg-panel-3) 등 테마 변수가 이 위치에서 해석 안 되는
-   경우가 있어(흰 배경으로 깨짐, 2026-09-11 확인) 고정값을 직접 지정한다. */
+    툴팁과 겹쳐 뜨는 문제도 있어서(DeathMapTracker.jsx 참고) title은 안 쓰고 이걸로만
+    보여준다. 배경/글자색은 var(--bg-panel-3) 등 테마 변수가 이 위치에서 해석 안 되는
+    경우가 있어(흰 배경으로 깨짐, 2026-09-11 확인) 고정값을 직접 지정한다. */
 .death-map-tooltip {
   position: absolute;
   left: 50%;

@@ -1,8 +1,7 @@
 """
 회원가입 / 로그인 (SignupPage, LoginPage) + teams 계정 CRUD.
 
-프론트 연동은 아직 signup/login만 붙어있고 GET·PATCH·DELETE /me는 프론트에서 아직
-호출하는 곳이 없다(추후 마이페이지 등에서 주소만 연결하면 되도록 미리 구현해둔 것).
+GET·PATCH·DELETE /me는 front/src/pages/MyPage/index.jsx가 사용한다.
 """
 from datetime import datetime
 

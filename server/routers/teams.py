@@ -2,8 +2,8 @@
 팀 프로필 상세 페이지(메인화면 팀 검색 → 진입). 개인 검색과 API가 섞이지 않도록
 prefix/파일명/함수명을 전부 팀 전용으로 분리했다 (players.py/player_profile.py와 쌍).
 
-미가입(비회원) 팀 데이터 DB 캐싱은 아직 넣지 않았다 - 매 요청마다 Henrik을 그대로
-호출한다 (team_search.md의 캐싱 전략 검토 참고, 로그인 기능 붙기 전까지는 보류).
+미가입(비회원) 팀 데이터는 DB 캐싱 없이 매 요청마다 Henrik을 그대로 호출한다
+(team_search.md의 캐싱 전략 검토 참고).
 """
 import asyncio
 import json
@@ -15,7 +15,7 @@ from database.connection import SessionLocal, get_db
 from ml import engagement_predictor
 from models.team import Team
 from routers.auth import get_current_team
-from services import henrik_api, match_history, opponent_ai_report, predict_service, team_engagement_cache
+from services import henrik_api, match_history, opponent_ai_report, predict_service, prediction_cache, team_engagement_cache
 from services.team_profile import (
     MATCH_HISTORY_LIMIT,
     QUICK_ANALYSIS_MATCH_LIMIT,
@@ -55,6 +55,11 @@ def _accumulate_match_history_task(
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 logger = logging.getLogger(__name__)
+
+# get_team_analysis 캐시 키에 쓰는 버전 태그 - 응답 스키마가 바뀌면(engagementPrediction
+# 구조 변경 등) 올려서 이전 캐시가 새 형식과 섞여 반환되지 않게 한다(routers/predict.py의
+# MATCH_MODEL_VERSION과 같은 역할, services/prediction_cache.py 참고).
+TEAM_ANALYSIS_CACHE_VERSION = "v1"
 
 
 @router.get("/{team_name}/{team_tag}")
@@ -161,24 +166,32 @@ async def get_team_analysis(
     """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
     get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다.
 
-    2026-09-08: Depends(get_current_team) 추가 - engagementPrediction(③번 교전 매치업
-    예측, server/승부예측_성능_분석.md 6~9번)이 "우리팀 vs 상대팀"을 비교하려면 로그인한
-    팀이 누군지 알아야 한다. 이 엔드포인트를 쓰는 프론트 화면은 MatchPredictionPage뿐이고
-    그 라우트는 이미 ProtectedRoute(로그인 필수)라서 실제 접근 패턴은 안 바뀐다 - 9-4번에
-    적어둔 "구조적 변경" 우려와 달리 실질적인 파급 효과는 없는 것으로 확인."""
+    로그인이 필요하다(Depends(get_current_team)) - engagementPrediction(교전 매치업 예측)이
+    "우리팀 vs 상대팀"을 비교하려면 로그인한 팀이 누군지 알아야 한다.
 
+    Henrik 팀 조회 + 이력 + 매치 상세(건당 ~1.3MB) 여러 건을 매번 실시간으로 불러오는 무거운
+    엔드포인트라 routers/predict.py::predict_match와 같은 이유로 prediction_cache(40분 TTL,
+    동시요청 공유)를 적용했다. 캐시 히트 시엔 _compute_team_analysis가 실행되지 않으므로
+    write-through/predictions 테이블 저장도 40분에 한 번만(최초 호출자에 한해) 일어나,
+    매 조회마다 predictions에 중복 행이 쌓이던 문제도 같이 줄어든다."""
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
+    key = (
+        current.team_id, current.team_name, current.team_tag,
+        clean_name, clean_tag, TEAM_ANALYSIS_CACHE_VERSION,
+    )
+    return await prediction_cache.get_or_create(
+        key, lambda: _compute_team_analysis(clean_name, clean_tag, current, db, background_tasks),
+    )
 
-    #print(f"===== DEBUG: API Called for team: {clean_name}#{clean_tag} =====")
 
+async def _compute_team_analysis(
+    clean_name: str, clean_tag: str, current: Team, db: Session, background_tasks: BackgroundTasks,
+):
     team_info, history = await asyncio.gather(
         henrik_api.get_premier_team(clean_name, clean_tag),
         henrik_api.get_premier_team_history(clean_name, clean_tag),
     )
-
-    # print(f"===== DEBUG: team_info loaded: {bool(team_info)} =====")
-    # print(f"===== DEBUG: history raw data: {history} =====")
 
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -188,8 +201,6 @@ async def get_team_analysis(
     match_ids = [m["id"] for m in recent[:MATCH_HISTORY_LIMIT] if m.get("id")]
     started_at_by_id = {m["id"]: m.get("started_at") for m in recent if m.get("id")}
 
-    # print(f"===== DEBUG: extracted match_ids: {match_ids} =====")
-
     match_details = await asyncio.gather(*(henrik_api.get_match_detail(mid) for mid in match_ids))
     # write-through는 응답에 안 쓰이므로(engagementPrediction의 "우리팀" 몫은 이미 캐시된
     # team_engagement_cache를 읽을 뿐, 이 요청에서 방금 upsert한 값을 기다리지 않음)
@@ -198,27 +209,13 @@ async def get_team_analysis(
         _accumulate_match_history_task, match_ids, list(match_details), started_at_by_id
     )
 
-    # print(f"===== DEBUG: match_details fetched count: {len(match_details)} =====")
-
-        # 라운드 데이터 구조(공격/수비 사이드, economy 등) 확인용 임시 디버그 로그.
-    # roundInfo의 공격/수비/에코 승률 구현이 끝나면 삭제할 것.
-    # print("===== DEBUG: SAMPLE ROUND (planted round, top-level keys only) =====")
     sample_match = next((m for m in match_details if m), None)
     if sample_match:
-
         kills = sample_match.get("kills") or []
-        # 디버그
-        # if kills:
-        #     print("===== DEBUG: SAMPLE KILL EVENT =====")
-        #     print(json.dumps(kills[0], indent=2, ensure_ascii=False))
-        # else:
-        #     print("NO KILLS FOUND IN THIS MATCH")
-            
         rounds = sample_match.get("rounds") or []
         planted_round = next((r for r in rounds if r.get("bomb_planted")), None)
         if planted_round:
             trimmed = {k: v for k, v in planted_round.items() if k not in ("player_stats", "player_locations")}
-            # print(json.dumps(trimmed, indent=2, ensure_ascii=False))
         else:
             print("NO PLANTED ROUND FOUND IN THIS MATCH")
     else:
@@ -231,14 +228,6 @@ async def get_team_analysis(
         team_info=team_info,
         match_details=list(match_details),
     )
-
-    # 맵 이미지 매칭 키 디버깅용 로그 추가
-    #print("===== DEBUG: mapInfoByMap keys =====")
-    # print(list(profile.get("mapInfoByMap", {}).keys()))
-
-    #print("===== DEBUG: FINAL PROFILE RESPONSE =====")
-    # print("roundInfo:", profile.get("roundInfo"))
-    # print("mapInfoByMap:", profile.get("mapInfoByMap"))
 
     # 0경기(sampleGames <= 0)인 맵을 API 응답 레벨에서 원천적으로 필터링하여 방어
     raw_map_info = profile.get("mapInfoByMap", {})

@@ -58,9 +58,9 @@ def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
     """teams.red/blue 중 roster.name/tag가 조회 대상 팀과 일치하는 쪽을 "red"/"blue"로 반환.
     일치하는 쪽이 없으면(다른 팀 매치가 섞여 들어온 경우 방어) None.
 
-    2026-09-14 버그 수정: roster.get("name")도 strip() 처리 - Henrik roster.name에
-    공백이 붙은 팀이 실제로 있어(예: "XLA  ") 입력값만 strip하면 비교가 항상 실패했다
-    (ml/engagement_predictor.py::_team_roster의 동일 수정 참고)."""
+    roster.get("name")도 strip() 처리한다 - Henrik roster.name에 공백이 붙은 팀이 실제로
+    있어(예: "XLA  ") 입력값만 strip하면 비교가 항상 실패한다(ml/engagement_predictor.py::
+    _team_roster의 동일 처리 참고)."""
     teams = match.get("teams") or {}
     name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
     for side in ("red", "blue"):
@@ -74,13 +74,11 @@ def compute_round_phase_from_matches(match_details: list, team_name: str, team_t
     """라이브 match_details(v2/match raw dict 리스트)로 공격/수비/피스톨/에코 라운드
     승률을 실제로 계산한다.
 
-    2026-09-11까지는 이 자리가 {"attackWinRate": 50, "ecoWinRate": 40, ...} 같은
-    하드코딩된 가짜 값이었다(상대팀은 미가입일 수 있어 team_id가 없어서 services/
-    my_team_analysis.py의 DB 캐시 경로를 못 씀) - services/round_phase_analysis.py로
-    그 계산 로직을 공유 모듈로 빼서, 여기서는 DB의 team_id 대신 이 매치의 roster.members
-    (푸틴/puuid 집합)로 "우리 팀"을 식별해 똑같은 계산을 라이브로 돌린다. matches.
-    round_detail_json이 곧 v2/match의 rounds 필드 그대로라(services/match_history.py
-    참고) 입력 형태가 완전히 같다."""
+    상대팀은 미가입일 수 있어 team_id가 없고 services/my_team_analysis.py의 DB 캐시
+    경로를 쓸 수 없다 - services/round_phase_analysis.py의 공유 계산 로직을 그대로 쓰되,
+    DB의 team_id 대신 이 매치의 roster.members(puuid 집합)로 "우리 팀"을 식별해 라이브로
+    돌린다. matches.round_detail_json이 곧 v2/match의 rounds 필드 그대로라
+    (services/match_history.py 참고) 입력 형태가 완전히 같다."""
     all_records: list[dict] = []
     for match in match_details:
         if not match:
@@ -156,8 +154,8 @@ def _sorted_roster_agents(characters: list[str], agents: dict) -> list[str]:
     항상 같은 순서로 나오게 하기 위함 - _AGENT_ROLE_ORDER 상단 주석 참고. 정렬 실패 원인이
     되는 미확인 캐릭터명은 예외를 던지지 않고 맨 뒤로 보낸다(방어적 fallback).
     .replace("/", "") - Henrik이 "KAY/O"처럼 슬래시 포함 이름을 주는데 ref_agents엔
-    "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(2026-09-11, 35개 매치에서
-    KAY/O 참가 시 agent_uuid가 계속 NULL로 저장되던 버그의 원인으로 실측 확인)."""
+    "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 된다(KAY/O 참가 매치에서
+    agent_uuid가 NULL로 저장되던 버그의 원인으로 실측 확인)."""
     def sort_key(character: str) -> tuple[int, str]:
         meta = agents["by_name"].get((character or "").lower().replace("/", "")) or {}
         role_rank = _AGENT_ROLE_ORDER.get(meta.get("role_type"), 99)
@@ -510,10 +508,15 @@ def build_team_profile(
 
     act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
 
-    # 2026-09-11: 공격/수비/에코/피스톨/선취킬/선취死 승률을 전부 round_phase_analysis로
-    # 실제 계산한다(과거엔 하드코딩된 가짜 값이었음 - compute_round_phase_from_matches
-    # 참고). attackWinRate/defenseWinRate/atkWinRate/defWinRate 두 이름을 다 내려주는
-    # 이유: front/src/pages/MatchPredictionPage/index.jsx가 두 이름 다 폴백으로 읽는다.
+    # 팀 전체(5명 합산) 평균 KDA - 매치별 team-kda(_parse_team_match의 kda, 즉 5명
+    # 합산 kills+assists / 합산 deaths)를 조회된 매치 수만큼 평균낸다. 개인 KDA를
+    # 평균 내는 방식이 아니라 이미 팀 단위로 합산된 값의 평균이라 이중 평균이 아니다.
+    avg_kda = round(sum(r["kda"] for r in records) / len(records), 2) if records else 0
+
+    # 공격/수비/에코/피스톨/선취킬/선취死 승률은 전부 round_phase_analysis로 실제 계산한다
+    # (compute_round_phase_from_matches 참고). attackWinRate/defenseWinRate/atkWinRate/
+    # defWinRate 두 이름을 다 내려주는 이유: front/src/pages/MatchPredictionPage/index.jsx가
+    # 두 이름 다 폴백으로 읽는다.
     round_phase = compute_round_phase_from_matches(match_details, team_name, team_tag)
 
     return {
@@ -528,6 +531,7 @@ def build_team_profile(
             "losses": stats.get("losses") or 0,
             "avgRoundWin": round((stats.get("rounds_won") or 0) / matches_played, 1) if matches_played else 0,
             "avgRoundLose": round((stats.get("rounds_lost") or 0) / matches_played, 1) if matches_played else 0,
+            "avgKda": avg_kda,
         },
         "playerRanking": _player_ranking(all_roster_stats, agents),
         "mapWinrates": _map_winrates(records),
@@ -577,6 +581,10 @@ def build_quick_analysis(
     wins = sum(1 for r in records if r["result"] == "win")
     losses = games - wins
 
+    # 팀 전체(5명 합산) 평균 KDA - build_team_profile과 동일한 방식(_parse_team_match의
+    # 매치별 team-kda를 games 건수만큼 평균).
+    avg_kda = round(sum(r["kda"] for r in records) / games, 2) if games else 0
+
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
     logo_image = customization.get("image")
@@ -590,6 +598,7 @@ def build_quick_analysis(
         "winRate": round(wins / games * 100) if games else 0,
         "avgRoundWin": round(sum(r["roundsWon"] for r in records) / games, 1) if games else 0,
         "avgRoundLose": round(sum(r["roundsLost"] for r in records) / games, 1) if games else 0,
+        "avgKda": avg_kda,
         "playerRanking": _player_ranking(all_roster_stats, agents),
         "tier": {
             "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
