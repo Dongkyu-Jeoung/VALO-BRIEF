@@ -56,7 +56,7 @@ class PremierTests(unittest.IsolatedAsyncioTestCase):
              patch.object(service, "load_premier_prediction_features", AsyncMock(side_effect=ValueError(service.INSUFFICIENT_PREMIER_MESSAGE))), \
              patch.object(route, "predict_from_player_features") as model:
             with self.assertRaises(HTTPException) as caught:
-                await route.predict_match("Opp", "TAG", SimpleNamespace(team_name="Our", team_tag="TAG"))
+                await route.predict_match("Opp", "TAG", SimpleNamespace(team_id="our-id", team_name="Our", team_tag="TAG"))
         self.assertEqual(caught.exception.status_code, 422)
         self.assertEqual(caught.exception.detail, service.INSUFFICIENT_PREMIER_MESSAGE)
         model.assert_not_called()
