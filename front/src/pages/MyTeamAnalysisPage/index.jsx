@@ -26,7 +26,7 @@ export default function MyTeamAnalysisPage() {
   // 고정 SEASONS/ACTS의 첫 값으로 기본 선택돼, 그 값에 해당하는 전적이 하나도 없을 때
   // "처음엔 아무것도 안 보이다가 Act 셀렉트박스에서 실제 전적 있는 시즌을 직접 골라야만
   // 보이는" 증상이 생긴다(services/my_team_stats.py::build_my_team_stats 참고).
-  const { season, setSeason, act, setAct } = useSeasonActFilter(stats?.actOptions);
+  const { season, setSeason, act, setAct, seasons, acts } = useSeasonActFilter(stats?.actOptions);
   const [analysis, setAnalysis] = useState(null);
   const [aiReport, setAiReport] = useState(null);
   const [selectedMapId, setSelectedMapId] = useState('ascent');
@@ -63,6 +63,8 @@ export default function MyTeamAnalysisPage() {
           onSeasonChange={setSeason}
           act={act}
           onActChange={setAct}
+          seasons={seasons}
+          acts={acts}
         />
       ) : (
         <LoadingText />
