@@ -226,30 +226,67 @@ def _compute_player_round_stats(kills_by_round: dict[int, list], puuid: str, rou
     }
 
 
-def _backfill_if_needed(db: Session, match_row: Match, our_team_id: str) -> None:
+async def _backfill_if_needed(db: Session, match_row: Match, our_team_id: str, weapon_uuids: set) -> None:
     """이미 캐싱된 매치를, 그때는 미가입이었던 상대 팀이 나중에 가입하며 다시 만난 경우
-    처리. Henrik을 다시 부르지 않고도 안전하게 채울 수 있다 - 이 match_id는 our_team_id의
-    프리미어 이력에서 나온 것이므로(호출부에서 이미 그 팀 기준으로 필터링됨) 매치 참가
-    두 팀 중 하나는 반드시 our_team_id다. team_a_id가 이미 다른 팀으로 확정되어 있다면
-    아직 비어있는 team_b_id 쪽이 our_team_id라고 확정할 수 있다."""
-    if our_team_id in (match_row.team_a_id, match_row.team_b_id):
-        return  # 이미 이 팀 기준으로 처리된 매치
-    if match_row.team_b_id is not None:
-        return  # 양쪽 다 이미 다른 팀으로 채워져 있음 (정상 흐름에선 발생하지 않음) - 방어적으로 무시
+    처리. team_id 배정은 Henrik을 다시 부르지 않고도 안전하게 채울 수 있다 - 이 match_id는
+    our_team_id의 프리미어 이력에서 나온 것이므로(호출부에서 이미 그 팀 기준으로 필터링됨)
+    매치 참가 두 팀 중 하나는 반드시 our_team_id다. team_a_id가 이미 다른 팀으로 확정되어
+    있다면 아직 비어있는 team_b_id 쪽이 our_team_id라고 확정할 수 있다.
 
-    match_row.team_b_id = our_team_id
-    if (
-        match_row.winner_team_id is None
-        and match_row.rounds_won_a is not None
-        and match_row.rounds_won_b is not None
-        and match_row.rounds_won_b > match_row.rounds_won_a
-    ):
-        match_row.winner_team_id = our_team_id
+    2026-09-14 추가: 이 매치가 services/match_history.py의 write-through 경로(상대팀 검색/
+    승부예측 조회 - 우리 팀이 가입하기 전에 다른 팀이 이 매치를 먼저 조회해 캐싱했을 수
+    있음)로 먼저 저장된 경우, first_bloods/first_deaths/most_used_weapon_uuid/detail_json은
+    그 경로가 의도적으로 건드리지 않아(match_history.py 모듈 docstring 참고) NULL로 남아
+    있다 - 우리팀 분석 "통계" 탭의 퍼블(첫킬) 값이 전부 0으로 보이던 원인. team_id 배정과
+    달리 이 값들은 원본 kills 이벤트가 있어야 계산되는데 그건 DB에 저장돼 있지 않으므로,
+    이 매치의 어떤 로우든 first_bloods가 비어 있으면 Henrik 매치 상세를 한 번 다시 불러와
+    _insert_match과 동일한 방식으로 로스터 전원의 파생 스탯을 재계산해 채운다."""
+    is_new_side = our_team_id not in (match_row.team_a_id, match_row.team_b_id)
+    if is_new_side:
+        if match_row.team_b_id is not None:
+            return  # 양쪽 다 이미 다른 팀으로 채워져 있음 (정상 흐름에선 발생하지 않음) - 방어적으로 무시
 
-    db.query(MatchPlayerStat).filter(
-        MatchPlayerStat.match_id == match_row.match_id,
-        MatchPlayerStat.team_id.is_(None),
-    ).update({"team_id": our_team_id})
+        match_row.team_b_id = our_team_id
+        if (
+            match_row.winner_team_id is None
+            and match_row.rounds_won_a is not None
+            and match_row.rounds_won_b is not None
+            and match_row.rounds_won_b > match_row.rounds_won_a
+        ):
+            match_row.winner_team_id = our_team_id
+
+        db.query(MatchPlayerStat).filter(
+            MatchPlayerStat.match_id == match_row.match_id,
+            MatchPlayerStat.team_id.is_(None),
+        ).update({"team_id": our_team_id})
+
+    needs_derived_stats = (
+        db.query(MatchPlayerStat.stat_id)
+        .filter(MatchPlayerStat.match_id == match_row.match_id, MatchPlayerStat.first_bloods.is_(None))
+        .first()
+        is not None
+    )
+    if needs_derived_stats:
+        try:
+            match = await henrik_api.get_match_detail(match_row.match_id)
+        except henrik_api.HenrikRateLimitError:
+            match = None  # 다음 기회에 - 신규 매치 동기화와 동일하게 조용히 스킵
+
+        if match:
+            kills_by_round = _group_kills_by_round(match.get("kills") or [])
+            rounds_played = len(match.get("rounds") or [])
+            kast_by_puuid = calculate_match_kast(match)
+            rows = db.query(MatchPlayerStat).filter(MatchPlayerStat.match_id == match_row.match_id).all()
+            for row in rows:
+                advanced = _compute_player_round_stats(kills_by_round, row.puuid, rounds_played)
+                row.first_bloods = advanced["first_bloods"]
+                row.first_deaths = advanced["first_deaths"]
+                weapon_uuid = advanced["most_used_weapon_uuid"]
+                row.most_used_weapon_uuid = weapon_uuid if weapon_uuid in weapon_uuids else None
+                row.detail_json = advanced["round_events"]
+                if row.puuid in kast_by_puuid:
+                    row.kast = kast_by_puuid[row.puuid]
+
     db.commit()
 
 
@@ -492,8 +529,9 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
     for match_id in match_ids:
         existing = db.get(Match, match_id)
         if existing is not None:
-            # 이미 캐싱된 매치 - Henrik을 다시 부르지 않고 필요하면 상대팀 쪽만 백필.
-            _backfill_if_needed(db, existing, team_id)
+            # 이미 캐싱된 매치 - team_id 배정은 Henrik을 다시 안 불러도 되지만, first_bloods
+            # 등 파생 스탯이 비어 있으면 _backfill_if_needed 내부에서 그때만 다시 불러온다.
+            await _backfill_if_needed(db, existing, team_id, weapon_uuids)
             continue
 
         try:
