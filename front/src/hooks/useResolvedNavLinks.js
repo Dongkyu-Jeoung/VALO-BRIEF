@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { fetchMyTeamPlayers } from '../api/myTeam';
+import { fetchPersonalSearchTarget } from '../api/myTeam';
 import { fetchRecentOpponent } from '../api/prediction';
 import { useAuth } from '../context/AuthContext';
 import { ROUTES } from '../constants/routes';
@@ -28,14 +28,12 @@ export function useResolvedNavLinks() {
       navigate(DEFAULT_PLAYER_LINK);
       return;
     }
-    const players = await fetchMyTeamPlayers();
-    // resolvable === false인 선수는 Henrik이 실제 계정 존재를 확인해준 적 없는
-    // "유령" 계정이다(services/my_team_players.py 참고) - 조회 가능한 선수 중
-    // ACS 최고를 고른다. 필드 자체가 없으면(mock 등 구버전 응답) 조회 가능하다고
-    // 간주해 하위 호환을 지킨다.
-    const resolvable = (players || []).filter((p) => p.resolvable !== false);
-    const top = resolvable[0];
-    navigate(top ? ROUTES.player(top.name, top.tag) : DEFAULT_PLAYER_LINK);
+    // 서버가 로스터 중 ACS 최고이면서 "지금도" Henrik에서 실제로 조회되는 선수를 골라
+    // 내려준다(services/my_team_players.py::resolve_personal_search_target) - 예전엔
+    // 프론트가 단순히 목록의 첫 번째(ACS 최고)만 골랐는데, 그 선수가 그 사이 Riot ID를
+    // 바꿨으면 프로필이 텅 빈 채로 뜨는 문제가 있었다(2026-09-14, SPF#FF2 사례).
+    const target = await fetchPersonalSearchTarget();
+    navigate(target ? ROUTES.player(target.name, target.tag) : DEFAULT_PLAYER_LINK);
   }
 
   async function goToTeamSearch() {

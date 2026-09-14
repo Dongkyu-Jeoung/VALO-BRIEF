@@ -9,7 +9,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import isfinite
 
 from sqlalchemy.orm import Session
@@ -17,6 +17,15 @@ from sqlalchemy.orm import Session
 from models.prediction import Prediction
 from models.team import Team
 from services import henrik_api
+
+_KST = timezone(timedelta(hours=9))
+
+
+def _now_kst() -> datetime:
+    """predictions.created_at을 KST로 명시적으로 채운다 - 컬럼의 DB 기본값
+    (server_default=func.now())은 RDS 서버 자체 시간대(기본 UTC)를 따라서 그대로 두면
+    실제 한국 시간보다 9시간 늦게 찍힌다(services/match_sync.py 등의 동일 패턴 참고)."""
+    return datetime.now(_KST).replace(tzinfo=None)
 
 # 이력에서 가장 최근 매치부터 몇 건까지 살펴보며 5인 로스터가 온전히 잡히는 매치를 찾을지.
 # services/team_profile.py의 MATCH_HISTORY_LIMIT(10)보다 훨씬 적게 잡았다 - 로스터 5명만
@@ -296,6 +305,7 @@ def save_prediction(
         predicted_winrate_b=predicted_winrate_b,
         model_version=model_version,
         feature_snapshot_json=feature_snapshot,
+        created_at=_now_kst(),
     )
     db.add(row)
     db.commit()
