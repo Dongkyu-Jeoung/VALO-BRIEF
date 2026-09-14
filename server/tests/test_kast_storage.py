@@ -42,6 +42,40 @@ class KastStorageTests(unittest.TestCase):
                 self.assertEqual(kast["p"], 33.3 if counted else 66.7)
                 self.assertEqual(match, original)
 
+    def test_special_event_assists_validate_stats_without_kast_credit(self):
+        for teamkill in (False, True):
+            with self.subTest(teamkill=teamkill):
+                match = match_fixture()
+                for player in match["players"]["all_players"]:
+                    player["team"] = "Red" if player["puuid"] == "e" else "Blue"
+                match["players"]["all_players"].append({
+                    "puuid": "r", "team": "Red",
+                    "stats": {"kills": 0, "deaths": 0, "assists": 0},
+                })
+                match["kills"].append({
+                    "round": 0, "kill_time_in_round": 2000,
+                    "killer_puuid": "r" if teamkill else "e",
+                    "victim_puuid": "e",
+                    "assistants": [{"assistant_puuid": "p"}],
+                })
+                match["players"]["all_players"][0]["stats"]["assists"] = 1
+                match["players"]["all_players"][1]["stats"]["deaths"] += 1
+                original = copy.deepcopy(match)
+
+                kast = calculate_match_kast(match, reconcile_special=True)
+                # p died in round 0; the special event earns no assist or trade credit.
+                self.assertEqual(kast.get("p"), 66.7)
+                self.assertEqual(match, original)
+
+                for assists in (0, 2):
+                    with self.subTest(assists=assists):
+                        match["players"]["all_players"][0]["stats"]["assists"] = assists
+                        reports = []
+                        self.assertEqual(calculate_match_kast(
+                            match, report=reports.append, reconcile_special=True,
+                        ), {})
+                        self.assertTrue(reports[-1].startswith("EVENT_STATS_MISMATCH"))
+
     def test_ambiguous_special_deaths_and_unexplained_mismatch_rejected(self):
         match = match_fixture()
         event = {"round": 2, "kill_time_in_round": 1000,
