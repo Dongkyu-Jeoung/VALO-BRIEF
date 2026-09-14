@@ -51,6 +51,10 @@ async function request(path, { method = 'GET', body, headers } = {}, isRetry = f
       ...headers,
     },
     credentials: 'include',
+    // 이 앱의 모든 API 응답은 로그인한 계정마다 다른 개인화된 데이터라 브라우저가
+    // 캐싱하면 안 된다 - 서버가 Cache-Control을 따로 안 내려주면 브라우저는 같은
+    // URL이면 Authorization 헤더가 달라도 캐시를 재사용할 수 있다
+    cache: 'no-store',
     body: body ? JSON.stringify(body) : undefined,
   });
 

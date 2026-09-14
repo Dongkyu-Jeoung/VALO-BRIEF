@@ -62,9 +62,17 @@ async def get_player_profile(riot_name: str, riot_tag: str, db: Session = Depend
         # valorant-api.com에서 최초 1회 조회 후 캐싱)를 거쳐 한글 텍스트/아바타 URL로 변환
         avatar_url, title_ko = await cosmetics_task
         account = {**account, "title": title_ko, "avatarUrl": avatar_url}
-    elif cached:
-        # Henrik 호출이 실패(레이트리밋/일시 장애 등)해도 캐시가 있으면 마지막으로
-        # 확인된 레벨/칭호/아바타로 프로필을 계속 보여준다
+    elif cached and cached.account_level is not None:
+        # Henrik 호출이 실패(레이트리밋/일시 장애 등)해도 캐시가 실제 계정 조회로 채워진
+        # 적이 있으면(account_level이 있으면) 마지막으로 확인된 레벨/칭호/아바타로
+        # 프로필을 계속 보여준다. account_level이 NULL인 cached 행은 이 선수의 프로필을
+        # 조회한 적이 없다는 뜻 - 다른 팀 매치의 로스터 멤버로 등장해서 match_history.py::
+        # _ensure_riot_account_placeholder가 puuid/이름/태그만 채운 placeholder일 뿐이다
+        # (2026-09-14 실측: 이런 placeholder를 "캐시"로 오인해서 닉네임/태그만 있고 나머지는
+        # 전부 빈 값인 반쪽짜리 프로필을 그대로 내려주던 버그 - 개인 검색이 이런 선수를
+        # 가리키면 "정보를 못 가져온다"는 것처럼 보였다). 이 경우엔 진짜로 못 찾은 것과
+        # 동일하게 404로 응답해서, 프론트(withFallback)가 다른 실패 케이스와 똑같이
+        # mock으로 폴백하게 한다.
         account = {
             "puuid": cached.puuid,
             "name": cached.riot_name,

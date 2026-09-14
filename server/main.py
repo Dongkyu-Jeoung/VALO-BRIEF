@@ -55,11 +55,12 @@ app.add_middleware(
 # 개인 검색 or 팀 검색 Header/Main
 app.include_router(search_router)
 
-# 개인 검색 (Frame 04) - 선수 프로필
+# 개인 검색 - 선수 프로필
 app.include_router(players_router)
 
 # 팀 검색 - 팀 프로필 상세 페이지
 app.include_router(teams_router)
+
 # 회원가입 / 로그인
 app.include_router(auth_router)
 
@@ -68,6 +69,9 @@ app.include_router(predict_router)
 
 # 우리팀 분석 (로그인 필요, DB 캐시 기반)
 app.include_router(my_team_router)
+
 # 교전 정보 예측 모델 연결
 app.include_router(ml_router)
+
+# 맵 메타데이터 조회
 app.include_router(maps_router.router)

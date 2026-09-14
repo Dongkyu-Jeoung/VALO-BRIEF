@@ -48,6 +48,7 @@ def upsert_match_engagement(
     game_start: datetime | None,
     trade_rate: float | None,
     duelist_acs: float | None,
+    win: bool | None = None,
 ) -> None:
     """write-through 진입점 - 매치 상세를 받은 그 자리에서 바로 호출한다(services/
     match_history.py). (team_id, match_id) 한 행을 upsert. ENGAGEMENT_CACHE_ENABLED가
@@ -69,6 +70,7 @@ def upsert_match_engagement(
         game_start=game_start,
         trade_rate=trade_rate,
         duelist_acs=duelist_acs,
+        win=win,
         computed_at=_now_kst(),
     )
     stmt = stmt.on_duplicate_key_update(
@@ -76,6 +78,7 @@ def upsert_match_engagement(
         game_start=stmt.inserted.game_start,
         trade_rate=stmt.inserted.trade_rate,
         duelist_acs=stmt.inserted.duelist_acs,
+        win=stmt.inserted.win,
         computed_at=stmt.inserted.computed_at,
     )
     db.execute(stmt)
@@ -106,11 +109,15 @@ def get_recent_team_engagement(db: Session, team_id: str, n: int = RECENT_MATCHE
 
     trade_values = [r.trade_rate for r in rows if r.trade_rate is not None]
     duelist_values = [r.duelist_acs for r in rows if r.duelist_acs is not None]
-    if not trade_values and not duelist_values:
+    win_values = [r.win for r in rows if r.win is not None]
+    if not trade_values and not duelist_values and not win_values:
         return None
 
     return {
         "trade_rate": sum(trade_values) / len(trade_values) if trade_values else 50.0,
         "duelist_acs": sum(duelist_values) / len(duelist_values) if duelist_values else 0.0,
+        # 0~100 스케일(퍼센트)로 맞춘다 - team_recent_win_rate가 diff_trade_rate/
+        # diff_duelist_acs와 같은 스케일 감각으로 쓰이도록(ml/engagement_training.py 참고).
+        "win_rate": sum(win_values) / len(win_values) * 100 if win_values else 50.0,
         "sample_matches": len(rows),
     }

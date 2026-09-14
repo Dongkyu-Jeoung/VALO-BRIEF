@@ -209,10 +209,25 @@ export const predictionMock = {
   },
   aiReport: {
     intro: 'Team Ascend는 최근 5경기 기준 3승 2패를 기록 중입니다.',
-    strengths: ['피스톨 라운드 승률 높음'],
-    weaknesses: ['Eco 라운드 취약'],
-    tactic: '초반 공략 집중',
-    phases: [{ label: 'EARLY', text: '빠른 압박 주의' }],
-    opponentPickAnalysisText: '듀얼리스트 조합 선호',
+    strengths: [
+      { stat: '68%', title: '피스톨 라운드 승률', detail: ['초반 자금 확보 우수'] },
+      { stat: '60%', title: '선취킬 마무리율', detail: ['초반 교전 주도권 강함'] },
+      { stat: '55%', title: '공격 라운드 승률', detail: ['공격 사이드 안정적'] },
+    ],
+    weaknesses: [
+      { stat: '30%', title: '에코 라운드 승률', detail: ['경제 열세 시 운영 미흡'] },
+      { stat: '70%', title: '선취 실점 후 패배율', detail: ['실점 후 만회 능력 부족'] },
+      { stat: '40%', title: '수비 라운드 승률', detail: ['수비 조직력 약함'] },
+    ],
+    tactic: [
+      { stat: '', title: '초반 공략 집중', detail: ['초반 교전 우위 지속 활용'] },
+    ],
+    phases: [
+      { label: '구매 페이즈', stat: '', title: '세미 에코 세팅', detail: ['상대 풀바이 대비'] },
+      { label: '초반 페이즈', stat: '', title: '빠른 압박 주의', detail: ['상대 초반 스킬 적극적'] },
+      { label: '중반 페이즈', stat: '', title: '정보 수집 우선', detail: ['사이트 홀딩 성향 파악'] },
+      { label: '후반 페이즈', stat: '', title: '포스트플랜트 리테이크', detail: ['설치 후 방어 약함'] },
+    ],
+    opponentPickAnalysis: { stat: '', title: '듀얼리스트 조합 선호', detail: ['초반 듀얼링 중심 운영'] },
   },
 };

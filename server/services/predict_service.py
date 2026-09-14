@@ -210,7 +210,12 @@ async def resolve_recent_roster(team_name: str, team_tag: str) -> tuple[dict | N
         teams = match.get("teams") or {}
         for side in ("red", "blue"):
             roster = (teams.get(side) or {}).get("roster") or {}
-            if str(roster.get("name", "")).lower() != name_l or str(roster.get("tag", "")).lower() != tag_l:
+            # 2026-09-14 버그 수정: roster.get("name")도 strip() 처리 - Henrik roster.name에
+            # 공백이 붙은 팀이 실제로 있어(예: "XLA  ") 안 하면 비교가 항상 실패했다.
+            if (
+                str(roster.get("name", "")).strip().lower() != name_l
+                or str(roster.get("tag", "")).strip().lower() != tag_l
+            ):
                 continue
             puuids = set(roster.get("members") or [])
             all_players = (match.get("players") or {}).get("all_players") or []
@@ -243,11 +248,14 @@ async def resolve_recent_opponent(team_name: str, team_tag: str) -> dict | None:
 
     teams = match.get("teams") or {}
     name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
+    # 2026-09-14 버그 수정: roster.get("name")도 strip() 처리(위 resolve_recent_roster와
+    # 동일 이유) - Henrik roster.name에 공백이 붙은 팀이 실제로 있어(예: "XLA  ") 안 하면
+    # 비교가 항상 실패했다.
     our_side = next(
         (
             side for side in ("red", "blue")
-            if str((teams.get(side) or {}).get("roster", {}).get("name", "")).lower() == name_l
-            and str((teams.get(side) or {}).get("roster", {}).get("tag", "")).lower() == tag_l
+            if str((teams.get(side) or {}).get("roster", {}).get("name", "")).strip().lower() == name_l
+            and str((teams.get(side) or {}).get("roster", {}).get("tag", "")).strip().lower() == tag_l
         ),
         None,
     )

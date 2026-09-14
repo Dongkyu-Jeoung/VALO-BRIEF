@@ -258,6 +258,19 @@
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
+  transition: font-size 0.2s ease, opacity 0.2s ease;
+}
+
+/* 우세/열세 강조 - 위쪽 "예상 승률"(PredictBox의 pv-percent.is-high/is-low)과 같은
+   규칙: 우세한 쪽은 더 크고 진하게, 열세한 쪽은 더 작고 흐리게. */
+.duel-compare-label .team-pct.is-high {
+  font-size: 19px;
+  opacity: 1;
+}
+
+.duel-compare-label .team-pct.is-low {
+  font-size: 14px;
+  opacity: 0.55;
 }
 
 .duel-compare-bar {
@@ -283,9 +296,20 @@
   border-radius: 0 var(--radius-pill, 999px) var(--radius-pill, 999px) 0;
 }
 
-/* size="lg" - 화면당 하나, 가장 중요한 결과만 강조(예: 최종 교전 승률) */
+/* size="lg" - 화면당 하나, 가장 중요한 결과만 강조(예: 최종 교전 승률). 우세/열세 폰트
+   크기 차이도 PredictBox의 메인 승률(34px/26px)과 동일한 절대값으로 맞춘다 - 이 바가
+   그 화면의 "헤드라인"이라는 위상이 같기 때문. */
 .duel-compare--lg .duel-compare-label .team-pct {
   font-size: 26px;
+}
+
+.duel-compare--lg .duel-compare-label .team-pct.is-high {
+  font-size: 34px;
+}
+
+.duel-compare--lg .duel-compare-label .team-pct.is-low {
+  font-size: 26px;
+  opacity: 0.55;
 }
 
 .duel-compare--lg .duel-compare-bar {

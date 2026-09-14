@@ -216,10 +216,12 @@
   margin-top: 44px;
 }
 
+/* 페이즈는 항상 정확히 4개(PHASE_LABELS) - 3열로 나누면 마지막 줄에 1개만 남아
+   어색한 여백이 생겨서(실사용 지적) 2x2로 고정한다. */
 .ai-phase-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
   margin-bottom: 40px;
 }
 
@@ -227,32 +229,31 @@
   background: var(--bg-panel-2);
   border: 1px solid var(--border-soft);
   border-radius: 5px;
-  padding: 24px 22px;
+  padding: 22px 22px 20px;
 }
 
 .ai-phase-box .phase-label {
   font-size: 13px;
   color: var(--accent);
   font-family: 'JetBrains Mono', monospace;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   letter-spacing: 0.06em;
 }
 
-.ai-phase-box p {
-  font-size: 14.5px;
-  color: var(--text-2);
-  line-height: 1.75;
-  margin: 0;
-}
+/* 페이즈 본문도 강점/약점/전술과 같은 "제목 + stat 뱃지 + 개조식 detail" 구조로
+   통일한다(2026-09-13) - 예전엔 문장 하나(<p>{text}</p>)를 그대로 박아 넣어서
+   페이즈 4개가 전부 긴 문단으로 나열되는 게 산만하다는 지적이 있었다. 실제
+   .ai-list-title/.ai-list-detail 스타일은 아래 공용 선택자 목록에 .ai-phase-box를
+   추가해서 상속받는다. */
 
-.ai-pick-analysis-text {
-  font-size: 15px;
-  line-height: 1.85;
-  color: var(--text-2);
+/* 2026-09-13: 통문단 하나(<p>{text}</p>)를 강점/약점/전술/페이즈와 같은
+   "제목 + stat 뱃지 + 개조식 detail" 카드로 통일 - .ai-list-title/.ai-list-detail
+   스타일은 아래 공용 선택자 목록에 .ai-pick-analysis-box를 추가해서 상속받는다. */
+.ai-pick-analysis-box {
   background: var(--bg-panel-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  padding: 24px;
+  padding: 22px 24px 20px;
   margin-bottom: 32px;
 }
 
@@ -369,10 +370,13 @@
 }
 
 /* 전술 제안(tactic)의 title/detail은 .ai-list-body로 감싸 여기 규칙을 그대로
-   타고, 선수 피드백(PlayerFeedbackCard)은 .ai-feedback-cols 스코프로 같은
-   흰색/회색 톤을 공유한다. */
+   타고, 선수 피드백(PlayerFeedbackCard)은 .ai-feedback-cols, 라운드 페이즈
+   (PhaseRow)는 .ai-phase-box, 상대 요원 선택 분석(OpponentPickAnalysis)은
+   .ai-pick-analysis-box 스코프로 같은 흰색/회색 톤을 공유한다. */
 .ai-list-body .ai-list-title,
-.ai-feedback-cols .ai-list-title {
+.ai-feedback-cols .ai-list-title,
+.ai-phase-box .ai-list-title,
+.ai-pick-analysis-box .ai-list-title {
   display: block;
   margin: 0 0 8px;
   font-weight: 500;
@@ -382,7 +386,9 @@
 
 .ai-list-body .ai-list-detail,
 .ai-feedback-cols .ai-list-detail,
-.ai-list-item .ai-list-detail {
+.ai-list-item .ai-list-detail,
+.ai-phase-box .ai-list-detail,
+.ai-pick-analysis-box .ai-list-detail {
   margin: 0;
   line-height: 1.5;
   font-size: 13px;
@@ -391,6 +397,8 @@
 
 .ai-list-body .ai-list-detail + .ai-list-detail,
 .ai-feedback-cols .ai-list-detail + .ai-list-detail,
-.ai-list-item .ai-list-detail + .ai-list-detail {
+.ai-list-item .ai-list-detail + .ai-list-detail,
+.ai-phase-box .ai-list-detail + .ai-list-detail,
+.ai-pick-analysis-box .ai-list-detail + .ai-list-detail {
   margin-top: 2px;
 }
