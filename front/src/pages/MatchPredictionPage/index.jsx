@@ -30,6 +30,9 @@ export default function MatchPredictionPage() {
   // 지연 로딩(activeTab이 바뀔 때 따로 fetch)이라 이 값을 따로 들고 있어야 한다.
   const [resolvedOpponent, setResolvedOpponent] = useState(null);
   const [aiReport, setAiReport] = useState(null);
+  // 백엔드 status 그대로("ready"/"not_ready"/"generating") - AiReportTab이 이 값으로
+  // 세 가지 화면(리포트/준비 중 안내/생성 중 안내)을 구분한다.
+  const [aiReportStatus, setAiReportStatus] = useState(null);
   // aiReport는 정상적으로 null일 수 있어서(상대팀 데이터가 아직 준비 안 됨) "아직 요청
   // 자체를 안 보냈다"와 구분하는 별도 플래그가 필요하다 - 없으면 null인 동안 매 렌더마다
   // 계속 재요청하게 된다.
@@ -45,6 +48,7 @@ export default function MatchPredictionPage() {
     setAnalysisData(null);
     setResolvedOpponent(null);
     setAiReport(null);
+    setAiReportStatus(null);
     setAiReportRequested(false);
     setAiReportSettled(false);
 
@@ -93,17 +97,42 @@ export default function MatchPredictionPage() {
   // AI 리포트는 비용이 큰 LLM 호출이라(services/opponent_ai_report.py) 탭을 처음 열 때만
   // 지연 조회한다(MyTeamAnalysisPage와 동일한 패턴). resolvedOpponent가 정해지기 전엔
   // 대기 - 데모 링크 자동 치환 중에 URL의 teamName/teamTag로 잘못 조회하지 않기 위함.
+  // 이 트리거는 "시작 여부"만 결정한다(activeTab에 의존) - 실제 폴링 루프는 아래
+  // 별도 effect가 맡는다(activeTab에 의존하지 않음, 이유는 그 effect 주석 참고).
   useEffect(() => {
     if (activeTab !== 'AI 리포트' || aiReportRequested || !resolvedOpponent) return;
-    let active = true;
     setAiReportRequested(true);
-    fetchTeamAiReport(resolvedOpponent.name, resolvedOpponent.tag).then((data) => {
-      if (!active) return;
-      setAiReport(data);
-      setAiReportSettled(true);
-    });
-    return () => { active = false; };
   }, [activeTab, aiReportRequested, resolvedOpponent]);
+
+  // 백엔드가 캐시된 리포트가 없으면 즉시 {"status":"generating"}으로 응답하고 Claude
+  // 생성은 백그라운드로 넘긴다(services/opponent_ai_report.py 참고, 20~45초 걸림) - 여기서
+  // 몇 초 간격으로 다시 조회해 완료 여부를 확인한다. activeTab을 의존성에 넣지 않는 이유:
+  // 백엔드 생성은 탭 전환과 무관하게 계속 진행되므로, "통계" 탭으로 잠깐 넘어갔다 돌아와도
+  // 폴링이 끊기지 않고 이어져야 한다(넣으면 탭을 벗어나는 순간 클린업으로 폴링이 멈추고,
+  // aiReportRequested는 이미 true라 다시 안 돌아 영구히 멈춰버리는 문제가 있었다).
+  useEffect(() => {
+    if (!aiReportRequested || !resolvedOpponent) return;
+    let active = true;
+    let timer = null;
+
+    async function poll() {
+      const data = await fetchTeamAiReport(resolvedOpponent.name, resolvedOpponent.tag);
+      if (!active) return;
+      const status = data?.status ?? 'not_ready';
+      setAiReportStatus(status);
+      setAiReport(status === 'ready' ? data.report : null);
+      setAiReportSettled(true);
+      if (status === 'generating') {
+        timer = setTimeout(poll, 4000);
+      }
+    }
+    poll();
+
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [aiReportRequested, resolvedOpponent]);
 
   // 승률은 프로필·분석 요청의 완료를 기다리지 않고 먼저 표시한다.
   if (!prediction) return <LoadingText full />;
@@ -164,7 +193,7 @@ export default function MatchPredictionPage() {
       ) : null}
       {activeTab === 'AI 리포트' ? (
         aiReportSettled ? (
-          <AiReportTab report={aiReport} opponentName={displayOpponentTeam.name} />
+          <AiReportTab report={aiReport} status={aiReportStatus} opponentName={displayOpponentTeam.name} />
         ) : <LoadingText />
       ) : null}
     </div>

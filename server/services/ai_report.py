@@ -46,6 +46,7 @@ ANTHROPIC_API_KEY가 없거나 호출/파싱이 실패하면 서버가 죽지 �
 리포트로 대체한다(ml/engagement_predictor.py의 "학습 전 heuristic-v0" 폴백과
 같은 철학 - AI_리포트_개발_설계.md 6번).
 """
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -407,14 +408,17 @@ def _parse_and_validate(raw_json: str, roster: list[dict]) -> dict:
     if not isinstance(data.get("intro"), str) or not data["intro"].strip():
         raise ValueError("intro 누락/빈 값")
 
+    # 3개 미만이면 재시도하지만, 4개 이상은 통째로 재시도하는 대신 앞 3개만 잘라 쓴다 -
+    # Claude 호출 한 번이 20초 안팎이라(2026-09-12 실측, opponent_ai_report.py와 동일
+    # 파이프라인 공유) "거의 맞는" 응답 때문에 그 20초를 또 태우는 낭비를 없앤다.
     raw_strengths = data.get("strengths") or []
     raw_weaknesses = data.get("weaknesses") or []
-    if len(raw_strengths) != 3:
-        raise ValueError(f"strengths는 정확히 3개여야 함 (받음: {len(raw_strengths)}개)")
-    if len(raw_weaknesses) != 3:
-        raise ValueError(f"weaknesses는 정확히 3개여야 함 (받음: {len(raw_weaknesses)}개)")
-    strengths = [_validate_stat_item(s, f"strengths[{i}]") for i, s in enumerate(raw_strengths)]
-    weaknesses = [_validate_stat_item(w, f"weaknesses[{i}]") for i, w in enumerate(raw_weaknesses)]
+    if len(raw_strengths) < 3:
+        raise ValueError(f"strengths는 최소 3개여야 함 (받음: {len(raw_strengths)}개)")
+    if len(raw_weaknesses) < 3:
+        raise ValueError(f"weaknesses는 최소 3개여야 함 (받음: {len(raw_weaknesses)}개)")
+    strengths = [_validate_stat_item(s, f"strengths[{i}]") for i, s in enumerate(raw_strengths[:3])]
+    weaknesses = [_validate_stat_item(w, f"weaknesses[{i}]") for i, w in enumerate(raw_weaknesses[:3])]
 
     raw_tactic = data.get("tactic") or []
     if not (TACTIC_MIN_ITEMS <= len(raw_tactic) <= TACTIC_MAX_ITEMS):
@@ -539,8 +543,13 @@ async def build_my_team_ai_report(db: Session, team: Team) -> dict:
     # LLM 응답은 확률적이라 가끔 로스터 중 한두 명이 playerFeedback에서 누락되는 등
     # 스키마를 못 맞출 때가 있다(실사용 관찰 - 같은 프롬프트를 재시도하면 보통 성공함) -
     # services/claude_client.py::generate_with_retry가 폴백 전에 몇 번 더 시도해준다.
-    report = generate_with_retry(
-        system_prompt, user_prompt, lambda raw: _parse_and_validate(raw, roster), log_prefix="ai_report"
+    # generate_with_retry 자체는 동기(블로킹) 함수라 - Claude 호출 한 번이 20초 안팎 걸리는데
+    # (2026-09-12 실측), 이 코루틴 안에서 그냥 부르면 그동안 이벤트 루프 전체가 멈춰서
+    # 같은 서버가 처리 중인 다른 모든 요청까지 같이 멈춘다. asyncio.to_thread로 별도
+    # 스레드에서 돌려 이벤트 루프를 막지 않는다.
+    report = await asyncio.to_thread(
+        generate_with_retry, system_prompt, user_prompt,
+        lambda raw: _parse_and_validate(raw, roster), log_prefix="ai_report",
     )
 
     source = "claude"

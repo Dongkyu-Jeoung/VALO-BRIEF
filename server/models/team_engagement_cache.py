@@ -10,7 +10,7 @@ team_engagement_cache.py 모듈 docstring, server/승부예측_성능_분석.md 
 trade_rate/duelist_acs는 그 팀이 "이 매치 한 건"에서 기록한 실제 값 - 계산 불가하면
 (듀얼리스트 픽 없음, 킬 이벤트 없음 등) NULL.
 """
-from sqlalchemy import Column, DateTime, Float, String
+from sqlalchemy import Boolean, Column, DateTime, Float, String
 
 from database.connection import Base
 
@@ -27,4 +27,9 @@ class TeamEngagementCache(Base):
     game_start = Column(DateTime, nullable=True)
     trade_rate = Column(Float, nullable=True)
     duelist_acs = Column(Float, nullable=True)
+    # 이 매치의 실제 승패 - Henrik의 teams.{side}.has_won을 그대로 저장한다
+    # (Match.winner_team_id를 다시 조인할 필요 없이 이 표 하나로 label_win과 "최근
+    # 승률" 피처를 둘 다 만들기 위함). diff_win_rate가 실제 승패와의 상관계수 0.493으로
+    # 지금까지 쓰던 어떤 피처보다 강한 신호였다(ml/engagement_training.py 참고).
+    win = Column(Boolean, nullable=True)
     computed_at = Column(DateTime, nullable=False)

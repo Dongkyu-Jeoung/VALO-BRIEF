@@ -3,7 +3,7 @@ services/ai_report.py 프롬프트를 수정하는 동안, 브라우저 새로�
 페이지 렌더링까지 기다리지 않고 Claude 응답만 터미널에서 바로 확인하기 위한
 개발용 스크립트. build_my_team_ai_report와 달리 insights 테이블을 읽거나 쓰지
 않는다 - 프롬프트 반복 실험 중에는 캐시 판정/저장 과정 자체가 불필요한 지연이기
-때문이다(9-11 4차 변경 관련 논의 참고).
+때문이다.
 
 사용법:
     python -m scripts.preview_ai_report <team_id>

@@ -136,6 +136,16 @@ async def build_my_team_players(db: Session, team: Team) -> list[dict]:
             "hs": round(sum(hs_values) / len(hs_values)) if hs_values else 0,
             "adr": round(sum(adr_values) / len(adr_values)) if adr_values else 0,
             "acs": round(sum(acs_values) / len(acs_values)) if acs_values else 0,
+            # account_level은 Henrik 계정 조회가 실제로 성공한 적 있을 때만 채워진다
+            # (services/riot_accounts.py::upsert_riot_account). 위 enrichment 시도(missing
+            # 처리) 이후에도 이 값이 없으면 다른 팀 매치의 로스터원으로만 등장해 이름/태그만
+            # placeholder로 저장됐을 뿐, Henrik이 존재 자체를 확인해준 적 없는 선수다 -
+            # routers/players.py의 GET /api/players/{name}/{tag}로 보내도 404(정상 프로필
+            # 조회 불가)만 나온다. "개인 검색" 자동선택(useResolvedNavLinks.js)이 이런
+            # 선수를 건너뛸 수 있게 이 플래그를 같이 내려준다 - 목록 자체(개인 분석 탭)는
+            # 이 선수도 그대로 보여준다(그 탭의 상세보기는 Henrik이 아니라 DB 원본을
+            # 읽어서 문제없음, 2026-09-14).
+            "resolvable": account.account_level is not None,
         })
 
     players.sort(key=lambda p: p["acs"], reverse=True)

@@ -2,21 +2,38 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
 import { ROUTES } from '../../constants/routes';
-import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
 import { useAuth } from '../../context/AuthContext';
-
-const MENU_LINKS = [
-  { label: '개인 검색', to: '/players/example/0000' },
-  { label: '상대팀 전적 검색', to: ROUTES.team(DEMO_TEAM_NAME, DEMO_TEAM_TAG) },
-  { label: '승부 예측', to: ROUTES.predict(DEMO_TEAM_NAME, DEMO_TEAM_TAG) },
-  { label: '우리팀 분석', to: ROUTES.myTeam },
-];
+import { useResolvedNavLinks } from '../../hooks/useResolvedNavLinks';
+import LoadingText from '../common/LoadingText';
 
 export default function MainHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  
+
   const { user, isAuthenticated, logout } = useAuth();
+
+  // "개인 검색"/"상대팀 전적 검색"/"승부 예측"은 누른 시점에만 실제 목적지를 조회해서
+  // 이동한다(UtilHeader와 동일 패턴 - useResolvedNavLinks 참고, 2026-09-14 재설계).
+  const { goToPersonalSearch, goToTeamSearch, goToPredict } = useResolvedNavLinks();
+  const menuLinks = [
+    { label: '개인 검색', prefix: '/players', onSelect: goToPersonalSearch },
+    { label: '상대팀 전적 검색', prefix: '/teams', onSelect: goToTeamSearch },
+    { label: '승부 예측', prefix: '/predict', onSelect: goToPredict },
+    { label: '우리팀 분석', prefix: ROUTES.myTeam, to: ROUTES.myTeam },
+  ];
+  // 조회 중인지 여부 - true인 동안 화면 전체를 덮는 로딩 오버레이를 띄운다
+  // (UtilHeader와 동일 패턴 - 그쪽 주석 참고).
+  const [resolving, setResolving] = useState(false);
+
+  async function handleSelect(item) {
+    if (resolving) return;
+    setResolving(true);
+    try {
+      await item.onSelect();
+    } finally {
+      setResolving(false);
+    }
+  }
 
   const avatarText = user?.nickname ? user.nickname.charAt(0).toUpperCase() : '?';
 
@@ -31,20 +48,32 @@ export default function MainHeader() {
 
       {isAuthenticated && (
         <nav className="nav-menu">
-          {MENU_LINKS.map((item) => (
-            <Link key={item.label} to={item.to}>
-              {item.label}
-            </Link>
+          {menuLinks.map((item) => (
+            item.to ? (
+              <Link key={item.label} to={item.to}>
+                {item.label}
+              </Link>
+            ) : (
+              <a
+                key={item.label}
+                href={item.prefix}
+                onClick={(e) => { e.preventDefault(); handleSelect(item); }}
+              >
+                {item.label}
+              </a>
+            )
           ))}
         </nav>
       )}
 
+      {resolving && <LoadingText full />}
+
       <div className="header-right">
         {isAuthenticated ? (
           <div className="profile-menu">
-            <button 
-              type="button" 
-              className="profile-avatar-btn" 
+            <button
+              type="button"
+              className="profile-avatar-btn"
               title={user?.nickname}
               onClick={() => setDropdownOpen((prev) => !prev)}
             >
@@ -90,10 +119,20 @@ export default function MainHeader() {
               ✕
             </button>
             <div className="sidebar-links">
-              {MENU_LINKS.map((item) => (
-                <Link key={item.label} to={item.to} onClick={() => setSidebarOpen(false)}>
-                  {item.label}
-                </Link>
+              {menuLinks.map((item) => (
+                item.to ? (
+                  <Link key={item.label} to={item.to} onClick={() => setSidebarOpen(false)}>
+                    {item.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={item.label}
+                    href={item.prefix}
+                    onClick={(e) => { e.preventDefault(); setSidebarOpen(false); handleSelect(item); }}
+                  >
+                    {item.label}
+                  </a>
+                )
               ))}
             </div>
           </nav>

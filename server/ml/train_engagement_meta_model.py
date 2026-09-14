@@ -46,6 +46,8 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 from sklearn.model_selection import KFold, cross_val_predict, train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 
 from database.connection import SessionLocal
@@ -54,8 +56,21 @@ from ml.engagement_training import FEATURE_COLUMNS, LABEL_COLUMNS, META_COLUMNS,
 from ml.train_engagement_model import BASE_MODEL_PARAMS, train_engagement_model
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_meta_model.pkl"
-MODEL_VERSION = "engagement-meta-v2"
-META_FEATURE_COLUMNS = ["p_trade", "p_match"]
+MODEL_VERSION = "engagement-meta-v3"
+# p_trade/p_match만으로는 메타 모델이 사실상 아무것도 못 배웠다(실측 - 학습된
+# 로지스틱 회귀 계수가 0.0001~0.0002 수준, 정확도/logloss가 베이스라인과 완전히 동률).
+# 원인: p_trade가 "우리팀의 예측 트레이드 성공률"(절대값)일 뿐 상대와의 비교가 아닌데,
+# 승패는 상대적 우위로 갈린다. 반면 diff_trade_rate(우리-상대 트레이드율 차이)는 실제
+# 승패와의 상관계수가 0.276으로 base 모델의 어떤 예측치보다도 크다(직접 상관 분석,
+# team_engagement_cache 990건 기준). 그래서 diff_trade_rate/diff_duelist_acs를 원본
+# 피처 그대로(OOF 예측이 아님 - 이미 매치 전에 알 수 있는 과거 이력 평균이라 새로 예측할
+# 필요도, 누수 위험도 없다) 메타 피처에 추가했다.
+#
+# diff_win_rate(팀×매치 로그의 win 컬럼으로 만든 "최근 승률 차이")를
+# 추가로 넣었다 - 실측 상관계수 0.493으로 diff_trade_rate보다도 훨씬 강한 신호였다
+# (1286건 기준). diff_trade_rate와 마찬가지로 원본 이력 평균값 그대로 넣는다(예측치가
+# 아니라 매치 전에 이미 확정된 값이라 OOF 불필요).
+META_FEATURE_COLUMNS = ["p_trade", "p_match", "diff_trade_rate", "diff_duelist_acs", "diff_win_rate"]
 
 # label_win이 있는(=매치 결과를 아는) 표본이 이보다 적으면 메타 단계를 건너뛴다. 피처가
 # 2개뿐인 가벼운 로지스틱 회귀라 base 모델(MIN_SAMPLES=60)보다는 덜 보수적으로 잡았다 -
@@ -99,7 +114,16 @@ def _out_of_fold_meta_features(df: pd.DataFrame) -> pd.DataFrame:
         for our, opp in zip(oof_duelist_clipped, df["opponent_recent_duelist_acs"])
     ])
 
-    return pd.DataFrame({"p_trade": p_trade, "p_match": p_match}, index=df.index)
+    # diff_trade_rate/diff_duelist_acs는 OOF로 새로 뽑을 필요가 없다 - base 모델의
+    # 예측치가 아니라 이미 df에 있는 원본 입력 피처(과거 이력 평균의 차이)라, 매치가
+    # 열리기 전에 이미 확정된 값이다(모듈 상단 META_FEATURE_COLUMNS 주석 참고).
+    return pd.DataFrame({
+        "p_trade": p_trade,
+        "p_match": p_match,
+        "diff_trade_rate": df["diff_trade_rate"].to_numpy(),
+        "diff_duelist_acs": df["diff_duelist_acs"].to_numpy(),
+        "diff_win_rate": df["diff_win_rate"].to_numpy(),
+    }, index=df.index)
 
 
 def _train_meta_stage(df: pd.DataFrame, min_samples: int) -> dict | None:
@@ -123,7 +147,13 @@ def _train_meta_stage(df: pd.DataFrame, min_samples: int) -> dict | None:
         X, y, test_size=0.2, random_state=42, stratify=y if y.nunique() > 1 else None
     )
 
-    meta_model = LogisticRegression()
+    # StandardScaler를 앞에 둔다 - p_trade/p_match(0~100대)와 diff_trade_rate(표준편차 ~7.6)/
+    # diff_duelist_acs(표준편차 ~50.5)는 원래 스케일이 서로 다르다. 스케일링 없이 로지스틱
+    # 회귀에 그대로 넣으면 L2 정규화가 "작은 스케일이라 계수가 커야 하는" 피처를 더 세게
+    # 눌러버려 상대적 중요도가 왜곡된다 - Pipeline으로 감싸두면 저장된 meta_model을 그대로
+    # predict_proba에 넣기만 해도(추론 코드 ml/engagement_predictor.py 수정 불필요) 항상
+    # 같은 스케일링이 적용된다.
+    meta_model = make_pipeline(StandardScaler(), LogisticRegression())
     meta_model.fit(X_train, y_train)
 
     # 베이스라인(항상 학습 데이터의 다수 클래스만 예측) 대비 - 최소한의 검증 근거를 남긴다.
@@ -153,17 +183,20 @@ def _train_meta_stage(df: pd.DataFrame, min_samples: int) -> dict | None:
             "표본이 더 쌓이기 전까지는 신뢰도에 주의(finalPrediction은 참고용으로만 사용 권장)."
         )
 
-    # 어느 피처에 얼마나 가중치를 뒀는지 - LogisticRegression 계수는 "그 피처가 1 커질 때
-    # 로그오즈가 얼마나 변하는지"라서 부호/크기로 방향과 상대적 크기를 바로 읽을 수 있다.
-    coef = dict(zip(META_FEATURE_COLUMNS, meta_model.coef_[0]))
+    # 어느 피처에 얼마나 가중치를 뒀는지 - StandardScaler를 거친 뒤의 계수라 "그 피처가
+    # 표준편차 1만큼 커질 때 로그오즈가 얼마나 변하는지"이므로, 스케일이 서로 다른 피처들
+    # (p_trade/p_match는 0~100대, diff_*는 표준편차 7~50대) 사이에서도 계수 크기를 그대로
+    # 비교할 수 있다(스케일링 전이었다면 이 비교 자체가 왜곡됐다 - 위 make_pipeline 주석 참고).
+    logistic = meta_model.named_steps["logisticregression"]
+    coef = dict(zip(META_FEATURE_COLUMNS, logistic.coef_[0]))
     total_abs = sum(abs(v) for v in coef.values()) or 1.0
-    print("[engagement-meta] 학습된 가중치(로지스틱 회귀 계수, 절대값 기준 상대 비중):")
+    print("[engagement-meta] 학습된 가중치(표준화 후 로지스틱 회귀 계수, 절대값 기준 상대 비중):")
     for name, value in sorted(coef.items(), key=lambda kv: -abs(kv[1])):
         print(f"    {name}: {value:+.4f} (상대 비중 {abs(value) / total_abs:.1%})")
 
     # 전체 표본으로 다시 학습해서 배포 - train/test 분리는 위 검증용, 실제 배포 모델은
     # 가진 데이터를 최대한 다 쓴다.
-    meta_model_final = LogisticRegression()
+    meta_model_final = make_pipeline(StandardScaler(), LogisticRegression())
     meta_model_final.fit(X, y)
 
     return {
