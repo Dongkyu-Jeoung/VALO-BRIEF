@@ -1,121 +1,15 @@
+"""Prefill compact engagement statistics after signup and compute KAST from API events.
+
+Raw matches and player statistics are no longer inserted or updated here.
 """
-회원가입 시 팀 프리미어 매치 이력을 선동기화(Pre-fill)하는 파이프라인.
-
-routers/auth.py의 signup()이 팀 계정 생성 직후 BackgroundTasks로 이 모듈의
-sync_team_match_history()를 실행한다 - 매치 상세를 여러 건 순차 호출해야 해서(Henrik
-레이트리밋 안에서) 회원가입 응답을 그만큼 기다리게 할 수 없기 때문이다.
-
-파싱 대상 스키마(Henrik v2/match)는 services/team_profile.py가 이미 실사용 중인 필드
-(teams.red/blue.roster, players.all_players, 최상위 kills 배열의 killer_puuid/
-victim_puuid/round/kill_time_in_round)를 그대로 따른다. first_bloods/first_deaths/kast의
-라운드별 계산과 트레이드 판정(5초 윈도)은 ml/valorant_git.py(compute_advanced_player_
-stats)의 방식을 그대로 옮긴 것 - 앱 전체에서 "KAST"의 정의를 하나로 맞추기 위함.
-
-matches/match_player_stats에 원본을 저장하는 것과 별개로, services/match_history.py와
-같은 컨벤션으로 team_engagement_cache에도 write-through한다(services/team_engagement_
-cache.py 모듈 docstring 참고) - 회원가입 직후 첫 승부예측 조회부터 바로 "우리 팀" 값이
-채워져 있도록 하기 위함.
-"""
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database.connection import SessionLocal
-from ml import engagement_predictor
-from models.match import Match
-from models.match_player_stat import MatchPlayerStat
-from models.riot_account import RiotAccount
 from models.team import Team
-from services import henrik_api, team_engagement_cache
-from services.player_profile import ROLE_LABELS
-from services.riot_accounts import upsert_riot_account
-from datetime import datetime, timedelta, timezone
+from services import henrik_api, match_history, team_engagement_cache
 
-_KST = timezone(timedelta(hours=9))
-
-# 팀원이 죽은 뒤 이 시간(ms) 안에 그 킬러를 처치하면 "트레이드"로 KAST에 반영한다.
-# ml/valorant_git.py의 TRADE_WINDOW_MS와 동일한 업계 통용 근사치(공식 정의 아님).
 TRADE_WINDOW_MS = 5000
-
-# ref_agents/ref_weapons/ref_maps는 정적 참조 테이블이라 프로세스 생존 기간 동안
-# 한 번만 로드해 재사용한다 (services/player_profile.py와 동일 캐싱 전략).
-_agent_uuid_cache: dict | None = None
-_weapon_uuid_cache: set | None = None
-_map_uuid_cache: dict | None = None
-
-
-def _now_kst() -> datetime:
-    return datetime.now(_KST).replace(tzinfo=None)
-
-
-def _ensure_riot_account_placeholder(db: Session, puuid: str, name: str | None, tag: str | None) -> None:
-    """match_player_stats.puuid FK(NOT NULL, riot_accounts 참조)를 만족시키기 위한 최소
-    placeholder. services/match_history.py::_ensure_riot_account_placeholder와 동일한
-    용도(두 모듈이 같은 테이블에 쓰므로 컨벤션을 맞춤, private 함수라 독립적으로 재구현).
-    이미 있으면 건드리지 않는다. name/tag가 비어 있어도(비공개 계정 등) "-"로 채워서
-    이 선수의 매치 스탯이 손실되지 않게 한다 - 나중에 직접 검색되면 upsert_riot_account가
-    정확한 값으로 갱신한다."""
-    if db.get(RiotAccount, puuid) is not None:
-        return
-    db.add(RiotAccount(puuid=puuid, riot_name=name or "-", riot_tag=tag or "-", region="kr", platform="pc"))
-
-
-def _parse_game_start(value) -> datetime | None:
-    if isinstance(value, (int, float)):
-        ts = value / 1000 if value > 1e12 else value
-        return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_KST).replace(tzinfo=None)
-    return None
-
-
-def _parse_started_at(value: str | None) -> datetime | None:
-    """프리미어 히스토리 API(league_matches[].started_at)의 ISO 문자열("...Z")을 KST
-    datetime으로. matches.game_start(v2/match metadata.game_start, epoch)와는 소스가
-    다른 별도 값이라 파싱도 따로 한다."""
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return dt.astimezone(_KST).replace(tzinfo=None)
-
-
-def _load_agent_meta_by_name(db: Session) -> dict:
-    """요원 영문명(소문자) -> {"uuid": ref_agents.uuid, "role_type": Duelist/Initiator/...}.
-    match.players.all_players[].character가 uuid가 아니라 이름 문자열이라
-    (services/team_profile.py에서 이미 확인된 필드) 이름 기준으로 되찾아야 한다."""
-    global _agent_uuid_cache
-    if _agent_uuid_cache is not None:
-        return _agent_uuid_cache
-    rows = db.execute(text("SELECT uuid, display_name, role_type FROM ref_agents")).mappings().all()
-    _agent_uuid_cache = {
-        r["display_name"].lower(): {"uuid": r["uuid"], "role_type": r["role_type"]} for r in rows
-    }
-    return _agent_uuid_cache
-
-
-def _load_weapon_uuids(db: Session) -> set:
-    """ref_weapons.uuid 전체 집합(소문자). kills[].damage_weapon_id가 valorant-api.com과
-    같은 uuid 포맷이라는 전제(ref_weapons 테이블 주석 참고)로 직접 대조하고, 매칭되지
-    않으면(포맷이 다르거나 신규 무기) most_used_weapon_uuid를 NULL로 남긴다."""
-    global _weapon_uuid_cache
-    if _weapon_uuid_cache is not None:
-        return _weapon_uuid_cache
-    rows = db.execute(text("SELECT uuid FROM ref_weapons")).mappings().all()
-    _weapon_uuid_cache = {r["uuid"].lower() for r in rows}
-    return _weapon_uuid_cache
-
-
-def _load_map_uuid_by_name(db: Session) -> dict:
-    """맵 영문명(소문자) -> ref_maps.uuid. metadata.map도 character와 마찬가지로 이름
-    문자열이라 이름 기준으로 uuid를 되찾아야 한다."""
-    global _map_uuid_cache
-    if _map_uuid_cache is not None:
-        return _map_uuid_cache
-    rows = db.execute(text("SELECT uuid, display_name FROM ref_maps")).mappings().all()
-    _map_uuid_cache = {r["display_name"].lower(): r["uuid"] for r in rows}
-    return _map_uuid_cache
 
 
 def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
@@ -132,18 +26,6 @@ def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
         if str(roster.get("name", "")).strip().lower() == name_l and str(roster.get("tag", "")).strip().lower() == tag_l:
             return side
     return None
-
-
-def _find_registered_team(db: Session, name: str | None, tag: str | None) -> Team | None:
-    """상대팀 name/tag가 이미 가입된 팀인지 조회. 없으면(대부분의 경우) None -
-    matches.team_b_id는 그대로 NULL로 남는다."""
-    if not name or not tag:
-        return None
-    return (
-        db.query(Team)
-        .filter(func.lower(Team.team_name) == name.strip().lower(), func.lower(Team.team_tag) == tag.strip().lower())
-        .first()
-    )
 
 
 def _group_kills_by_round(kills: list) -> dict[int, list]:
@@ -564,15 +446,33 @@ def _find_team_id(db: Session, team_name: str, team_tag: str) -> str | None:
     return row[0] if row else None
 
 
+async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> None:
+    if not team_engagement_cache.ENGAGEMENT_CACHE_ENABLED:
+        return
+    history = await henrik_api.get_premier_team_history(team_name, team_tag)
+    entries = (history or {}).get("league_matches") or []
+    seen = set()
+    for entry in entries:
+        match_id = entry.get("id")
+        if not match_id or match_id in seen:
+            continue
+        seen.add(match_id)
+        if team_engagement_cache.has_match(db, team_id, match_id):
+            continue
+        try:
+            match = await henrik_api.get_match_detail(match_id)
+        except henrik_api.HenrikRateLimitError:
+            break
+        if not match or _match_our_side(match, team_name, team_tag) is None:
+            continue
+        match_history.upsert_match_engagement_summary(db, match_id, match, entry.get("started_at"))
+
+
 async def sync_team_match_history(team_name: str, team_tag: str) -> None:
-    """회원가입 직후 routers/auth.py가 BackgroundTasks로 실행하는 진입점.
-    Depends(get_db) 세션은 요청 생명주기에 묶여 있어 백그라운드 태스크에서 재사용할 수
-    없으므로 여기서 별도 세션을 열고 닫는다."""
-    db = SessionLocal()
-    try:
+    """Signup entry point: populate only team_engagement_cache."""
+    if not team_engagement_cache.ENGAGEMENT_CACHE_ENABLED:
+        return
+    with SessionLocal() as db:
         team_id = _find_team_id(db, team_name, team_tag)
-        if team_id is None:
-            return  # 방어적 스킵 - 정상 흐름에선 signup()이 이미 커밋한 뒤라 항상 찾아짐
-        await _sync(db, team_id, team_name, team_tag)
-    finally:
-        db.close()
+        if team_id is not None:
+            await _sync(db, team_id, team_name, team_tag)

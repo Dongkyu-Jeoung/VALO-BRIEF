@@ -2,7 +2,6 @@ import copy
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services import match_history
 from services.match_sync import calculate_match_kast
 from services import backfill_kast
 
@@ -112,22 +111,6 @@ class KastStorageTests(unittest.TestCase):
         match["teams"]["red"]["rounds_won"] = 4
         self.assertEqual(calculate_match_kast(match), {})
 
-    def test_upsert_fills_and_preserves_kast(self):
-        for complete in (True, False):
-            match = copy.deepcopy(match_fixture())
-            if not complete:
-                match.pop("kills")
-            rows = [MagicMock(kast=42.) for _ in range(3)]
-            db = MagicMock()
-            db.get.return_value = None
-            db.query.return_value.filter.return_value.first.side_effect = rows
-            with patch.object(match_history, "_find_team_id", return_value=None), \
-                 patch.object(match_history, "_load_map_uuid_by_name", return_value={}), \
-                 patch.object(match_history, "_load_agent_info_by_name", return_value={}), \
-                 patch.object(match_history, "_ensure_riot_account_placeholder"):
-                match_history.upsert_match_history(db, "m", match)
-            self.assertEqual(rows[0].kast, 66.7 if complete else 42.)
-            db.commit.assert_called_once()
 
 
 class BackfillTests(unittest.IsolatedAsyncioTestCase):

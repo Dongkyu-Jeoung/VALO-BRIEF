@@ -1,6 +1,22 @@
 """
 team_engagement_cache 테이블 - 팀×매치당 한 행씩 쌓는 append-only 로그.
 
+matches/match_player_stats에는 더 이상 원본을 저장하지 않기로 하면서(2026-09-08 재설계 -
+server/승부예측_성능_분석.md 11번 참고), 이 표 하나가 "지금 이 팀의 최근 폼" 캐시와
+"모델 재학습용 원본" 두 역할을 겸한다:
+
+  services/match_history.py(팀 페이지 조회 시) / services/match_sync.py(회원가입 백필,
+  내부적으로 match_history.upsert_match_engagement_summary를 그대로 재사용)가 매치 상세(raw Henrik
+  v2/match dict)를 받는 즉시, 그 매치 하나만의 트레이드 성공률/듀얼리스트 ACS를 계산해서
+  (ml/engagement_predictor.py::trade_rate_from_matches/duelist_acs_from_matches를 매치
+  1건짜리 리스트로 호출) 이 표에 (team_id, match_id) 한 행으로 upsert한다
+  (upsert_match_engagement). round_detail_json이나 선수별 세부 스탯(KAST/첫킬/무기)은
+  저장하지 않는다 - 이 교전 매치업 모델에 필요한 값만 남긴다.
+
+  - "지금 폼" 조회(get_recent_team_engagement) = 그 팀의 최근 N행 평균 - DB 쿼리 한 번.
+  - 학습 데이터(ml/engagement_training.py::build_training_dataframe) = 이 표의 행들을
+    시간순으로 재생하며 그 시점까지의 rolling 평균을 피처로, 그 행 자체의 값을 라벨로
+    쓴다 - matches/match_player_stats 없이 이 표 하나로 완전히 재구성한다.
 matches/match_player_stats가 더 이상 원본을 저장하지 않게 되면서, 이 표 하나가 "지금 이
 팀의 최근 폼" 캐시와 "모델 재학습용 원본" 두 역할을 겸한다: services/match_history.py /
 services/match_sync.py가 매치 상세를 받는 즉시 그 매치 하나의 트레이드 성공률/듀얼리스트

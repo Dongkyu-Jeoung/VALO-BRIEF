@@ -28,20 +28,15 @@ from services.team_profile import (
 def _accumulate_match_history(
     db: Session, match_ids: list[str], match_details: list, started_at_by_id: dict[str, str] | None = None
 ) -> None:
-    """조회하는 김에 matches/match_player_stats + team_engagement_cache에 쌓는다
-    (opportunistic 캐싱, server/승부예측_성능_분석.md 7-2-1번) - 승부예측 분석 탭 ③번
-    모델 학습용 데이터 축적이 목적. 화면 응답은 이미 받아온 match_details만으로 완성되고
-    이 함수의 성공 여부와는 무관하므로(BackgroundTasks로 응답 이후에 돈다,
-    _accumulate_match_history_task 참고), 실패해도 조용히 넘어가고(단, 세션은 롤백해서
-    이후 쿼리가 깨지지 않게 함) 로그만 남긴다.
-    started_at_by_id: 프리미어 히스토리(league_matches)의 started_at - match_player_stats.
-    started_at 채우는 용도(services/match_history.py 참고)."""
+    """Persist compact engagement summaries from already fetched API responses.
+    Raw match rows and player statistics are not stored. Roll back failures so
+    the next summary can still be processed."""
     started_at_by_id = started_at_by_id or {}
     for match_id, detail in zip(match_ids, match_details):
         if not detail:
             continue
         try:
-            match_history.upsert_match_history(db, match_id, detail, started_at_by_id.get(match_id))
+            match_history.upsert_match_engagement_summary(db, match_id, detail, started_at_by_id.get(match_id))
         except Exception as e:
             db.rollback()
             print(f"  [match_history] upsert 실패(match_id={match_id}): {e}")
@@ -50,14 +45,7 @@ def _accumulate_match_history(
 def _accumulate_match_history_task(
     match_ids: list[str], match_details: list, started_at_by_id: dict[str, str] | None = None
 ) -> None:
-    """FastAPI BackgroundTasks 진입점 - 응답을 보낸 뒤에 실행되므로 요청 스코프 세션
-    (Depends(get_db))은 이미 닫혔을 수 있어 재사용하지 않고 직접 세션을 열고 닫는다
-    (services/match_sync.py::sync_team_match_history와 동일 패턴).
-
-    원래는 응답을 만들기 전에 이 write-through를 동기로 기다렸는데, 매치 10건 기준 실측
-    ~2.5초가 걸려(DB 왕복 다수) 응답이 그만큼 늦어졌다(팀 전적 검색 시 ACT/매치 목록이
-    늦게 뜨는 원인). write-through 결과는 응답 어디에도 안 쓰이므로(build_team_profile은
-    이미 받아온 match_details만 씀) 백그라운드로 미뤄도 손해가 없다."""
+    """Save engagement summaries after the response, using a separate DB session."""
     db = SessionLocal()
     try:
         _accumulate_match_history(db, match_ids, match_details, started_at_by_id)

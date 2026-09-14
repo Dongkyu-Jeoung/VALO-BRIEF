@@ -1,100 +1,42 @@
-"""
-Henrik 매치 상세(v2/match) 하나를 matches/match_player_stats에 upsert(우리팀 분석 페이지
-등 다른 화면이 원본 통계를 그대로 읽을 수 있도록)하고, 동시에 그 매치 하나만의 트레이드
-성공률/듀얼리스트 ACS를 계산해 team_engagement_cache에 (team_id, match_id) 행으로도
-upsert한다 - 승부예측 분석 탭 ③번(교전 매치업 예측) 모델 학습용 데이터 + "지금 폼" 캐시를
-겸한다(services/team_engagement_cache.py 모듈 docstring 참고).
+"""Persist compact engagement statistics without storing raw matches or player rows."""
+from datetime import datetime, timedelta, timezone
 
-services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 테이블에 쓰므로 컨벤션을 맞춘다:
-  - matches.team_a_id/team_b_id는 "red=a/blue=b" 같은 고정 색상 의미가 아니다. 이미 DB에
-    있는 매치면 기존 슬롯 배치를 identity로 확인해 그대로 유지하고(스왑 금지), 새 매치면
-    red->a/blue->b를 기본값으로 쓴다.
-  - matches.round_detail_json은 v2/match의 `rounds` 배열을 그대로 저장한다 - 우리팀 분석
-    페이지 등의 소비처를 위함.
-  - match_player_stats.side는 없다(하프타임마다 공/수가 바뀌어 매치당 값 1개로 표현이 안
-    되는 데이터였음) - team_id로만 로스터를 가른다.
-  - match_player_stats.role_type은 한글 라벨(services.player_profile.ROLE_LABELS)로
-    저장한다(match_sync.py와 동일).
-
-KAST는 match_sync.calculate_match_kast로 원본 이벤트를 검증한 뒤 계산하며, 불완전한
-응답은 기존 값을 보존한다. first_bloods/first_deaths/most_used_weapon_uuid/detail_json은
-이 저장 경로에서 변경하지 않는다.
-
-"조회하는 김에 항상 쌓기"(opportunistic 캐싱) 전략 - 별도 배치 작업 없이 routers/teams.py가
-이미 받아온 match_details를 그 자리에서 넘기면 된다. 이 함수가 실패해도 화면 응답이
-깨지면 안 되므로 호출부가 반드시 try/except로 감싸야 한다(이 함수는 예외를 그대로 던진다).
-"""
-from datetime import datetime, timezone
-
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-    
+
 from ml import engagement_predictor
-from models.match import Match
-from models.match_player_stat import MatchPlayerStat
-from models.riot_account import RiotAccount
 from models.team import Team
 from services import team_engagement_cache
-from services.player_profile import ROLE_LABELS
-from services.match_sync import calculate_match_kast
 
-_ref_map_uuid_cache: dict | None = None
-_ref_agent_cache: dict | None = None
-
-
-def _load_map_uuid_by_name(db: Session) -> dict:
-    """ref_maps 참조 테이블을 영문명(소문자) -> uuid로 로드(캐시됨). services/player_
-    profile.py의 _load_ref_maps는 이름->한글명만 주고 uuid를 안 줘서 여기서 별도로 뺐다."""
-    global _ref_map_uuid_cache
-    if _ref_map_uuid_cache is None:
-        rows = db.execute(text("SELECT uuid, display_name FROM ref_maps")).mappings().all()
-        _ref_map_uuid_cache = {r["display_name"].lower(): r["uuid"] for r in rows}
-    return _ref_map_uuid_cache
-
-
-def _load_agent_info_by_name(db: Session) -> dict:
-    """ref_agents 참조 테이블을 영문명(소문자) -> {uuid, role_type}으로 로드(캐시됨)."""
-    global _ref_agent_cache
-    if _ref_agent_cache is None:
-        rows = db.execute(text("SELECT uuid, display_name, role_type FROM ref_agents")).mappings().all()
-        _ref_agent_cache = {
-            r["display_name"].lower(): {"uuid": r["uuid"], "role_type": r["role_type"]} for r in rows
-        }
-    return _ref_agent_cache
+_KST = timezone(timedelta(hours=9))
 
 
 def _parse_game_start(value) -> datetime | None:
-    """metadata.game_start(epoch 초/밀리초)를 datetime으로. services/team_profile.py::
-    _parse_datetime과 동일 로직 - private 함수라 의존하지 않고 여기 따로 둠."""
     if isinstance(value, (int, float)):
-        ts = value / 1000 if value > 1e12 else value
-        return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone().replace(tzinfo=None)
+        timestamp = value / 1000 if value > 1e12 else value
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).astimezone(_KST).replace(tzinfo=None)
     return None
 
 
 def _parse_started_at(value: str | None) -> datetime | None:
-    """프리미어 히스토리 API(league_matches[].started_at)의 ISO 문자열("...Z")을
-    datetime으로. _parse_game_start(metadata.game_start, epoch)와는 소스가 다른 별도
-    값이라 파싱도 따로 한다."""
     if not value:
         return None
     try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return dt.astimezone().replace(tzinfo=None)
+    return parsed.astimezone(_KST).replace(tzinfo=None)
 
 
 def _find_team_id(db: Session, team_name: str, team_tag: str) -> str | None:
-    """team_name/team_tag로 가입된 teams 행을 찾아 team_id(=Henrik 프리미어 팀 id)를 반환.
-    가입 안 된 팀이면 None. 대소문자 무시 비교(services/match_sync.py::
-    _find_registered_team과 동일) - exact match면 대소문자 차이만으로 두 파이프라인이
-    같은 팀을 다르게 판정할 수 있었다."""
     if not team_name or not team_tag:
         return None
     row = (
         db.query(Team.team_id)
-        .filter(func.lower(Team.team_name) == team_name.strip().lower(), func.lower(Team.team_tag) == team_tag.strip().lower())
+        .filter(
+            func.lower(Team.team_name) == team_name.strip().lower(),
+            func.lower(Team.team_tag) == team_tag.strip().lower(),
+        )
         .first()
     )
     return row[0] if row else None
@@ -336,27 +278,16 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     blue_won = blue.get("has_won")
     if red_engagement_id:
         team_engagement_cache.upsert_match_engagement(
-            db, red_engagement_id, match_id,
-            opponent_team_id=blue_engagement_id,
+            db, team_ids[side], match_id,
+            opponent_team_id=team_ids[opponent],
             game_start=game_start,
             trade_rate=engagement_predictor.trade_rate_from_matches(
-                [match], red_roster.get("name", ""), red_roster.get("tag", "")
+                [match], roster.get("name", ""), roster.get("tag", ""),
             ),
             duelist_acs=engagement_predictor.duelist_acs_from_matches(
-                [match], red_roster.get("name", ""), red_roster.get("tag", "")
+                [match], roster.get("name", ""), roster.get("tag", ""),
             ),
-            win=red_won if isinstance(red_won, bool) else None,
+            win=won if isinstance(won, bool) else None,
         )
-    if blue_engagement_id:
-        team_engagement_cache.upsert_match_engagement(
-            db, blue_engagement_id, match_id,
-            opponent_team_id=red_engagement_id,
-            game_start=game_start,
-            trade_rate=engagement_predictor.trade_rate_from_matches(
-                [match], blue_roster.get("name", ""), blue_roster.get("tag", "")
-            ),
-            duelist_acs=engagement_predictor.duelist_acs_from_matches(
-                [match], blue_roster.get("name", ""), blue_roster.get("tag", "")
-            ),
-            win=blue_won if isinstance(blue_won, bool) else None,
-        )
+        saved += 1
+    return saved
