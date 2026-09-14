@@ -239,6 +239,43 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         candidates = {p: acs_by_puuid.get(p, 0) for p in puuids if p in acs_by_puuid}
         return max(candidates, key=candidates.get) if candidates else None
 
+     # 팀별 전체 5명 스탯 합산 및 팀 평균 KDA 사전 계산 로직 추가
+    team_stats_summary = {"red": {"kills": 0, "deaths": 0, "assists": 0, "count": 0}, 
+                          "blue": {"kills": 0, "deaths": 0, "assists": 0, "count": 0}}
+    
+    for player in all_players:
+        puuid = player.get("puuid")
+        if not puuid:
+            continue
+        stats = player.get("stats") or {}
+        p_kills = stats.get("kills") or 0
+        p_deaths = stats.get("deaths") or 0
+        p_assists = stats.get("assists") or 0
+
+        if puuid in red_puuids:
+            team_stats_summary["red"]["kills"] += p_kills
+            team_stats_summary["red"]["deaths"] += p_deaths
+            team_stats_summary["red"]["assists"] += p_assists
+            team_stats_summary["red"]["count"] += 1
+        elif puuid in blue_puuids:
+            team_stats_summary["blue"]["kills"] += p_kills
+            team_stats_summary["blue"]["deaths"] += p_deaths
+            team_stats_summary["blue"]["assists"] += p_assists
+            team_stats_summary["blue"]["count"] += 1
+
+    # 팀별 평균 KDA 계산 (팀 전체 합산 기준 또는 5명 평균 기준)
+    team_avg_kda = {}
+    for t_key in ["red", "blue"]:
+        c = team_stats_summary[t_key]["count"] or 1
+        t_kills = team_stats_summary[t_key]["kills"]
+        t_deaths = team_stats_summary[t_key]["deaths"]
+        t_assists = team_stats_summary[t_key]["assists"]
+        
+        # 방식에 따라 선택: 
+        # 1) 팀원들의 개별 KDA 평균: 각 팀원의 (K+A)/max(D,1) 값을 합산해 인원수로 나눔
+        # 2) 팀 전체 통계 총합 기준 KDA: (총 킬 + 총 어시스트) / max(총 데스, 1) -> 전자스포츠에서 주로 팀 종합 지표로 쓰임
+        team_avg_kda[t_key] = round((t_kills + t_assists) / max(t_deaths, 1), 2)
+
     mvp_red = _mvp_puuid(red_puuids)
     mvp_blue = _mvp_puuid(blue_puuids)
 
@@ -275,15 +312,24 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             stat_row = MatchPlayerStat(match_id=match_id, puuid=puuid)
             db.add(stat_row)
 
+        kills = stats.get("kills") or 0
+        deaths = stats.get("deaths") or 0
+        assists = stats.get("assists") or 0
+
         stat_row.team_id = team_id
         stat_row.is_mvp = (puuid == mvp_puuid) if mvp_puuid else False
         stat_row.agent_uuid = (agent_meta or {}).get("uuid")
         stat_row.role_type = ROLE_LABELS.get((agent_meta or {}).get("role_type"))
         stat_row.started_at = started_at
         stat_row.acs = acs_by_puuid.get(puuid, 0)
-        stat_row.kills = stats.get("kills")
-        stat_row.deaths = stats.get("deaths")
-        stat_row.assists = stats.get("assists")
+        stat_row.kills = kills
+        stat_row.deaths = deaths
+        stat_row.assists = assists
+        
+        # 개인별 KDA 혹은 팀 평균 KDA 중 필요에 맞게 대입할 수 있습니다.
+        # (개인별 KDA로 저장하려면 아래와 같이 유지)
+        stat_row.kda = round((kills + assists) / max(deaths, 1), 2)
+        
         stat_row.headshot_pct = round(heads / total_shots * 100, 1) if total_shots else None
         stat_row.adr = round((player.get("damage_made") or 0) / rounds_played) if rounds_played else None
         # 불완전한 응답으로 기존 KAST를 덮어쓰지 않는다.

@@ -75,12 +75,20 @@ function summarizeMatches(matches, fallback) {
   const wins = matches.filter((m) => m.result === 'win').length;
   const roundsWon = matches.reduce((sum, m) => sum + m.roundsWon, 0);
   const roundsLost = matches.reduce((sum, m) => sum + m.roundsLost, 0);
+  // 팀 전체(5명 합산) KDA - 각 매치 record.kda(services/team_profile.py::_parse_team_match가
+  // 이미 5명 합산 kills+assists / 합산 deaths로 계산해둔 값)를 필터링된 매치 수만큼
+  // 평균낸다. team.recentSummary.avgKda(백엔드 build_team_profile)와 동일한 정의를
+  // Act 필터링 시에도 그대로 유지하기 위함.
+  const avgKda = Math.round(
+    (matches.reduce((sum, m) => sum + (m.kda ?? 0), 0) / matches.length) * 100
+  ) / 100;
   return {
     winRate: Math.round((wins / matches.length) * 100),
     wins,
     losses: matches.length - wins,
     avgRoundWin: Math.round((roundsWon / matches.length) * 10) / 10,
     avgRoundLose: Math.round((roundsLost / matches.length) * 10) / 10,
+    avgKda,
   };
 }
 
@@ -131,6 +139,7 @@ export function TeamProfileBody({ team, showPredictCta = false }) {
             </div>
             <div className="metric-row"><span>평균 라운드 승</span><b>{recentSummary.avgRoundWin}</b></div>
             <div className="metric-row"><span>평균 라운드 패</span><b>{recentSummary.avgRoundLose}</b></div>
+            <div className="metric-row"><span>평균 KDA</span><b>{recentSummary.avgKda}</b></div>
           </div>
           <div className="mh-box">
             <h5>상대 팀 개인 순위 <span className="tag">최근 5게임</span></h5>

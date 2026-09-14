@@ -510,6 +510,11 @@ def build_team_profile(
 
     act_options = [{"season": season, "acts": acts} for season, acts in act_index.items()]
 
+    # 팀 전체(5명 합산) 평균 KDA - 매치별 team-kda(_parse_team_match의 kda, 즉 5명
+    # 합산 kills+assists / 합산 deaths)를 조회된 매치 수만큼 평균낸다. 개인 KDA를
+    # 평균 내는 방식이 아니라 이미 팀 단위로 합산된 값의 평균이라 이중 평균이 아니다.
+    avg_kda = round(sum(r["kda"] for r in records) / len(records), 2) if records else 0
+
     # 2026-09-11: 공격/수비/에코/피스톨/선취킬/선취死 승률을 전부 round_phase_analysis로
     # 실제 계산한다(과거엔 하드코딩된 가짜 값이었음 - compute_round_phase_from_matches
     # 참고). attackWinRate/defenseWinRate/atkWinRate/defWinRate 두 이름을 다 내려주는
@@ -528,6 +533,7 @@ def build_team_profile(
             "losses": stats.get("losses") or 0,
             "avgRoundWin": round((stats.get("rounds_won") or 0) / matches_played, 1) if matches_played else 0,
             "avgRoundLose": round((stats.get("rounds_lost") or 0) / matches_played, 1) if matches_played else 0,
+            "avgKda": avg_kda,
         },
         "playerRanking": _player_ranking(all_roster_stats, agents),
         "mapWinrates": _map_winrates(records),
@@ -577,6 +583,10 @@ def build_quick_analysis(
     wins = sum(1 for r in records if r["result"] == "win")
     losses = games - wins
 
+    # 팀 전체(5명 합산) 평균 KDA - build_team_profile과 동일한 방식(_parse_team_match의
+    # 매치별 team-kda를 games 건수만큼 평균).
+    avg_kda = round(sum(r["kda"] for r in records) / games, 2) if games else 0
+
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
     logo_image = customization.get("image")
@@ -590,6 +600,7 @@ def build_quick_analysis(
         "winRate": round(wins / games * 100) if games else 0,
         "avgRoundWin": round(sum(r["roundsWon"] for r in records) / games, 1) if games else 0,
         "avgRoundLose": round(sum(r["roundsLost"] for r in records) / games, 1) if games else 0,
+        "avgKda": avg_kda,
         "playerRanking": _player_ranking(all_roster_stats, agents),
         "tier": {
             "division": f"디비전 {placement.get('division')}" if placement.get("division") is not None else "-",
