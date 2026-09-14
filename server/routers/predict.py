@@ -17,7 +17,7 @@ from ml.predictor import predict_blue_win, predict_from_player_features, create_
 from models.team import Team
 from routers.auth import get_current_team
 from schema.predict import PredictRequest, PredictResponse
-from services import predict_service, prediction_cache
+from services import predict_service
 from services.henrik_api import HenrikRateLimitError
 
 router = APIRouter(prefix="/api/predict", tags=["Predict"])
@@ -82,17 +82,6 @@ async def predict_match(
     team_tag: str,
     current: Team = Depends(get_current_team),
 ):
-    # Authentication still runs on every request, including cache hits.
-    key = (
-        current.team_id, current.team_name, current.team_tag,
-        team_name, team_tag, MATCH_MODEL_VERSION,
-    )
-    return await prediction_cache.get_or_create(
-        key, lambda: _compute_prediction(team_name, team_tag, current),
-    )
-
-
-async def _compute_prediction(team_name: str, team_tag: str, current: Team):
     started = time.perf_counter()
     checkpoint = create_prediction_checkpoint()
     checkpoint("GET 예측 요청 처리 시작 (인증 이후)")
