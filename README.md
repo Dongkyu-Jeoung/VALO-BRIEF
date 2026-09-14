@@ -5,7 +5,17 @@ Team Project
 
 화면에서 사용하는 `GET /api/predict/{team_name}/{team_tag}`는 로그인 팀과 상대 팀의
 Premier History(`league_matches`)를 최신순으로 정렬하고, 중복을 제거한 최대 5경기를 사용합니다.
-양 팀이 맞붙었던 경기 상세는 한 번만 조회하며 기존 Henrik 캐시를 재사용합니다.
+동일한 로그인 팀(ID·이름·태그)과 상대 팀(이름·태그), 모델 버전의 성공한 예측 응답은
+완료 시점부터 40분간 서버 메모리에 캐싱합니다. 캐시 적중 시 인증 후 이전 응답을 즉시 반환하며,
+Henrik 조회·스탯 재집계·모델 추론·예측 결과 DB 저장을 반복하지 않습니다.
+재조회로 만료 시각을 연장하지 않으며, 만료 후 다음 요청에서 새로 예측합니다.
+동시에 들어온 동일 조합 요청은 한 번의 계산을 공유하고, 실패 응답은 캐싱하지 않습니다.
+캐시는 프로세스별 최대 256개이며 초과 시 가장 오래 사용하지 않은 결과부터 제거합니다.
+서버 재시작 시 초기화되고 여러 워커 간에는 공유되지 않습니다.
+분석·AI 리포트·최근 상대 조회는 별도 요청이므로 이 캐시의 대상이 아닙니다.
+로그의 `[PREDICTION CACHE] HIT/MISS/SHARED`로 캐시 사용 여부를 확인할 수 있습니다.
+
+캐시가 없는 예측에서는 양 팀이 맞붙었던 경기 상세를 한 번만 조회하며 기존 Henrik 캐시를 재사용합니다.
 예측 요청당 History 2회, 상세 최대 10회, 팀 정보·로고 조회 2회가 필요합니다(캐시·재시도 제외).
 팀 조회 및 History 경로는 [Henrik Premier 공식 문서](https://docs.henrikdev.xyz/valorant/api-reference/premier)를 참고합니다.
 
@@ -41,6 +51,7 @@ Premier 예측의 KAST는 자기 처치·팀킬 이벤트를 일반 킬/어시�
 ```text
 cd server
 python -m unittest discover -s tests -p test_premier_prediction.py -v
+python -m unittest discover -s tests -p test_prediction_cache.py -v
 cd ../front
 npm run build
 ```
