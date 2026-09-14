@@ -17,9 +17,11 @@ export function fetchMyTeamStats() {
   );
 }
 
-export function fetchMyTeamPlayers() {
+// refresh=true면 서버의 로스터 캐시(Henrik get_premier_team 결과)를 무시하고 다시 받아온다
+// (routers/my_team.py 참고) - "개인 분석" 탭의 로스터 새로고침 버튼 전용.
+export function fetchMyTeamPlayers(refresh = false) {
   return withFallback(
-    () => httpClient.get(ENDPOINTS.myTeamPlayers()),
+    () => httpClient.get(ENDPOINTS.myTeamPlayers(refresh)),
     myTeamPlayersMock,
     'fetchMyTeamPlayers'
   );
