@@ -107,10 +107,6 @@ export default function EngagementPredictionBlock({
           />
         </div>
       </div>
-
-      {/* {data.modelVersion ? (
-        <div className="empty-text model-version-note">모델 버전: {data.modelVersion}</div>
-      ) : null} */}
     </div>
   );
 }
