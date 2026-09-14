@@ -86,7 +86,7 @@ export default function EngagementPredictionBlock({
         </div>
       ) : null}
 
-      <div className="duel-compare-grid">
+      {/* <div className="duel-compare-grid">
         <div className="duel-compare-block">
           <div className="duel-compare-title">트레이드 성공률 예측 (1대1 교전 기준)</div>
           <DuelCompareBar
@@ -106,7 +106,11 @@ export default function EngagementPredictionBlock({
             rightPct={duel.theirScore}
           />
         </div>
-      </div>
+      </div> */}
+
+      {/* {data.modelVersion ? (
+        <div className="empty-text model-version-note">모델 버전: {data.modelVersion}</div>
+      ) : null} */}
     </div>
   );
 }

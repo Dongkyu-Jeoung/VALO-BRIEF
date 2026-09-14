@@ -15,7 +15,7 @@ from database.connection import SessionLocal, get_db
 from ml import engagement_predictor
 from models.team import Team
 from routers.auth import get_current_team
-from services import henrik_api, match_history, opponent_ai_report, predict_service, team_engagement_cache
+from services import henrik_api, match_history, opponent_ai_report, predict_service, prediction_cache, team_engagement_cache
 from services.team_profile import (
     MATCH_HISTORY_LIMIT,
     QUICK_ANALYSIS_MATCH_LIMIT,
@@ -68,6 +68,11 @@ def _accumulate_match_history_task(
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 logger = logging.getLogger(__name__)
+
+# get_team_analysis 캐시 키에 쓰는 버전 태그 - 응답 스키마가 바뀌면(engagementPrediction
+# 구조 변경 등) 올려서 이전 캐시가 새 형식과 섞여 반환되지 않게 한다(routers/predict.py의
+# MATCH_MODEL_VERSION과 같은 역할, services/prediction_cache.py 참고).
+TEAM_ANALYSIS_CACHE_VERSION = "v1"
 
 
 @router.get("/{team_name}/{team_tag}")
@@ -178,11 +183,29 @@ async def get_team_analysis(
     예측, server/승부예측_성능_분석.md 6~9번)이 "우리팀 vs 상대팀"을 비교하려면 로그인한
     팀이 누군지 알아야 한다. 이 엔드포인트를 쓰는 프론트 화면은 MatchPredictionPage뿐이고
     그 라우트는 이미 ProtectedRoute(로그인 필수)라서 실제 접근 패턴은 안 바뀐다 - 9-4번에
-    적어둔 "구조적 변경" 우려와 달리 실질적인 파급 효과는 없는 것으로 확인."""
+    적어둔 "구조적 변경" 우려와 달리 실질적인 파급 효과는 없는 것으로 확인.
 
+    2026-09-14: routers/predict.py::predict_match와 같은 이유로 prediction_cache(40분
+    TTL, 동시요청 공유)를 적용했다 - Henrik get_premier_team/get_premier_team_history +
+    매치 상세(건당 ~1.3MB) 여러 건을 매번 실시간으로 불러오는 무거운 엔드포인트라 캐싱
+    효과가 크다. 캐시 히트 시엔 아래 본문(_compute_team_analysis)이 아예 실행되지
+    않으므로 background_tasks의 write-through/predictions 테이블 저장도 40분에 한 번만
+    (최초 호출자에 한해) 일어난다 - 오히려 매 조회마다 predictions에 중복 행이 쌓이던
+    문제도 같이 줄어든다."""
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
+    key = (
+        current.team_id, current.team_name, current.team_tag,
+        clean_name, clean_tag, TEAM_ANALYSIS_CACHE_VERSION,
+    )
+    return await prediction_cache.get_or_create(
+        key, lambda: _compute_team_analysis(clean_name, clean_tag, current, db, background_tasks),
+    )
 
+
+async def _compute_team_analysis(
+    clean_name: str, clean_tag: str, current: Team, db: Session, background_tasks: BackgroundTasks,
+):
     #print(f"===== DEBUG: API Called for team: {clean_name}#{clean_tag} =====")
 
     team_info, history = await asyncio.gather(
