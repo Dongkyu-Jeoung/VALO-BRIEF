@@ -21,11 +21,17 @@ def get_my_team_stats(current: Team = Depends(get_current_team), db: Session = D
 
 
 @router.get("/players")
-async def get_my_team_players(current: Team = Depends(get_current_team), db: Session = Depends(get_db)):
+async def get_my_team_players(
+    refresh: bool = False,
+    current: Team = Depends(get_current_team),
+    db: Session = Depends(get_db),
+):
     """match_player_stats를 즉시 집계해 응답한다. riot_accounts에 아바타/티어가 아직
     없는 선수(팀 동기화 경로가 안 채운 경우)는 이번 조회에서 한 번만 Henrik을 불러 채운다
-    (services/my_team_players.py 참고)."""
-    return await my_team_players.build_my_team_players(db, current)
+    (services/my_team_players.py 참고). 로스터(Henrik member 목록) 자체는 team_id 기준
+    프로세스 메모리에 캐싱돼 있는데, refresh=true로 부르면 그 캐시를 무시하고 Henrik에서
+    다시 받아온다 - 프론트 "로스터 새로고침" 버튼 전용."""
+    return await my_team_players.build_my_team_players(db, current, force_refresh=refresh)
 
 
 @router.get("/players/search-target")
