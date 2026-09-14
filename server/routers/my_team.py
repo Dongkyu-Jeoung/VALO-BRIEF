@@ -28,6 +28,18 @@ async def get_my_team_players(current: Team = Depends(get_current_team), db: Ses
     return await my_team_players.build_my_team_players(db, current)
 
 
+@router.get("/players/search-target")
+async def get_my_team_personal_search_target(current: Team = Depends(get_current_team), db: Session = Depends(get_db)):
+    """헤더/메뉴바 "개인 검색" 클릭 시 이동할 선수 - 로스터 중 ACS 최고이면서 지금도
+    Henrik에서 실제로 조회되는 선수(Riot ID를 바꾼 선수를 건너뛰기 위한 라이브 재검증,
+    services/my_team_players.py::resolve_personal_search_target 참고). 이 라우트가
+    "/players/{puuid}"보다 먼저 등록돼야 "search-target"이 puuid 파라미터로 먹히지 않는다."""
+    target = await my_team_players.resolve_personal_search_target(db, current)
+    if target is None:
+        raise HTTPException(status_code=404, detail="이동할 선수를 찾지 못했습니다.")
+    return target
+
+
 @router.get("/players/{puuid}")
 def get_my_team_player_detail(puuid: str, current: Team = Depends(get_current_team), db: Session = Depends(get_db)):
     """player_stats_summary에 캐싱된 값을 읽어 응답한다. 캐시가 비어있으면(첫 진입)

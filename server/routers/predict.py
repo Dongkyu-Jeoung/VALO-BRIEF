@@ -12,7 +12,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
-
+from database.connection import SessionLocal
 from ml.predictor import predict_blue_win, predict_from_player_features, create_prediction_checkpoint
 from models.team import Team
 from routers.auth import get_current_team
@@ -99,8 +99,8 @@ async def predict_match(
         )
         result = await asyncio.to_thread(predict_from_player_features, blue_players, red_players)
 
-        checkpoint("예측 작업 스레드 호출")
-        result = await asyncio.to_thread(_predict_with_db, our_roster, opp_roster, checkpoint, db_missing_players)
+        # checkpoint("예측 작업 스레드 호출")
+        # result = await asyncio.to_thread(_predict_with_db, our_roster, opp_roster, checkpoint, db_missing_players)
 
         try:
             await asyncio.to_thread(_save_prediction_result, current.team_id, team_name, team_tag, result)
