@@ -16,9 +16,13 @@ services/my_team_stats.py(통계 탭)와 같은 전제 - Henrik을 실시간으�
     스왑). 그 구간에 설치가 한 번도 없으면 그 구간은 공수 판정 불가로 집계에서 제외한다.
   - 에코 라운드: 그 라운드 우리 팀 5명의 economy.loadout_value 평균이 ECO_THRESHOLD
     미만이면 에코로 판정한다(공식 정의가 아닌 휴리스틱 - 필요시 조정).
-  - 클러치(1v1/1v2 트레이드 성공률): 라운드의 모든 kill_events를 시간순으로 재생하며
-    우리 팀이 1명 남는 순간 상대가 몇 명 남아있었는지로 상황을 분류하고, 그 라운드의
-    승패를 그대로 클러치 성공/실패로 본다.
+  - 트레이드 성공률(1v1/1v2, 2026-09-14 재정의): my_team_player_detail.py(개인 분석)와
+    같은 정의 - "우리 팀원이 죽은 교전에서 상대가 몇 명 같이 죽었는지"를
+    round_phase_analysis.py::nearby_trade_deaths로 계산한다. 1v1 = 상대 1명 이상
+    같이 죽음(기본 트레이드), 1v2 = 2명 이상(가치 트레이드), 각각 전체 사망 횟수 대비
+    비율(서로 배타적이지 않음). 이전엔 "클러치(우리 팀 마지막 생존자 상황) 라운드
+    승패"를 그대로 재사용해 이름과 실제 의미가 달랐다(사용자 확인 후 수정) - 이제는
+    라운드 승패와 무관하게 죽음-교전 단위로 집계한다.
   - 타격대(Duelist) vs 타격대: ml/engagement_predictor.py::_duelist_matchup_from_acs를
     그대로 재사용한다 - 승부예측 쪽(상대팀 실시간 분석)과 같은 정규화 방식으로
     "타격대 매치업 유불리"의 의미를 앱 전체에서 하나로 유지하기 위함.
@@ -46,6 +50,7 @@ from services.round_phase_analysis import (
     aggregate_round_phase,
     analyze_rounds,
     determine_team_color,
+    nearby_trade_deaths,
     pct,
     round_kill_events,
 )
@@ -53,27 +58,23 @@ from services.round_phase_analysis import (
 _DUELIST_LABEL = ROLE_LABELS["Duelist"]
 
 
-def _clutch_tally(rounds: list, our_puuids: set[str], opp_puuids: set[str], our_color: str) -> dict[int, dict]:
-    """라운드마다 우리 팀이 1명 남는 순간 상대가 몇 명 남아있었는지로 클러치 상황(1/2)을
-    분류하고, 그 라운드의 승패를 클러치 성공/실패로 집계."""
-    result = {1: {"win": 0, "loss": 0}, 2: {"win": 0, "loss": 0}}
+def _trade_tally(rounds: list, our_puuids: set[str], opp_puuids: set[str]) -> dict:
+    """라운드마다 우리 팀원이 죽을 때마다 nearby_trade_deaths로 "같은 교전에서 상대가
+    몇 명 같이 죽었는지"를 구해 1v1(상대 1명↑)/1v2(상대 2명↑) 트레이드 횟수를 센다 -
+    my_team_player_detail.py의 개인 트레이드 집계와 같은 정의를 팀 전체 사망에 적용."""
+    death_total = trade1v1 = trade1v2 = 0
     for rnd in rounds:
         kills = round_kill_events(rnd)
-        if not kills:
-            continue
-        our_alive = set(our_puuids)
-        opp_alive = set(opp_puuids)
-        clutch_n = None
         for k in kills:
-            victim = k.get("victim_puuid")
-            our_alive.discard(victim)
-            opp_alive.discard(victim)
-            if clutch_n is None and len(our_alive) == 1 and len(opp_alive) >= 1:
-                clutch_n = len(opp_alive)
-        if clutch_n in (1, 2):
-            won = rnd.get("winning_team") == our_color
-            result[clutch_n]["win" if won else "loss"] += 1
-    return result
+            if k.get("victim_puuid") not in our_puuids:
+                continue
+            death_total += 1
+            nearby = nearby_trade_deaths(kills, k, opp_puuids)
+            if nearby >= 1:
+                trade1v1 += 1
+            if nearby >= 2:
+                trade1v2 += 1
+    return {"deathTotal": death_total, "trade1v1": trade1v1, "trade1v2": trade1v2}
 
 
 def _death_locations_for_match(rounds: list, our_puuids: set[str], map_uuid: str | None) -> list[dict]:
@@ -158,7 +159,7 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
     agents = _load_ref_agents(db)
 
     all_records: list[dict] = []
-    clutch_totals = {1: {"win": 0, "loss": 0}, 2: {"win": 0, "loss": 0}}
+    trade_totals = {"deathTotal": 0, "trade1v1": 0, "trade1v2": 0}
     our_duelist_acs: list[int] = []
     opp_duelist_acs: list[int] = []
     map_buckets: dict[str, dict] = {}
@@ -182,10 +183,10 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
         records = analyze_rounds(rounds, our_color)
         all_records.extend(records)
 
-        clutch = _clutch_tally(rounds, our_puuids, opp_puuids, our_color)
-        for n in (1, 2):
-            clutch_totals[n]["win"] += clutch[n]["win"]
-            clutch_totals[n]["loss"] += clutch[n]["loss"]
+        trade = _trade_tally(rounds, our_puuids, opp_puuids)
+        trade_totals["deathTotal"] += trade["deathTotal"]
+        trade_totals["trade1v1"] += trade["trade1v1"]
+        trade_totals["trade1v2"] += trade["trade1v2"]
 
         for r in our_rows:
             if r.role_type == _DUELIST_LABEL and r.acs is not None:
@@ -263,9 +264,10 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
     our_duelist_avg = sum(our_duelist_acs) / len(our_duelist_acs) if our_duelist_acs else 0.0
     opp_duelist_avg = sum(opp_duelist_acs) / len(opp_duelist_acs) if opp_duelist_acs else 0.0
     matchup = _duelist_matchup_from_acs(our_duelist_avg, opp_duelist_avg)
+    death_total = trade_totals["deathTotal"]
     engagement_metrics = {
-        "trade1v1": pct(clutch_totals[1]["win"], clutch_totals[1]["loss"]),
-        "trade1v2": pct(clutch_totals[2]["win"], clutch_totals[2]["loss"]),
+        "trade1v1": round(trade_totals["trade1v1"] / death_total * 100) if death_total else 0,
+        "trade1v2": round(trade_totals["trade1v2"] / death_total * 100) if death_total else 0,
         "duelistVsDuelist": {"us": matchup["ourScore"], "them": matchup["theirScore"]},
     }
     _upsert_summary_row(db, team_id, "engagement", "overall", 0, 0, engagement_metrics)

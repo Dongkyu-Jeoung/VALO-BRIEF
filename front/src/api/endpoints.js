@@ -38,6 +38,7 @@ export const ENDPOINTS = {
   // 우리팀 분석 (Frame 09~13, 로그인 필요)
   myTeamStats: () => `/api/my-team/stats`,
   myTeamPlayers: () => `/api/my-team/players`,
+  myTeamSearchTarget: () => `/api/my-team/players/search-target`,
   myTeamPlayerDetail: (playerId) => `/api/my-team/players/${encodeURIComponent(playerId)}`,
   myTeamAnalysis: () => `/api/my-team/analysis`,
   myTeamAiReport: () => `/api/my-team/ai-report`,
