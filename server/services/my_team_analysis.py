@@ -1,33 +1,31 @@
 """
 로그인한 팀 전용 "우리팀 분석 > 팀 분석" 탭 데이터 조립 + team_stats_summary 캐싱.
 
-services/my_team_stats.py(통계 탭)와 같은 전제 - Henrik을 실시간으로 부르지 않고 DB
+services/my_team_stats.py(통계 탭)와 같은 전제로 Henrik을 실시간으로 부르지 않고 DB
 (matches/match_player_stats)만으로 계산한다. 다만 이 탭은 round_detail_json을 라운드
-단위로 파싱해야 해서 계산 비용이 훨씬 크기 때문에, 결과를 team_stats_summary에
-캐싱해두고(cache-aside: 있으면 읽고, 없으면 계산해서 채운 뒤 읽음) 이후 조회는 재계산
-없이 캐시만 읽는다.
+단위로 파싱해야 해서 계산 비용이 훨씬 크므로, 결과를 team_stats_summary에
+캐싱해두고(cache-aside: 있으면 읽고, 없으면 계산해서 채운 뒤 읽음) 이후 조회는 캐시만
+읽는다.
 
-라운드 단위 파생값은 Henrik 원본에 명시적인 필드가 없어 아래 방식으로 추론한다(전부
-사용자 확인 후 진행하기로 한 부분 - 프로젝트 내 유일한 소스이므로 여기 문서화):
-  - 공격/수비: 라운드의 player_stats[].player_team으로 "우리 팀이 이 매치에서 Red/Blue
-    중 어느 색이었는지" 먼저 알아낸 뒤, 하프(12라운드)마다 그 구간에서 스파이크가 설치된
+라운드 단위 파생값은 Henrik 원본에 명시적인 필드가 없어 아래 방식으로 추론한다(프로젝트
+내 유일한 소스이므로 여기 문서화):
+  - 공격/수비: 라운드의 player_stats[].player_team으로 이 매치에서 우리 팀이 Red/Blue
+    중 어느 색이었는지 먼저 알아낸 뒤, 하프(12라운드)마다 그 구간에서 스파이크가 설치된
     라운드의 plant_events.planted_by.team을 그 구간 전체의 공격 팀으로 본다(발로란트
     표준 룰 - 사이드는 라운드마다 안 바뀌고 하프 단위로만 바뀜, 연장은 2라운드 단위로
-    스왑). 그 구간에 설치가 한 번도 없으면 그 구간은 공수 판정 불가로 집계에서 제외한다.
+    스왑). 그 구간에 설치가 한 번도 없으면 공수 판정 불가로 집계에서 제외한다.
   - 에코 라운드: 그 라운드 우리 팀 5명의 economy.loadout_value 평균이 ECO_THRESHOLD
-    미만이면 에코로 판정한다(공식 정의가 아닌 휴리스틱 - 필요시 조정).
-  - 트레이드 성공률(1v1/1v2, 2026-09-14 재정의): my_team_player_detail.py(개인 분석)와
-    같은 정의 - "우리 팀원이 죽은 교전에서 상대가 몇 명 같이 죽었는지"를
-    round_phase_analysis.py::nearby_trade_deaths로 계산한다. 1v1 = 상대 1명 이상
-    같이 죽음(기본 트레이드), 1v2 = 2명 이상(가치 트레이드), 각각 전체 사망 횟수 대비
-    비율(서로 배타적이지 않음). 이전엔 "클러치(우리 팀 마지막 생존자 상황) 라운드
-    승패"를 그대로 재사용해 이름과 실제 의미가 달랐다(사용자 확인 후 수정) - 이제는
-    라운드 승패와 무관하게 죽음-교전 단위로 집계한다.
+    미만이면 에코로 판정한다(공식 정의가 아닌 휴리스틱).
+  - 트레이드 성공률(1v1/1v2): my_team_player_detail.py(개인 분석)와 같은 정의 - "우리
+    팀원이 죽은 교전에서 상대가 몇 명 같이 죽었는지"를 round_phase_analysis.py::
+    nearby_trade_deaths로 계산한다. 1v1 = 상대 1명 이상 같이 죽음(기본 트레이드), 1v2 =
+    2명 이상(가치 트레이드), 각각 전체 사망 횟수 대비 비율(서로 배타적이지 않음) - 라운드
+    승패와 무관하게 죽음-교전 단위로 집계한다.
   - 타격대(Duelist) vs 타격대: ml/engagement_predictor.py::_duelist_matchup_from_acs를
-    그대로 재사용한다 - 승부예측 쪽(상대팀 실시간 분석)과 같은 정규화 방식으로
-    "타격대 매치업 유불리"의 의미를 앱 전체에서 하나로 유지하기 위함.
-  - skills(스킬 사용 유효성)는 제외한다 - Henrik 응답의 ability_casts가 항상 null로
-    와서(실측 확인) 데이터 소스가 없다.
+    그대로 재사용한다 - 승부예측 쪽(상대팀 실시간 분석)과 같은 정규화 방식으로 "타격대
+    매치업 유불리"의 의미를 앱 전체에서 하나로 유지하기 위함.
+  - skills(스킬 사용 유효성)는 제외한다 - Henrik 응답의 ability_casts가 항상 null로 와서
+    데이터 소스가 없다.
 """
 import json as json_module
 from datetime import datetime
@@ -104,13 +102,11 @@ def _upsert_summary_row(
 ) -> None:
     """(team_id, stat_type, dimension_key) 한 행을 원자적으로 upsert한다.
 
-    2026-09-11 실측 확인: 기존에는 "조회 후 없으면 add"(TOCTOU) 방식이라, 이 팀의
-    "팀 분석"/"AI 리포트" 탭을 거의 동시에 두 번 조회하면(우리팀 분석 페이지가
-    stats/analysis를 병렬로 불러오는 것처럼) 두 세션이 동시에 "없음"을 보고 동시에
-    INSERT를 시도해 uq_team_stats 중복 키 IntegrityError가 실제로 발생했다
-    (services/team_engagement_cache.py::upsert_match_engagement가 2026-09-08에
-    겪었던 것과 같은 종류의 경합). MySQL 네이티브 INSERT ... ON DUPLICATE KEY UPDATE로
-    바꿔 그 경합 자체를 없앤다."""
+    기존 "조회 후 없으면 add"(TOCTOU) 방식은, 같은 팀의 "팀 분석"/"AI 리포트" 탭을 거의
+    동시에 두 번 조회하면(병렬 요청) 두 세션이 동시에 "없음"을 보고 INSERT를 시도해
+    uq_team_stats 중복 키 IntegrityError가 났다(services/team_engagement_cache.py::
+    upsert_match_engagement와 같은 종류의 경합). MySQL 네이티브 INSERT ... ON DUPLICATE
+    KEY UPDATE로 바꿔 그 경합 자체를 없앤다."""
     stmt = mysql_insert(TeamStatsSummary).values(
         team_id=team_id, stat_type=stat_type, dimension_key=dimension_key,
         wins=wins, losses=losses, metrics_json=metrics,
@@ -331,13 +327,11 @@ def build_my_team_analysis(db: Session, team_id: str) -> dict:
     읽는다.
 
     _compute_and_cache는 한 팀당 여러 행(round_phase/engagement/맵별)을 한 트랜잭션
-    안에서 upsert한다 - _upsert_summary_row가 원자적 upsert로 바뀌어(위 함수 참고)
-    중복 키 에러는 없어졌지만, 같은 팀을 거의 동시에 두 세션이 계산하면(예: "팀 분석"
-    탭과 "AI 리포트" 탭이 동시에 이 팀을 처음 조회) 여러 행에 걸친 잠금 순서 차이로
-    데드락(OperationalError 1213)이 날 수 있다(실측 재현 확인). 데드락이든 그 사이
-    다른 세션이 먼저 채워서 생기는 나머지 충돌이든, 롤백 후 캐시를 다시 읽어보면 대부분
-    이미 채워져 있어 재계산 없이 바로 해결된다 - 그래도 비어있으면 한 번 더 계산을
-    시도한다(진짜 일시적 데드락이었던 경우)."""
+    안에서 upsert한다 - 중복 키 에러는 원자적 upsert로 없어졌지만, 같은 팀을 두 세션이
+    거의 동시에 처음 계산하면(예: "팀 분석"과 "AI 리포트" 탭 동시 조회) 여러 행에 걸친
+    잠금 순서 차이로 데드락(OperationalError 1213)이 날 수 있다. 롤백 후 캐시를 다시
+    읽으면 대부분 이미 채워져 있어 재계산 없이 해결되고, 그래도 비어있으면 한 번 더
+    계산을 시도한다."""
     rows = db.query(TeamStatsSummary).filter(TeamStatsSummary.team_id == team_id).all()
     if not rows:
         for attempt in range(2):

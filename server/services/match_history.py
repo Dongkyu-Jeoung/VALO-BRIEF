@@ -3,31 +3,26 @@ Henrik 매치 상세(v2/match) 하나를 matches/match_player_stats에 upsert(�
 등 다른 화면이 원본 통계를 그대로 읽을 수 있도록)하고, 동시에 그 매치 하나만의 트레이드
 성공률/듀얼리스트 ACS를 계산해 team_engagement_cache에 (team_id, match_id) 행으로도
 upsert한다 - 승부예측 분석 탭 ③번(교전 매치업 예측) 모델 학습용 데이터 + "지금 폼" 캐시를
-겸한다(server/승부예측_성능_분석.md 11번, services/team_engagement_cache.py 모듈 docstring
-참고).
+겸한다(services/team_engagement_cache.py 모듈 docstring 참고).
 
-services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 matches/match_player_stats
-테이블에 쓰므로 컨벤션을 맞춘다:
+services/match_sync.py(회원가입 시 팀 이력 선동기화)와 같은 테이블에 쓰므로 컨벤션을 맞춘다:
   - matches.team_a_id/team_b_id는 "red=a/blue=b" 같은 고정 색상 의미가 아니다. 이미 DB에
-    있는 매치라면 기존에 어느 슬롯이 red/blue였는지 identity로 확인해서 그 배치를 그대로
-    유지하고(스왑 금지), 새 매치면 red->a/blue->b를 기본값으로 쓴다.
-  - matches.round_detail_json은 라운드 원본 배열 그대로 저장한다(v2/match의 `rounds`
-    필드) - ml/engagement_training.py는 이제 이 테이블을 안 읽으므로 이 필드는 우리팀
-    분석 페이지 등 다른 소비처를 위한 것.
-  - match_player_stats.side는 더 이상 없다(하프타임마다 공/수가 바뀌어 매치당 값 1개로
-    표현이 안 되는 데이터였음) - team_id로만 로스터를 가른다.
+    있는 매치면 기존 슬롯 배치를 identity로 확인해 그대로 유지하고(스왑 금지), 새 매치면
+    red->a/blue->b를 기본값으로 쓴다.
+  - matches.round_detail_json은 v2/match의 `rounds` 배열을 그대로 저장한다 - 우리팀 분석
+    페이지 등의 소비처를 위함.
+  - match_player_stats.side는 없다(하프타임마다 공/수가 바뀌어 매치당 값 1개로 표현이 안
+    되는 데이터였음) - team_id로만 로스터를 가른다.
   - match_player_stats.role_type은 한글 라벨(services.player_profile.ROLE_LABELS)로
     저장한다(match_sync.py와 동일).
 
-KAST는 match_sync.calculate_match_kast로 원본 이벤트를 검증한 뒤 계산한다.
-불완전한 응답은 기존 KAST를 보존한다. first_bloods/first_deaths/
-most_used_weapon_uuid/detail_json은 이 저장 경로에서 변경하지 않는다.
+KAST는 match_sync.calculate_match_kast로 원본 이벤트를 검증한 뒤 계산하며, 불완전한
+응답은 기존 값을 보존한다. first_bloods/first_deaths/most_used_weapon_uuid/detail_json은
+이 저장 경로에서 변경하지 않는다.
 
-"조회하는 김에 항상 쌓기"(opportunistic 캐싱) 전략은 그대로 - 별도 배치 작업 없이
-routers/teams.py가 이미 받아온 match_details를 그 자리에서 넘기면 된다. 이 함수가
-실패해도 화면 응답 자체는 깨지면 안 되므로, 호출부가 반드시 try/except로 감싸고 실패를
-삼켜야 한다(이 함수 자체는 예외를 던질 수 있음 - 의도적으로 조용히 삼키지 않는다,
-호출부가 로그를 남길지/무시할지 결정).
+"조회하는 김에 항상 쌓기"(opportunistic 캐싱) 전략 - 별도 배치 작업 없이 routers/teams.py가
+이미 받아온 match_details를 그 자리에서 넘기면 된다. 이 함수가 실패해도 화면 응답이
+깨지면 안 되므로 호출부가 반드시 try/except로 감싸야 한다(이 함수는 예외를 그대로 던진다).
 """
 from datetime import datetime, timezone
 
@@ -145,10 +140,9 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     match_id는 호출부가 넘겨준다(match dict 내부에서 재추출하지 않음) - routers/teams.py는
     이미 history 조회 단계에서 각 매치의 id를 알고 있고(`get_match_detail(mid)` 호출에
     쓴 바로 그 값), v2/match 응답 내부 metadata에 그 id가 정확히 어떤 키로 들어있는지
-    문서로 확인할 방법이 없어(server/Henrik-API-전체목록.md가 삭제됨) 추측성 키 이름에
-    의존하는 대신 이미 확실한 값을 그대로 받는 쪽을 택했다.
-    match_id가 비어있으면 조용히 스킵(방어) - 그 외 실패는 예외를 그대로 던지므로 호출부가
-    try/except로 감싸야 한다(모듈 docstring 참고)."""
+    확인할 문서가 없어 추측성 키 이름에 의존하는 대신 이미 확실한 값을 그대로 받는
+    쪽을 택했다. match_id가 비어있으면 조용히 스킵(방어) - 그 외 실패는 예외를 그대로
+    던지므로 호출부가 try/except로 감싸야 한다(모듈 docstring 참고)."""
     if not match_id:
         return
 
@@ -182,7 +176,6 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     blue_rounds_won = blue.get("rounds_won")
     rounds_played = (red_rounds_won or 0) + (blue_rounds_won or 0)
 
-    # 맵 UUID 캐시 로드 및 파싱
     map_name = metadata.get("map") or ""
     map_uuid_map = _load_map_uuid_by_name(db)
     map_uuid = map_uuid_map.get(map_name.lower())
@@ -239,7 +232,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         candidates = {p: acs_by_puuid.get(p, 0) for p in puuids if p in acs_by_puuid}
         return max(candidates, key=candidates.get) if candidates else None
 
-     # 팀별 전체 5명 스탯 합산 및 팀 평균 KDA 사전 계산 로직 추가
+    # 팀별 킬/데스/어시스트 합산 (팀 평균 KDA 계산용)
     team_stats_summary = {"red": {"kills": 0, "deaths": 0, "assists": 0, "count": 0}, 
                           "blue": {"kills": 0, "deaths": 0, "assists": 0, "count": 0}}
     
@@ -263,17 +256,16 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
             team_stats_summary["blue"]["assists"] += p_assists
             team_stats_summary["blue"]["count"] += 1
 
-    # 팀별 평균 KDA 계산 (팀 전체 합산 기준 또는 5명 평균 기준)
+    # 팀별 평균 KDA 계산
     team_avg_kda = {}
     for t_key in ["red", "blue"]:
         c = team_stats_summary[t_key]["count"] or 1
         t_kills = team_stats_summary[t_key]["kills"]
         t_deaths = team_stats_summary[t_key]["deaths"]
         t_assists = team_stats_summary[t_key]["assists"]
-        
-        # 방식에 따라 선택: 
-        # 1) 팀원들의 개별 KDA 평균: 각 팀원의 (K+A)/max(D,1) 값을 합산해 인원수로 나눔
-        # 2) 팀 전체 통계 총합 기준 KDA: (총 킬 + 총 어시스트) / max(총 데스, 1) -> 전자스포츠에서 주로 팀 종합 지표로 쓰임
+
+        # 팀 전체 합산 기준 KDA: (총 킬+어시스트)/max(총 데스,1) - 전자스포츠에서 흔히
+        # 쓰는 팀 종합 지표.
         team_avg_kda[t_key] = round((t_kills + t_assists) / max(t_deaths, 1), 2)
 
     mvp_red = _mvp_puuid(red_puuids)
@@ -293,9 +285,8 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
 
         character = player.get("character") or ""
         # .replace("/", "") - Henrik이 "KAY/O"처럼 슬래시 포함 이름을 주는데 ref_agents엔
-        # "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(2026-09-11, KAY/O 참가
-        # 매치에서 agent_uuid가 계속 NULL로 저장되던 버그의 원인으로 실측 확인 -
-        # services/team_profile.py의 동일 주석 참고).
+        # "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(agent_uuid가 계속 NULL로
+        # 저장되던 버그의 원인 - services/team_profile.py의 동일 주석 참고).
         agent_meta = agent_info.get(character.lower().replace("/", ""))
         stats = player.get("stats") or {}
         heads = stats.get("headshots") or 0
@@ -326,8 +317,7 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         stat_row.deaths = deaths
         stat_row.assists = assists
         
-        # 개인별 KDA 혹은 팀 평균 KDA 중 필요에 맞게 대입할 수 있습니다.
-        # (개인별 KDA로 저장하려면 아래와 같이 유지)
+        # 개인별 KDA로 저장한다(위 team_avg_kda는 팀 종합 지표로 별도 계산됨).
         stat_row.kda = round((kills + assists) / max(deaths, 1), 2)
         
         stat_row.headshot_pct = round(heads / total_shots * 100, 1) if total_shots else None

@@ -29,13 +29,12 @@ _client: httpx.AsyncClient | None = None
 
 
 class HenrikRateLimitError(Exception):
-    """Henrik API 레이트리밋(429)에 계속 걸렸을 때 - "존재하지 않음"(None)과 반드시
-    구분해야 한다. 예전엔 429도 다른 실패와 똑같이 None으로 뭉뚱그려 반환했는데, 그게
-    /exists 응답에서 "존재하지 않는 팀/선수"와 동일하게 처리돼 - 실제로는 존재하는 팀인데
-    검색이 갑자기 안 되는 것처럼 보이는 버그의 원인이었다(팀 검색 1건이 exists 확인 +
+    """Henrik API 레이트리밋(429)을 "존재하지 않음"(None)과 구분하기 위한 예외.
+    예전엔 429도 None으로 뭉뚱그려 반환해, 실제로는 존재하는 팀/선수인데도 /exists
+    응답에서 "존재하지 않음"으로 보이는 버그가 있었다(팀 검색 1건이 exists 확인 +
     백그라운드 프리페치(이력+매치상세 최대 10건)까지 겹쳐 최대 12개 요청을 짧은 시간에
-    쓰므로 다른 화면 요청과 합쳐 API 키 한도를 초과할 수 있다).
-    main.py의 전역 예외 핸들러가 이걸 잡아 503으로 응답한다."""
+    쓰므로 다른 화면 요청과 합쳐 API 키 한도를 초과할 수 있다). main.py의 전역 예외
+    핸들러가 이걸 잡아 503으로 응답한다."""
 
     def __init__(self, path, retry_after=60.0):
         super().__init__(path)
@@ -182,9 +181,7 @@ async def get_mmr_history(region: str, riot_name: str, riot_tag: str) -> dict | 
 async def get_stored_matches(region: str, riot_name: str, riot_tag: str, mode: str | None = None) -> list | None:
     """Henrik이 미리 캐싱해둔 매치 이력 조회 (라운드/킬/좌표 상세 없는 경량 요약, 조회 대상
     플레이어 관점이라 참가자 목록 검색 불필요). mode 없이 부르면 저장된 전체 이력을 truncate
-    없이 다 준다(total == returned로 실측 확인) 
-    - mode="competitive" 등 필터는 그 전체 집합의
-    부분집합이라 별도로 합칠 필요 없음(실측: 서로 다른 두 계정 모두 competitive 결과가
-    무필터 결과의 완전한 부분집합이었음)."""
+    없이 다 준다(실측 확인: total == returned) - mode="competitive" 등 필터는 그 전체
+    집합의 부분집합이라 별도로 합칠 필요 없다."""
     params = {"mode": mode} if mode else None
     return await _get(f"/valorant/v1/stored-matches/{region}/{riot_name}/{riot_tag}", params=params)

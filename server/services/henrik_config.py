@@ -29,13 +29,10 @@ def build_client_configs(general_key, ml_key):
 
 
 load_environment()
-# 2026-09-11: 실제 Henrik 응답 헤더로 두 키의 진짜 한도를 확인한 결과(x-ratelimit-limit),
-# HENRIK_API_KEY=60/분, HENRIK_ML_API_KEY=45/분이었다. 승부예측 한 건이 상대팀 선수
-# 5명 분량을 순간적으로 최대 30건까지 몰아 부르는 반면(ml/valorant_git.py), 검색/화면
-# 쪽은 여러 요청에 걸쳐 나눠 걸리는 편이라 순간 버스트에 더 취약한 예측 쪽에 한도가 더
-# 큰 키를 배정한다 - 인자 순서를 바꿔서 GENERAL(검색/화면)이 원래 ML 몫이던 키를,
-# ML(승부예측)이 원래 GENERAL 몫이던 키를 쓰게 한다. 두 예산은 여전히 완전히 분리돼
-# 있음(서로 침범 안 함) - 어느 쪽에 어느 키를 주느냐만 바꾼 것.
+# 실측 결과 HENRIK_API_KEY=60/분, HENRIK_ML_API_KEY=45/분이었다. 승부예측 한 건이 상대팀
+# 선수 5명 분량을 순간적으로 최대 30건까지 몰아 부르는 반면(ml/valorant_git.py) 검색/화면
+# 쪽은 요청이 나눠 걸려 버스트에 덜 취약하므로, 인자 순서를 바꿔 한도가 큰 키를 예측(ML)
+# 쪽에 배정한다. 두 예산은 여전히 완전히 분리돼 있다(서로 침범 안 함).
 GENERAL, ML = build_client_configs(os.getenv("HENRIK_ML_API_KEY"), os.getenv("HENRIK_API_KEY"))
 if ML is GENERAL:
     logging.getLogger(__name__).warning(

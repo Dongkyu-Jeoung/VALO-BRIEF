@@ -122,9 +122,9 @@ def _match_our_side(match: dict, team_name: str, team_tag: str) -> str | None:
     """teams.red/blue 중 roster.name/tag가 조회 대상 팀과 일치하는 쪽을 "red"/"blue"로
     반환 (services/team_profile.py의 동명 함수와 동일 로직).
 
-    2026-09-14 버그 수정: roster.get("name")도 strip() 처리 - Henrik roster.name에
-    공백이 붙은 팀이 실제로 있어(예: "XLA  ") 입력값만 strip하면 비교가 항상 실패했다
-    (ml/engagement_predictor.py::_team_roster의 동일 수정 참고)."""
+    roster.get("name")도 strip() 처리한다 - Henrik roster.name에 공백이 붙은 팀이 실제로
+    있어(예: "XLA  ") 입력값만 strip하면 비교가 항상 실패한다(ml/engagement_predictor.py::
+    _team_roster의 동일 처리 참고)."""
     teams = match.get("teams") or {}
     name_l, tag_l = team_name.strip().lower(), team_tag.strip().lower()
     for side in ("red", "blue"):
@@ -233,14 +233,14 @@ async def _backfill_if_needed(db: Session, match_row: Match, our_team_id: str, w
     매치 참가 두 팀 중 하나는 반드시 our_team_id다. team_a_id가 이미 다른 팀으로 확정되어
     있다면 아직 비어있는 team_b_id 쪽이 our_team_id라고 확정할 수 있다.
 
-    2026-09-14 추가: 이 매치가 services/match_history.py의 write-through 경로(상대팀 검색/
-    승부예측 조회 - 우리 팀이 가입하기 전에 다른 팀이 이 매치를 먼저 조회해 캐싱했을 수
-    있음)로 먼저 저장된 경우, first_bloods/first_deaths/most_used_weapon_uuid/detail_json은
-    그 경로가 의도적으로 건드리지 않아(match_history.py 모듈 docstring 참고) NULL로 남아
-    있다 - 우리팀 분석 "통계" 탭의 퍼블(첫킬) 값이 전부 0으로 보이던 원인. team_id 배정과
-    달리 이 값들은 원본 kills 이벤트가 있어야 계산되는데 그건 DB에 저장돼 있지 않으므로,
-    이 매치의 어떤 로우든 first_bloods가 비어 있으면 Henrik 매치 상세를 한 번 다시 불러와
-    _insert_match과 동일한 방식으로 로스터 전원의 파생 스탯을 재계산해 채운다."""
+    이 매치가 services/match_history.py의 write-through 경로(상대팀 검색/승부예측 조회 -
+    우리 팀이 가입하기 전에 다른 팀이 이 매치를 먼저 조회해 캐싱했을 수 있음)로 먼저
+    저장된 경우, first_bloods/first_deaths/most_used_weapon_uuid/detail_json은 그 경로가
+    의도적으로 건드리지 않아(match_history.py 모듈 docstring 참고) NULL로 남아 있다 -
+    team_id 배정과 달리 이 값들은 원본 kills 이벤트가 있어야 계산되는데 그건 DB에
+    저장돼 있지 않으므로, 이 매치의 어떤 로우든 first_bloods가 비어 있으면 Henrik 매치
+    상세를 한 번 다시 불러와 _insert_match과 동일한 방식으로 로스터 전원의 파생 스탯을
+    재계산해 채운다."""
     is_new_side = our_team_id not in (match_row.team_a_id, match_row.team_b_id)
     if is_new_side:
         if match_row.team_b_id is not None:
@@ -468,9 +468,9 @@ def _insert_match(
         stat_row.acs = round((stats.get("score") or 0) / rounds_played) if rounds_played else None
 
         # .replace("/", "") - Henrik이 "KAY/O"처럼 슬래시 포함 이름을 주는데 ref_agents엔
-        # "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 됐다(2026-09-11, KAY/O 참가
-        # 매치에서 agent_uuid가 계속 NULL로 저장되던 버그의 원인으로 실측 확인 -
-        # services/team_profile.py의 동일 주석 참고).
+        # "KAYO"로 저장돼 있어 소문자 변환만으로는 매칭이 안 된다(KAY/O 참가 매치에서
+        # agent_uuid가 NULL로 저장되던 버그의 원인으로 실측 확인 - services/team_profile.py의
+        # 동일 주석 참고).
         agent = agent_meta.get(str(player.get("character") or "").lower().replace("/", ""))
         stat_row.agent_uuid = (agent or {}).get("uuid")
         stat_row.role_type = ROLE_LABELS.get((agent or {}).get("role_type"))

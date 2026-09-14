@@ -60,10 +60,10 @@ def build_my_team_stats(db: Session, team: Team) -> dict:
 
     # team_a_id/team_b_id에 대한 OR + ORDER BY를 한 쿼리로 묶으면 MySQL이 인덱스를 못 타고
     # round_detail_json(라운드 원본 JSON, 매치당 용량이 큼)까지 통째로 정렬 버퍼에 올려서
-    # "Out of sort memory"가 났다(실측 확인). 이 응답엔 round_detail_json이 필요 없으니
-    # defer()로 SELECT 대상에서 빼고, team_a_id/team_b_id 쿼리를 각각 자기 인덱스로 따로
-    # 돌린 뒤 애플리케이션에서 합쳐 정렬한다 - 팀 하나가 가진 매치 수는 많아야 수백 건이라
-    # 파이썬에서 합쳐 정렬해도 비용이 미미하다.
+    # "Out of sort memory"가 났다. 이 응답엔 round_detail_json이 필요 없으니 defer()로
+    # SELECT 대상에서 빼고, team_a_id/team_b_id 쿼리를 각각 자기 인덱스로 따로 돌린 뒤
+    # 애플리케이션에서 합쳐 정렬한다 - 팀 하나가 가진 매치 수는 많아야 수백 건이라 파이썬에서
+    # 합쳐 정렬해도 비용이 미미하다.
     base_query = db.query(Match).options(defer(Match.round_detail_json))
     matches_by_id = {
         m.match_id: m

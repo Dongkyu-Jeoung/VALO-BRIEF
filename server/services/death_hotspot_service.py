@@ -1,12 +1,11 @@
 # server/services/death_hotspot_service.py
 # 팀+맵 기준으로 선수별 최다 사망 위치(핫스팟)를 계산.
 #
-# models/death_event.py(DeathEvent)·schema/death_event.py(DeathHotspot)가 원래 이
-# 기능을 위해 설계됐지만, DeathEvent를 실제로 저장하는 코드가 프로젝트 어디에도 없어
-# get_death_hotspots(DB 조회 경로)는 아직 미구현 상태다(2026-09-11 확인). 대신
-# services/team_profile.py·services/my_team_analysis.py가 이미 정규화(0~100)까지 끝낸
-# 원본 사망 좌표 리스트를 그 자리에서 이 모듈의 compute_player_hotspots로 넘겨 집계한다
-# - 화면(팀원 사망 위치 분석)에 필요한 "선수 1명당 대표 위치 1개"를 이 방식으로 만든다.
+# models/death_event.py·schema/death_event.py가 원래 이 기능을 위해 설계됐지만, DeathEvent를
+# 실제로 저장하는 코드가 없어 get_death_hotspots(DB 조회 경로)는 아직 미구현이다. 대신
+# services/team_profile.py·services/my_team_analysis.py가 정규화(0~100)까지 끝낸 원본 사망
+# 좌표 리스트를 compute_player_hotspots로 넘겨 그 자리에서 집계한다 - "선수 1명당 대표
+# 위치 1개"를 이 방식으로 만든다.
 
 # 0~100 정규화 좌표계 기준 격자 한 칸 크기. 이 값을 줄이면 칸이 잘게 쪼개져 핫스팟이
 # 더 정밀해지지만 표본이 적은 맵에서는 칸마다 표본이 1개씩만 흩어져 대표성이 떨어질 수

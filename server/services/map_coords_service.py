@@ -1,25 +1,19 @@
 """
 Henrik(v2/match)의 게임 월드 좌표(x, y)를 미니맵 위에 찍을 수 있는 0~100 정규화 좌표로
-변환한다 - 팀원 사망 위치 분석(히트맵) 섹션용(services/team_profile.py::_death_locations,
-services/my_team_analysis.py::_death_locations_for_match이 이 모듈을 씀).
+변환한다 - 팀원 사망 위치 분석(히트맵) 섹션용(services/team_profile.py,
+services/my_team_analysis.py가 이 모듈을 씀).
 
 변환 계수(xMultiplier/yMultiplier/xScalarToAdd/yScalarToAdd)는 맵마다 다르고 Henrik/Riot
-공식 API가 내려주지 않는다. 직접 하드코딩하면 라이엇이 맵을 리워크해서 좌표계가 바뀔 때
-조용히 틀린 값을 쓰게 될 위험이 있어(models/death_event.py가 원래 기대하던 "0~100
-정규화 좌표"를 안전하게 만들 방법이 없었음), 커뮤니티에서 널리 쓰이는 공개 API인
-valorant-api.com/v1/maps에서 서버가 직접 받아와 캐싱하는 방식을 쓴다(2026-09-11,
-이 서버 환경에서 해당 도메인으로의 네트워크 호출 가능 여부 직접 확인 완료).
+공식 API가 내려주지 않는다. 직접 하드코딩하면 라이엇이 맵을 리워크할 때 조용히 틀린 값을
+쓰게 될 위험이 있어, 공개 API인 valorant-api.com/v1/maps에서 서버가 직접 받아와 캐싱한다.
 
-캐시는 두 키로 동시에 만든다 - 소비처마다 갖고 있는 맵 식별자가 다르기 때문:
-  - by_uuid: services/my_team_analysis.py는 DB(matches.map_uuid, ref_maps.uuid 출처)만
-    갖고 있어 영문 맵 이름이 없다.
-  - by_name: services/team_profile.py는 Henrik raw 응답(metadata.map, 영문명)을 그
-    자리에서 가공하므로 uuid가 없다.
+캐시는 두 키로 만든다 - 소비처마다 맵 식별자가 다르기 때문: by_uuid는 DB(matches.map_uuid)만
+갖고 있어 영문 맵 이름이 없는 my_team_analysis.py용, by_name은 Henrik raw 응답(metadata.map)을
+그 자리에서 가공해 uuid가 없는 team_profile.py용이다.
 
-valorant-api.com 호출이 실패해도(네트워크 장애 등) 예외를 위로 던지지 않고 캐시를 빈
-상태로 유지한다 - 이 모듈은 화면의 부가 정보(히트맵)만 담당하므로, 실패 시
-normalize_location이 None을 반환해 호출부가 그 매치의 좌표만 조용히 스킵하게 한다
-(화면 전체 응답이 깨지면 안 됨).
+valorant-api.com 호출이 실패해도 예외를 던지지 않고 캐시를 빈 상태로 유지한다 - 이 모듈은
+화면의 부가 정보(히트맵)만 담당하므로, 실패 시 normalize_location이 None을 반환해 호출부가
+그 매치의 좌표만 조용히 스킵하게 한다(화면 전체 응답이 깨지면 안 됨).
 """
 import requests
 
@@ -95,10 +89,8 @@ def normalize_location(
     # 주의: 라이엇 게임 내 좌표계는 게임 X축이 미니맵의 세로(Y) 방향에, 게임 Y축이
     # 미니맵의 가로(X) 방향에 대응한다 - Valorant 좌표 변환 자료들이 공통으로 언급하는
     # 잘 알려진 함정. 그래서 xMultiplier/xScalarToAdd는 게임 y좌표에, yMultiplier/
-    # yScalarToAdd는 게임 x좌표에 적용해야 한다(축을 안 바꾸면 xMultiplier와
-    # yMultiplier가 우연히 비슷한 맵은 그럴듯해 보이다가, 두 값이 크게 다른 맵에서
-    # 좌표가 0~100 범위를 벗어나 미니맵 밖으로 튀는 형태로 드러난다 - 2026-09-11 실측
-    # 확인).
+    # yScalarToAdd는 게임 x좌표에 적용해야 한다(축을 안 바꾸면 xMultiplier와 yMultiplier가
+    # 크게 다른 맵에서 좌표가 0~100 범위를 벗어나 미니맵 밖으로 튀는 형태로 드러난다).
     nx = y * coeffs["xMultiplier"] + coeffs["xScalarToAdd"]
     ny = x * coeffs["yMultiplier"] + coeffs["yScalarToAdd"]
     return {"x": round(nx * 100, 2), "y": round(ny * 100, 2)}
@@ -106,10 +98,9 @@ def normalize_location(
 
 def get_map_minimaps() -> dict[str, str]:
     """알려진 맵 id(영문 소문자, gameData.js 기준)별 공식 미니맵 이미지 URL 딕셔너리.
-    프론트가 좌표 계산(normalize_location)과 항상 같은 소스(valorant-api.com)의
-    이미지를 쓰도록 하기 위함 - 로컬 이미지와 계수 기준 이미지가 서로 다른 버전이면
-    좌표가 맞아도 화면에서 어긋나 보이는 문제가 있었다(2026-09-11, 스플릿 맵에서 실측
-    확인 - 로컬 파일이 공식 이미지와 다른 구도/크롭이었음). 서버 시작 후 첫 호출에서만
+    프론트가 좌표 계산(normalize_location)과 항상 같은 소스(valorant-api.com)의 이미지를
+    쓰도록 하기 위함 - 로컬 이미지와 계수 기준 이미지가 다른 버전이면 좌표는 맞아도 화면에서
+    어긋나 보이는 문제가 있었다(스플릿 맵에서 실측 확인). 서버 시작 후 첫 호출에서만
     valorant-api.com을 부르고(_ensure_loaded), 이후는 캐시만 읽는다."""
     _ensure_loaded()
     result = {}
