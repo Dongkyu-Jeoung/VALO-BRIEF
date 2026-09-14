@@ -6,7 +6,7 @@ server/승부예측_성능_분석.md 11번 참고), 이 표 하나가 "지금 �
 "모델 재학습용 원본" 두 역할을 겸한다:
 
   services/match_history.py(팀 페이지 조회 시) / services/match_sync.py(회원가입 백필,
-  내부적으로 match_history.upsert_match_history를 그대로 재사용)가 매치 상세(raw Henrik
+  내부적으로 match_history.upsert_match_engagement_summary를 그대로 재사용)가 매치 상세(raw Henrik
   v2/match dict)를 받는 즉시, 그 매치 하나만의 트레이드 성공률/듀얼리스트 ACS를 계산해서
   (ml/engagement_predictor.py::trade_rate_from_matches/duelist_acs_from_matches를 매치
   1건짜리 리스트로 호출) 이 표에 (team_id, match_id) 한 행으로 upsert한다

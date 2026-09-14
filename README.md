@@ -44,7 +44,15 @@ Premier 예측의 KAST는 자기 처치·팀킬 이벤트를 일반 킬/어시�
 선수별 데스 스탯이 특수 사망 이벤트 전체를 포함하거나 전체를 제외한 집계와 정확히 일치하는 경우에만
 그 기준으로 생존 여부를 재계산합니다. 일부 특수 사망만 골라야 하는 모호한 경우와 설명되지 않는
 킬·데스·어시스트 불일치는 제외합니다. 이는 스탯에 근거한 보정 정책이며 실제 이벤트 의미를 확정하지는 않습니다.
-원본 이벤트·기존 DB 저장 경로는 변경하지 않으며, 보정 로그는 `SPECIAL_EVENTS_NORMALIZED`로 출력합니다.
+API 원본 이벤트는 변경하지 않으며, 보정 로그는 `SPECIAL_EVENTS_NORMALIZED`로 출력합니다.
+
+경기 저장 정책: 회원가입 동기화와 팀 프로필·분석 조회는 이제
+`matches`·`match_player_stats`에 신규 행이나 경기 원본을 저장하지 않습니다.
+교전 예측·학습에 필요한 팀별 경기 요약(trade_rate, duelist_acs, win)만
+`team_engagement_cache`에 저장합니다. 기존 DB 보완 작업과 원본 재저장 방식의
+`backfill_missing_agents.py`는 중단합니다. 예측 결과의 `predictions` 저장과 40분 응답 캐시는 유지합니다.
+기존 테이블·데이터는 삭제하지 않습니다. DB 전적을 읽는 우리 팀 분석·선수 상세는
+저장 중단 이전 데이터를 사용하며 신규 전적이 자동 반영되지 않습니다.
 
 검증 명령:
 
@@ -52,6 +60,7 @@ Premier 예측의 KAST는 자기 처치·팀킬 이벤트를 일반 킬/어시�
 cd server
 python -m unittest discover -s tests -p test_premier_prediction.py -v
 python -m unittest discover -s tests -p test_prediction_cache.py -v
+python -m unittest discover -s tests -p test_match_storage_policy.py -v
 cd ../front
 npm run build
 ```
