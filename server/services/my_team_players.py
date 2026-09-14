@@ -70,10 +70,22 @@ def _ensure_riot_account_placeholder(db: Session, puuid: str, name: str | None, 
     db.add(RiotAccount(puuid=puuid, riot_name=name or "-", riot_tag=tag or "-", region="kr", platform="pc"))
 
 
+_enrich_failed: set[str] = set()
+
+
 async def _enrich_profile(db: Session, row: RiotAccount) -> None:
     """riot_accounts.current_rank가 비어있는 선수 1명을 Henrik에서 조회해 avatar_url/
-    current_rank를 채운다. 레이트리밋 등으로 실패해도 조용히 넘어간다 - current_rank가
-    여전히 NULL로 남아 다음 방문 때 다시 시도된다."""
+    current_rank를 채운다. 레이트리밋 실패는 조용히 넘어간다 - current_rank가 여전히
+    NULL로 남아 다음 방문 때 다시 시도된다.
+
+    2026-09-14: Henrik이 계정/MMR 둘 다 진짜로 못 찾는 선수(get_account/get_mmr_history
+    둘 다 404 - 실측 사례: 신규 영입 직후라 Henrik 쪽에 아직 색인이 안 된 계정)는
+    _enrich_failed에 puuid를 기록해 이후 호출에서 재시도 대상(build_my_team_players의
+    missing 목록)에서 빠지게 한다. 이게 없으면 이 선수 하나 때문에 로스터 캐시가 웜이어도
+    "개인 분석" 탭을 열 때마다 매번 Henrik에 헛되이 2번(계정+MMR)씩 물어보게 된다(로스터
+    캐시는 get_premier_team 호출만 건너뛸 뿐, 개별 선수 enrich 재시도는 막지 않았음).
+    로스터 새로고침 버튼을 누르면(force_refresh) 이 팀 멤버들의 실패 기록도 같이 지워
+    다시 시도한다 - build_my_team_players 참고."""
     try:
         account = await henrik_api.get_account(row.riot_name, row.riot_tag)
         if account and account.get("puuid") != row.puuid:
@@ -94,6 +106,7 @@ async def _enrich_profile(db: Session, row: RiotAccount) -> None:
         return
 
     if not account and not mmr_history:
+        _enrich_failed.add(row.puuid)
         return
 
     upsert_riot_account(
@@ -132,6 +145,9 @@ async def build_my_team_players(db: Session, team: Team, force_refresh: bool = F
 
     member_puuids = [m.get("puuid") for m in members if m.get("puuid")]
 
+    if force_refresh:
+        _enrich_failed.difference_update(member_puuids)
+
     # riot_accounts에 아직 없는 신규 영입 선수는 최소 placeholder부터 만들어둔다 - 아래
     # accounts 조회와 이후 이 puuid를 참조하는 다른 곳(services/ai_report.py 등)이 항상
     # 유효한 FK 대상을 보게 하기 위함(_ensure_riot_account_placeholder 참고).
@@ -159,7 +175,10 @@ async def build_my_team_players(db: Session, team: Team, force_refresh: bool = F
         if member_puuids else {}
     )
 
-    missing = [row for row in accounts.values() if row.current_rank is None]
+    missing = [
+        row for row in accounts.values()
+        if row.current_rank is None and row.puuid not in _enrich_failed
+    ]
     if missing:
         await asyncio.gather(*(_enrich_profile(db, row) for row in missing))
 
