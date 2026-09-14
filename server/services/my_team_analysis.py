@@ -295,7 +295,8 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
             player_summaries.append({"name": riot_names.get(puuid, "-"), "acs": avg_acs, "fd": fd_rate})
 
         best = max(player_summaries, key=lambda p: p["acs"], default=None)
-        worst = max(player_summaries, key=lambda p: p["fd"], default=None)
+        remaining = [p for p in player_summaries if p is not best]
+        worst = max(remaining, key=lambda p: p["fd"], default=best)
 
         # 팀원 사망 위치 분석(히트맵) - 로스터 5명 기준으로 선수당 대표 위치 1개씩만 뽑는다.
         # compute_player_hotspots는 puuid만 알고 이름은 몰라 여기서 riot_names(위에서

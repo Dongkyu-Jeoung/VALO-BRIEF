@@ -515,3 +515,14 @@
     height: 260px;
   }
 }
+
+.duel-compare-block--narrow .duel-compare-bar {
+  max-width: 70%;
+  margin: 0 auto;
+}
+
+.duel-compare-block--narrow .duel-compare-labels,
+.duel-compare-block--narrow .duel-compare-bar {
+  max-width: 70%;
+  margin: 0 auto;
+}

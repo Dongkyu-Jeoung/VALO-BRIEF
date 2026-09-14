@@ -35,20 +35,10 @@ export default function EngagementInfoBlock({
       </div>
 
       <div className="duel-compare-block">
-        <div className="duel-compare-title">팀원 사망 위치 분석</div>
+        <div className="duel-compare-title">팀원 최다 사망 위치 분석</div>
         <DeathMapTracker 
           selectedMapId={selectedMapId} 
           deathData={data.deaths ?? []} 
-        />
-      </div>
-
-      <div className="duel-compare-block">
-        <div className="duel-compare-title">타격대 vs 타격대 비교</div>
-        <DuelCompareBar 
-          leftLabel={ourLabel} 
-          leftPct={leftPct} 
-          rightLabel={theirLabel} 
-          rightPct={rightPct} 
         />
       </div>
     </div>
