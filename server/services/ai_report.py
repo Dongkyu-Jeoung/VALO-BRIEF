@@ -4,43 +4,15 @@
 DB에 이미 집계된 우리팀 통계(my_team_stats/my_team_analysis/my_team_players/
 my_team_player_detail)를 모아 Claude(Anthropic API)로 팀 전술 리포트를 생성한다 -
 아무것도 새로 계산하지 않고 다른 탭이 이미 만든 숫자를 프롬프트 재료로만 쓴다
-(다른 탭과 항상 같은 숫자를 보장하기 위함).
+(다른 탭과 항상 같은 숫자를 보장하기 위함). 응답 JSON 스키마(intro/strengths/
+weaknesses/tactic/playerFeedback, 각 stat/title/detail 구조)는 _build_prompt의
+system_prompt에 정의돼 있다.
 
-2026-09-11: 최초 구현은 OpenAI(gpt-4o-mini)였으나 해당 계정에 크레딧이 없어(429
-insufficient_quota, 실측 확인) 엔진을 Claude로 교체했다 - AI_리포트_개발_설계.md
-9-6번 참고. 데이터 파이프라인/캐싱/폴백 로직은 엔진 교체와 무관하게 전부 그대로다.
-
-2026-09-11(2차): strengths/weaknesses/playerFeedback.strength/weakness를 통문장
-string에서 {stat,title,detail} 객체로 구조화했다 - 프론트에서 숫자와 설명을 분리해
-카드형으로 보여주기 위함.
-
-2026-09-11(3차): detail 문장 안에서 stat과 같은 의미의 수치를 또 언급하는 반복 문제가
-있어 글자 수 상한과 나쁜 예/좋은 예를 프롬프트에 추가했다.
-
-2026-09-11(4차): detail을 단일 문자열에서 개조식 구 1~2개짜리 문자열 배열로 바꿨다.
-프론트는 배열의 각 원소를 별도 줄로 렌더링한다.
-
-2026-09-11(5차): intro/tactic은 구조화 대상에서 빠져 있어 여전히 한 문단에 수치를
-여러 개 몰아넣거나(예: "(브리즈 100% vs 펄·프랙처·선셋 0%)") tactic이 5개 제안을
-쉼표로 이어붙인 문단 하나로 나오는 문제가 있었다. intro는 문장당 수치 1~2개로
-제한하고, tactic은 strengths/weaknesses와 동일한 {stat,title,detail} 리스트(우선순위
-2~3개)로 구조화했다 - _validate_stat_item을 그대로 재사용(stat은 빈 문자열 허용).
-insights 테이블의 strategy 행에는 이 리스트를 _encode_tactic/_decode_tactic으로
-JSON 인코딩해 저장한다. intro만 유일하게 자유 문단으로 남아있다(요약이라 항목화가
-부적절).
-
-2026-09-11(6차): "stat이 마땅치 않으면 빈 문자열 허용"이라는 예외 문구가 tactic
-전용 의도였는데 한정이 모호해 playerFeedback.weakness에도 잘못 적용되는 문제가
-실사용에서 나왔다(약점 쪽만 일관되게 stat뱃지가 안 뜸). stat 규칙 문장을 고쳐
-strengths/weaknesses/playerFeedback은 예외 없이 stat 필수, 빈 문자열 허용은
-tactic에만 해당한다고 명시했다.
-
-결과는 insights 테이블(server/database/valo_brief.sql 9번 섹션 - "AI 리포트(Layer2)"
-용으로 이미 설계돼 있었으나 이 모듈이 처음 실제로 쓴다)에 문장 단위로 저장한다.
-같은 팀으로 재조회하면 새 매치가 안 쌓인 이상 이 캐시를 그대로 재사용해 Claude를
-다시 부르지 않는다(비용/레이턴시 문제, AI_리포트_개발_설계.md 5번). 프롬프트를
-바꿀 때마다 scripts/clear_ai_cache.py로 캐시를 지워야 새 스키마가 반영된다 -
-scripts/preview_ai_report.py로 캐시/브라우저 없이 먼저 결과를 확인할 수 있다.
+결과는 insights 테이블에 문장 단위로 저장한다. 같은 팀으로 재조회하면 새 매치가 안
+쌓인 이상 이 캐시를 그대로 재사용해 Claude를 다시 부르지 않는다(비용/레이턴시 문제,
+AI_리포트_개발_설계.md 5번). 프롬프트를 바꿀 때마다 scripts/clear_ai_cache.py로
+캐시를 지워야 새 스키마가 반영된다 - scripts/preview_ai_report.py로 캐시/브라우저
+없이 먼저 결과를 확인할 수 있다.
 
 ANTHROPIC_API_KEY가 없거나 호출/파싱이 실패하면 서버가 죽지 않고 결정론적 템플릿
 리포트로 대체한다(ml/engagement_predictor.py의 "학습 전 heuristic-v0" 폴백과
@@ -59,7 +31,7 @@ from models.team import Team
 from services import my_team_analysis, my_team_player_detail, my_team_players, my_team_stats
 from services.claude_client import generate_with_retry
 
-# tactic 항목 개수 범위(우선순위 높은 순서로 2~3개) - 5차 변경.
+# tactic 항목 개수 범위(우선순위 높은 순서로 2~3개).
 TACTIC_MIN_ITEMS = 2
 TACTIC_MAX_ITEMS = 3
 
@@ -123,9 +95,9 @@ def _encode_tactic(items: list[dict]) -> str:
 
 
 def _decode_tactic(content: str) -> list[dict]:
-    """tactic 디코딩. 4차까지 tactic은 통문단 문자열이었다(레거시) - JSON 리스트
-    파싱이 안 되거나 빈 리스트면 그 문단 전체를 detail 1개짜리 항목 하나로 감싸
-    호환한다."""
+    """tactic 디코딩. 구조화 이전엔 tactic이 통문단 문자열이었다(레거시 캐시 호환) -
+    JSON 리스트 파싱이 안 되거나 빈 리스트면 그 문단 전체를 detail 1개짜리 항목 하나로
+    감싸 호환한다."""
     try:
         data = json.loads(content)
         if isinstance(data, list):
@@ -266,7 +238,7 @@ def _build_prompt(context: dict, roster: list[dict], details: dict[str, dict]) -
     strengths/weaknesses/tactic/playerFeedback.strength/weakness는 {stat,title,
     detail} 객체다(tactic만 리스트 길이가 2~3개). detail은 개조식 구 1~2개짜리
     문자열 배열 - 프론트가 각 원소를 별도 줄로 렌더링한다. intro는 유일하게 자유
-    문단이지만, 문장당 수치를 몰아넣지 말라는 제약을 둔다(5차 변경)."""
+    문단이지만, 문장당 수치를 몰아넣지 말라는 제약을 둔다."""
     team_name = context["stats"].get("name") or "우리 팀"
     system_prompt = (
         "너는 발로란트 프리미어 팀 전술 분석가다. 아래 사용자 메시지에 주어진 통계만 "

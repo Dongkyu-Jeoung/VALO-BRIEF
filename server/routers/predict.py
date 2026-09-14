@@ -24,11 +24,10 @@ router = APIRouter(prefix="/api/predict", tags=["Predict"])
 
 logger = logging.getLogger(__name__)
 
-# predictions.model_version에 남길 값 - 2026-09-07~09에 이미 이 이름으로 21건이 쌓여
-# 있었다(당시엔 save_prediction() 호출부가 있었는데 이후 리팩터링 중에 빠진 것으로
-# 보임). ml/model_loader.py가 로드하는 모델(models/xgboost_valorant.pkl)이 그때와
-# 같은 파일이라 새 문자열을 만들지 않고 기존 값을 그대로 이어서 쓴다 - model_version
-# 기준으로 묶어서 볼 때 과거 데이터와 끊기지 않게 하기 위함.
+# predictions.model_version에 남길 값 - 이 이름으로 과거 데이터가 이미 쌓여 있었고
+# ml/model_loader.py가 로드하는 모델(models/xgboost_valorant.pkl)도 그때와 같은 파일이라,
+# 새 문자열을 만들지 않고 기존 값을 그대로 이어서 써서 model_version 기준으로 과거
+# 데이터와 끊기지 않게 한다.
 MATCH_MODEL_VERSION = "xgboost-v1"
 
 
@@ -98,9 +97,6 @@ async def predict_match(
             current.team_name, current.team_tag, team_name, team_tag,
         )
         result = await asyncio.to_thread(predict_from_player_features, blue_players, red_players)
-
-        # checkpoint("예측 작업 스레드 호출")
-        # result = await asyncio.to_thread(_predict_with_db, our_roster, opp_roster, checkpoint, db_missing_players)
 
         try:
             await asyncio.to_thread(_save_prediction_result, current.team_id, team_name, team_tag, result)

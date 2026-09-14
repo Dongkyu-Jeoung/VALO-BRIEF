@@ -1,22 +1,15 @@
 """
 Henrik v2/match의 라운드 원본 배열(rounds - matches.round_detail_json과 완전히 같은
-형태, services/match_history.py::upsert_match_history가 `match.get("rounds")`를
-그대로 저장한 것)로부터 공격/수비/피스톨/에코 라운드 승률 등을 계산하는 순수 함수 모음.
+형태, services/match_history.py::upsert_match_history가 `match.get("rounds")`를 그대로
+저장한 것)로부터 공격/수비/피스톨/에코 라운드 승률과 트레이드 성공률을 계산하는 순수
+함수 모음.
 
-2026-09-11: 원래 services/my_team_analysis.py 안에 private 함수로만 있었다("우리팀
-분석" 탭이 DB 캐시(Match.round_detail_json + MatchPlayerStat, team_id로 필터)에서만
-썼음). 상대팀(가입 여부 무관) AI 리포트를 만들려는데 상대는 team_id가 없어(FK 제약상
-미가입 팀은 채울 수 없음) 그 DB 캐시 경로를 못 쓴다 - 대신 그 순간 라이브로 받은
-match_details(routers/teams.py::get_team_analysis가 이미 받아놓은 것)의 rounds를
-그대로 이 함수들에 넣으면 된다(이 함수들은 rounds+our_puuids/our_color만 있으면
-되고 DB/team_id에 의존하지 않는다). 그래서 공유 모듈로 뺐다 - 우리팀/상대팀 양쪽
-경로가 "라운드 페이즈 계산"이라는 같은 정의를 쓰게 하기 위함.
-
-2026-09-14: nearby_trade_deaths/TRADE_WINDOW_MS/ENGAGEMENT_RADIUS_M도 여기로 옮겼다 -
-원래 my_team_player_detail.py(개인 분석) 안에만 있었는데, my_team_analysis.py(팀 분석)의
-"트레이드 성공률"이 사실은 클러치(라운드 마지막 생존자 상황) 승패를 재사용한 것이라
-실제 "내가 죽었을 때 상대도 같이 죽는지"를 보지 않는 문제가 있어 같은 정의로 맞췄다
-(사용자 확인 후 진행) - round_phase_analysis 공유 원칙과 같은 이유로 여기 둔다.
+DB/team_id에 의존하지 않고 rounds+our_puuids/our_color만 있으면 동작하는 순수 함수라
+공유 모듈로 뺐다 - "우리팀 분석"(DB 캐시 기반)뿐 아니라 미가입 상대팀(team_id 없음) AI
+리포트처럼 그 자리에서 라이브로 받은 match_details만 있는 경로도 같은 "라운드 페이즈
+계산" 정의를 쓸 수 있게 하기 위함. nearby_trade_deaths/TRADE_WINDOW_MS/
+ENGAGEMENT_RADIUS_M도 같은 이유로 여기 있다 - 개인 분석과 팀 분석 양쪽의 "트레이드
+성공률"이 같은 정의(내가 죽었을 때 상대도 같이 죽었는지)를 쓰도록.
 """
 import math
 
@@ -28,11 +21,9 @@ ECO_THRESHOLD = 2000
 # "같은 교전"으로 본다.
 TRADE_WINDOW_MS = 5000
 
-# "같은 교전"으로 인정하는 거리 반경(근사 미터) - 원래 교전 거리 분포 버킷(0-5/5-10/
-# 10-15/15-20/20m+, my_team_player_detail.py 참고)의 10-15m 구간 상단(15m)으로 잡았으나
-# 실측 확인 결과 같은 교전인데도 반경 밖으로 판정돼 도우미 트레이드를 놓치는 경우가 있어
-# 2026-09-14 30m로 상향(사용자 확인). 실제 미터 스케일이 아니라 게임 내 좌표를 100으로
-# 나눈 근사치라는 점은 동일하다.
+# "같은 교전"으로 인정하는 거리 반경(근사 미터, 게임 내 좌표를 100으로 나눈 근사치) -
+# 원래 15m(교전 거리 분포 버킷의 10-15m 구간 상단, my_team_player_detail.py 참고)였으나
+# 같은 교전인데도 반경 밖으로 판정돼 도우미 트레이드를 놓치는 경우가 있어 30m로 상향했다.
 ENGAGEMENT_RADIUS_M = 30
 
 
@@ -87,14 +78,12 @@ def nearby_trade_deaths(kills_merged: list[dict], death_event: dict, opp_puuids:
     """death_event(우리 팀원이 죽은 킬 이벤트) 시점부터 TRADE_WINDOW_MS 안에 죽은
     상대(opp_puuids) 인원 수를 센다 - "같이 죽은 상대" 수.
 
-    2026-09-14 수정: 거리 조건은 "내 킬러가 아닌 다른 상대"(도우미 트레이드)에만
-    적용한다. 내 킬러 본인이 시간창 안에 죽는 경우는 위치 근사치(ENGAGEMENT_RADIUS_M,
-    실제 미터 스케일이 아닌 근사값)와 무관하게 무조건 트레이드로 인정한다 - killer_puuid로
-    특정되는 순간 이미 "같은 교전"이 확실하기 때문에, 거리 근사가 부정확해서 확실한
-    트레이드까지 걸러지는 걸 막기 위함(처음 배포 후 트레이드 성공률이 비정상적으로
-    낮게 나와 확인 후 수정 - 킬러가 죽었는데도 사망 위치가 근사 반경을 벗어나 트레이드로
-    안 잡히는 경우가 다수였다). 개인 분석(my_team_player_detail.py)·팀 분석
-    (my_team_analysis.py) 양쪽의 트레이드 성공률이 이 함수 하나로 같은 정의를 쓴다."""
+    거리 조건은 "내 킬러가 아닌 다른 상대"(도우미 트레이드)에만 적용한다. 내 킬러
+    본인이 시간창 안에 죽는 경우는 위치 근사치와 무관하게 무조건 트레이드로 인정한다 -
+    killer_puuid로 특정되는 순간 이미 "같은 교전"이 확실한데, 사망 위치가 근사 반경을
+    벗어나 확실한 트레이드까지 걸러지는 경우가 실제로 많았기 때문이다. 개인 분석
+    (my_team_player_detail.py)·팀 분석(my_team_analysis.py) 양쪽이 이 함수 하나로 같은
+    정의를 쓴다."""
     death_time = death_event.get("kill_time_in_round") or 0
     death_loc = death_event.get("victim_death_location") or {}
     killer = death_event.get("killer_puuid")

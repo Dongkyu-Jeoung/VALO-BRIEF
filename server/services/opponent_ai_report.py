@@ -58,9 +58,8 @@ def _now_kst() -> datetime:
 def _normalize_item(data: dict) -> dict:
     """{stat,title,detail} 형태 dict를 프론트 계약 shape으로 정규화. detail이
     문자열(구버전 캐시)이면 1개짜리 리스트로 감싼다. services/ai_report.py의 동명
-    함수와 동일 - 2026-09-13: strengths/weaknesses/tactic을 이 모듈도 같은 구조로
-    바꿔서 front/.../AiReportCard.jsx(우리팀 분석 탭이 쓰던 컴포넌트)를 그대로
-    재사용할 수 있게 했다 - 예전엔 통문장 문자열이라 화면이 산만했다는 지적이 있었음."""
+    함수와 동일 - strengths/weaknesses/tactic을 같은 구조로 맞춰서
+    front/.../AiReportCard.jsx(우리팀 분석 탭이 쓰던 컴포넌트)를 그대로 재사용한다."""
     detail = data.get("detail")
     if isinstance(detail, str):
         detail = [detail] if detail else []
@@ -461,9 +460,8 @@ async def get_or_start_opponent_ai_report(
 ) -> dict:
     """진입점 - routers/teams.py::GET /{team_name}/{team_tag}/ai-report가 호출.
 
-    2026-09-12 재설계: 예전엔 이 함수 안에서 Claude 생성까지 동기로 기다렸는데, 실측
-    20~45초가 걸려(Henrik 조회+통계 계산은 4.5초뿐, 대부분은 Claude 응답 시간과 스키마
-    검증 실패 시 재시도 비용) 프론트가 그만큼 그대로 멈춰 있어야 했다. 이제 이 함수는
+    Claude 생성은 실측 20~45초 걸려(Henrik 조회+통계 계산은 4.5초뿐, 대부분은 Claude
+    응답 시간과 스키마 검증 실패 시 재시도 비용) 이 함수 안에서 동기로 기다리지 않는다.
     항상 빠르게(수 초 내) 응답하고, 실제 생성은 BackgroundTasks로 넘긴다:
 
     반환 shape: {"status": "ready", "report": {...}} | {"status": "not_ready"} |

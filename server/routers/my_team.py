@@ -66,7 +66,7 @@ def get_my_team_analysis(current: Team = Depends(get_current_team), db: Session 
 
 @router.get("/ai-report")
 async def get_my_team_ai_report(current: Team = Depends(get_current_team), db: Session = Depends(get_db)):
-    """다른 탭이 이미 집계한 통계를 모아 OpenAI로 팀 전술 리포트를 생성(insights
-    테이블에 캐싱됨 - 새 매치가 안 쌓이면 재호출하지 않는다). OPENAI_API_KEY가
-    없거나 호출이 실패해도 폴백 템플릿으로 항상 200을 응답한다(services/ai_report.py 참고)."""
+    """다른 탭이 이미 집계한 통계를 모아 Claude로 팀 전술 리포트를 생성(insights
+    테이블에 캐싱됨 - 새 매치가 안 쌓이면 재호출하지 않는다). AI 호출이 실패해도
+    폴백 템플릿으로 항상 200을 응답한다(services/ai_report.py 참고)."""
     return await ai_report.build_my_team_ai_report(db, current)
