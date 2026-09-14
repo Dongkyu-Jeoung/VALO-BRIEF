@@ -24,11 +24,11 @@
 }
 
 .popup-title {
-  font-size: 19px;
+  font-size: 21px;
 }
 
 .popup-title.lg {
-  font-size: 20px;
+  font-size: 23px;
 }
 
 .ai-report-card {
@@ -40,7 +40,7 @@
 }
 
 .ai-intro {
-  font-size: 15.5px;
+  font-size: 16.5px;
   color: var(--text-2);
   line-height: 1.85;
   margin-bottom: 38px;
@@ -56,7 +56,7 @@
 }
 
 .ai-strength-title {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   margin-bottom: 22px;
   display: flex;
@@ -114,7 +114,7 @@
    여긴 번호와 한 줄에 나란히 와야 해서 inline 성격이 달라 분리했다. */
 .ai-item-title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--text-1);
 }
 
@@ -126,7 +126,7 @@
   padding: 1px 7px;
   border-radius: 3px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   margin-right: 8px;
   margin-bottom: 8px;
   vertical-align: middle;
@@ -170,7 +170,7 @@
 /* 전술 제안 제목 - 이전엔 var(--accent)(빨강)이었는데, 강점/약점과 달리
    전술 제안은 중립 섹션이라 흰색으로 통일. */
 .ai-tactic-heading {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-1);
   margin-bottom: 18px;
@@ -232,12 +232,16 @@
   padding: 22px 22px 20px;
 }
 
+/* phase-label(구매/초반/중반/후반 페이즈)은 한글 텍스트라 모노스페이스
+   영문 폰트(JetBrains Mono)를 지정하면 한글 글리프가 없어 폴백 폰트로
+   렌더링되고, 거기에 letter-spacing까지 더해져 글자 간격이 벌어져
+   보였다(2026-09-14 확인) - 모노스페이스/letter-spacing 제거, 대신
+   font-weight로 강조. */
 .ai-phase-box .phase-label {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--accent);
-  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
   margin-bottom: 14px;
-  letter-spacing: 0.06em;
 }
 
 /* 페이즈 본문도 강점/약점/전술과 같은 "제목 + stat 뱃지 + 개조식 detail" 구조로
@@ -293,14 +297,14 @@
 }
 
 .ai-pick-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   width: 84px;
   flex-shrink: 0;
 }
 
 .ai-pick-reason {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-2);
   line-height: 1.65;
 }
@@ -380,7 +384,7 @@
   display: block;
   margin: 0 0 8px;
   font-weight: 500;
-  font-size: 14px;
+  font-size: 15px;
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -390,8 +394,8 @@
 .ai-phase-box .ai-list-detail,
 .ai-pick-analysis-box .ai-list-detail {
   margin: 0;
-  line-height: 1.5;
-  font-size: 13px;
+  line-height: 1.55;
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -401,4 +405,39 @@
 .ai-phase-box .ai-list-detail + .ai-list-detail,
 .ai-pick-analysis-box .ai-list-detail + .ai-list-detail {
   margin-top: 2px;
+}
+
+/* 강점/약점(win/lose) 색상 전제인 .ai-strength-title 대신, 상대 요원 선택 분석처럼
+   중립 톤 섹션 제목에 쓰는 전용 클래스. */
+.ai-section-heading {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 22px;
+}
+
+.ai-pick-analysis-box {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 22px 24px 20px;
+  margin-bottom: 32px;
+}
+
+.ai-pick-analysis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ai-pick-analysis-head .ai-list-title {
+  margin: 0;
+}
+
+.ai-pick-analysis-box .stat-badge {
+  margin: 0;
+  flex-shrink: 0;
 }
