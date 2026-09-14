@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import StatInlineGrid from '../../../components/common/StatInlineGrid';
 import EmptyImageBox from '../../../components/common/EmptyImageBox';
-import DuelCompareBar from '../../../components/common/DuelCompareBar';
 import DropdownSelect from '../../../components/common/DropdownSelect';
 import LineChart from '../../../components/common/LineChart';
 import ProfileHeader from '../../../components/profile/ProfileHeader';
@@ -162,38 +161,13 @@ export default function PlayerDetailView({ player, onBack }) {
         <div className="analysis-row-head"><h5>③ 교전 정보</h5></div>
 
         <div className="duel-compare-block">
-          <div className="duel-compare-title">트레이드 성공률 (내가 죽었을 때 상대도 죽는지)</div>
+          <div className="duel-compare-title">트레이드 성공률 (내가 죽은 교전에서 상대도 같이 죽는지)</div>
           <StatInlineGrid
             columns={2}
             items={[
-              { label: '1대1 상황', value: `${engagement.trade1v1}%` },
-              { label: '1대2 상황', value: `${engagement.trade1v2}%` },
+              { label: '기본 트레이드 (상대 1명↑)', value: `${engagement.trade1v1}%` },
+              { label: '가치 트레이드 (상대 2명↑)', value: `${engagement.trade1v2}%` },
             ]}
-          />
-        </div>
-
-        <div className="duel-compare-block">
-          <div className="duel-compare-title">스킬 사용 유효율 (스킬명 · 교전 성사율 · 성공률)</div>
-          <div className="skill-box-row">
-            {engagement.skills.map((s) => (
-              <div className="skill-box" key={s.name}>
-                <div className="sk-name">{s.name}</div>
-                <div className="sk-metrics">
-                  <div>교전 성사율<b>{s.engageRate}%</b></div>
-                  <div>성공률<b>{s.successRate}%</b></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="duel-compare-block">
-          <div className="duel-compare-title">포지션별 상대 비교 (타격대 vs 타격대)</div>
-          <DuelCompareBar
-            leftLabel={player.name}
-            leftPct={engagement.duelistCompare.me}
-            rightLabel="상대 타격대"
-            rightPct={engagement.duelistCompare.opponent}
           />
         </div>
 

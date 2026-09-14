@@ -28,8 +28,8 @@ export default function EngagementInfoBlock({
         <StatInlineGrid
           columns={2}
           items={[
-            { label: '1대1 상황', value: `${data.trade1v1 ?? '-'}%` },
-            { label: '1대2 상황', value: `${data.trade1v2 ?? '-'}%` },
+            { label: '기본 트레이드 (상대 1명↑)', value: `${data.trade1v1 ?? '-'}%` },
+            { label: '가치 트레이드 (상대 2명↑)', value: `${data.trade1v2 ?? '-'}%` },
           ]}
         />
       </div>
