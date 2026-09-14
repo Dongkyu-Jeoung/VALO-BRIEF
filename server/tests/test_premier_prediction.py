@@ -128,12 +128,19 @@ class PremierTests(unittest.IsolatedAsyncioTestCase):
         from ml.team_feature import build_team_feature
         self.assertTrue(build_team_feature(features, features).equals(build_team_feature(reordered, reordered)))
 
-    def test_special_events_can_reach_saved_model(self):
+    def test_special_event_assists_can_reach_saved_model(self):
         matches = [match_fixture() for _ in range(3)]
-        matches[0]["kills"] = [{"round": 0, "kill_time_in_round": 1000,
-                                "killer_puuid": "blue0", "victim_puuid": "blue0", "assistants": []}]
+        matches[0]["kills"] = [{
+            "round": 0, "kill_time_in_round": 1000,
+            "killer_puuid": "blue0", "victim_puuid": "blue0",
+            "assistants": [{"assistant_puuid": "red0"}],
+        }]
+        matches[0]["players"]["all_players"][0]["stats"]["deaths"] = 1
+        matches[0]["players"]["all_players"][5]["stats"]["assists"] = 1
         blue = service.build_premier_player_features(matches, "Our", "TAG")
         red = service.build_premier_player_features(matches, "Opp", "TAG")
+        self.assertEqual(blue[0]["recent_kast"], 93.33)
+        self.assertEqual(red[0]["recent_kast"], 100)
         result = predictor.predict_from_player_features(blue, red)
         self.assertTrue(0 <= result["blue_win_probability"] <= 100)
 

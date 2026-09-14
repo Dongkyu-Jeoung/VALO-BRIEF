@@ -315,7 +315,8 @@ def calculate_match_kast(match: dict, report=None, reconcile_special=False) -> d
         actual = {
             "kills": sum(k["killer_puuid"] == puuid and k.get("_credit_kill", True) for k in kills),
             "deaths": sum(k["victim_puuid"] == puuid and k.get("_credit_death", True) for k in kills),
-            "assists": sum(any(a["assistant_puuid"] == puuid for a in k["assistants"]) and k.get("_credit_kill", True) for k in kills),
+            # Scoreboard assists can include special events; KAST credit is handled separately.
+            "assists": sum(any(a["assistant_puuid"] == puuid for a in k["assistants"]) for k in kills),
         }
         if any(stats.get(key) != value for key, value in actual.items()):
             if report is not None:
