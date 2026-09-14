@@ -44,6 +44,7 @@ export function fetchPrediction(teamName, teamTag) {
       ...(await httpClient.get(ENDPOINTS.prediction(teamName, teamTag))),
     }),
     predictionMock,
-    'fetchPrediction'
+    'fetchPrediction',
+    (err) => err.message?.startsWith('[HTTP 422]')
   );
 }

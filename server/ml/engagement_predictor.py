@@ -28,9 +28,12 @@ ml/predictor.py와 마찬가지로 이 모듈은 순수 함수 모음이다 - He
 리스트)를 그대로 넘겨준다.
 """
 from pathlib import Path
+import logging
+import warnings
 
 import joblib
 import pandas as pd
+from sklearn.exceptions import InconsistentVersionWarning
 
 from ml.team_feature import DUELISTS
 
@@ -52,6 +55,7 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "engagement_met
 # 파일이 없으면 조용히 None으로 남겨서 "모델 학습 전" 상태를 정상 동작으로 처리한다.
 _artifact = None
 _artifact_loaded = False
+logger = logging.getLogger(__name__)
 
 
 def _get_artifact():
@@ -60,7 +64,13 @@ def _get_artifact():
     형식)가 있으면 로드해서 캐싱, 없으면 None(정상 - 아직 학습 전)."""
     global _artifact, _artifact_loaded
     if not _artifact_loaded:
-        _artifact = joblib.load(MODEL_PATH) if MODEL_PATH.exists() else None
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", InconsistentVersionWarning)
+                _artifact = joblib.load(MODEL_PATH) if MODEL_PATH.exists() else None
+        except InconsistentVersionWarning as exc:
+            logger.error("[ENGAGEMENT MODEL INCOMPATIBLE] path=%s estimator=%s saved=%s runtime=%s; using heuristic-v0 until dependencies are aligned and server restarted", MODEL_PATH, exc.estimator_name, exc.original_sklearn_version, exc.current_sklearn_version)
+            _artifact = None
         _artifact_loaded = True
     return _artifact
 

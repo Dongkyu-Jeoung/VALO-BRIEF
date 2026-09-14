@@ -220,11 +220,12 @@ async def get_team_analysis(
     if sample_match:
 
         kills = sample_match.get("kills") or []
-        if kills:
-            print("===== DEBUG: SAMPLE KILL EVENT =====")
-            print(json.dumps(kills[0], indent=2, ensure_ascii=False))
-        else:
-            print("NO KILLS FOUND IN THIS MATCH")
+        # 디버그
+        # if kills:
+        #     print("===== DEBUG: SAMPLE KILL EVENT =====")
+        #     print(json.dumps(kills[0], indent=2, ensure_ascii=False))
+        # else:
+        #     print("NO KILLS FOUND IN THIS MATCH")
             
         rounds = sample_match.get("rounds") or []
         planted_round = next((r for r in rounds if r.get("bomb_planted")), None)

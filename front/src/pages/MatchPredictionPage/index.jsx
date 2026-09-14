@@ -25,6 +25,7 @@ export default function MatchPredictionPage() {
   // 우리팀(로그인한 팀) vs 상대팀 승률 예측 - /api/predict/{team_name}/{team_tag}가
   // JWT로 로그인한 팀을 "우리팀"으로 자동 인식해서 실제 모델(XGBoost)을 돌린다.
   const [prediction, setPrediction] = useState(null);
+  const [predictionError, setPredictionError] = useState(null);
   // resolveOpponent()가 실제로 확정한 상대팀 name/tag - 데모 링크 자동 치환(최근 상대로
   // 바뀔 수 있음) 이후의 값이라 URL의 teamName/teamTag와 다를 수 있다. AI 리포트 탭이
   // 지연 로딩(activeTab이 바뀔 때 따로 fetch)이라 이 값을 따로 들고 있어야 한다.
@@ -44,6 +45,7 @@ export default function MatchPredictionPage() {
 
     // 상대가 바뀌면 이전 예측과 새 프로필이 함께 표시되지 않도록 초기화한다.
     setPrediction(null);
+    setPredictionError(null);
     setOpponentTeam(null);
     setAnalysisData(null);
     setResolvedOpponent(null);
@@ -88,7 +90,17 @@ export default function MatchPredictionPage() {
         }
       });
       fetchTeamProfile(name, tag).then((data) => { if (active) setOpponentTeam(data); });
-      fetchPrediction(name, tag).then((data) => { if (active) setPrediction(data); });
+      fetchPrediction(name, tag)
+        .then((data) => { if (active) setPrediction(data); })
+        .catch((err) => {
+          if (!active) return;
+          let message = '승부예측을 진행할 수 없습니다.';
+          try {
+            const body = JSON.parse(err.message.replace(/^\[HTTP \d+\]\s*/, ''));
+            if (typeof body.detail === 'string') message = body.detail;
+          } catch { /* 기본 안내 문구 사용 */ }
+          setPredictionError(message);
+        });
     });
 
     return () => { active = false; };
@@ -135,6 +147,7 @@ export default function MatchPredictionPage() {
   }, [aiReportRequested, resolvedOpponent]);
 
   // 승률은 프로필·분석 요청의 완료를 기다리지 않고 먼저 표시한다.
+  if (predictionError) return <div className="container" role="alert">{predictionError}</div>;
   if (!prediction) return <LoadingText full />;
 
   // 로그인 상태인데도 /api/predict가 실패(최근 매치 로스터 5인을 못 찾는 등)해서

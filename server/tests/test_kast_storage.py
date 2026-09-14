@@ -25,6 +25,34 @@ def match_fixture():
 
 
 class KastStorageTests(unittest.TestCase):
+    def test_special_events_reconciled_without_mutating_raw_data(self):
+        for teamkill in (False, True):
+            for counted in (False, True):
+                match = match_fixture()
+                for player in match["players"]["all_players"]:
+                    player["team"] = "Red" if player["puuid"] == "e" else "Blue"
+                match["kills"].append({"round": 2, "kill_time_in_round": 1000,
+                                       "killer_puuid": "q" if teamkill else "p",
+                                       "victim_puuid": "p", "assistants": []})
+                match["players"]["all_players"][0]["stats"]["deaths"] += int(counted)
+                original = copy.deepcopy(match)
+                self.assertEqual(calculate_match_kast(match), {})
+                kast = calculate_match_kast(match, reconcile_special=True)
+                # A counted special death earns neither kill nor self-trade credit.
+                self.assertEqual(kast["p"], 33.3 if counted else 66.7)
+                self.assertEqual(match, original)
+
+    def test_ambiguous_special_deaths_and_unexplained_mismatch_rejected(self):
+        match = match_fixture()
+        event = {"round": 2, "kill_time_in_round": 1000,
+                 "killer_puuid": "p", "victim_puuid": "p", "assistants": []}
+        match["kills"].extend([event, {**event, "kill_time_in_round": 2000}])
+        match["players"]["all_players"][0]["stats"]["deaths"] += 1
+        self.assertEqual(calculate_match_kast(match, reconcile_special=True), {})
+        match = match_fixture()
+        match["kills"].pop()
+        self.assertEqual(calculate_match_kast(match, reconcile_special=True), {})
+
     def test_trade_and_no_kill_survival(self):
         self.assertEqual(calculate_match_kast(match_fixture())["p"], 66.7)
 

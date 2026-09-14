@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
 import time
+import logging
 from ml.model_loader import get_model
 from ml.rolling import (
     build_player_feature,
@@ -27,6 +28,8 @@ def create_prediction_checkpoint():
     request_id = uuid4().hex[:8]
 
     def checkpoint(label):
+        if not logging.getLogger(__name__).isEnabledFor(logging.DEBUG):
+            return
         timestamp = datetime.now().astimezone().isoformat(timespec="milliseconds")
         elapsed = time.perf_counter() - started
         print(f"[{timestamp}] [predict={request_id}] [+{elapsed:.3f}s] {label}", flush=True)
@@ -160,6 +163,13 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
 
     blue_players, red_players = players
 
+    return predict_from_player_features(blue_players, red_players, save_json, checkpoint)
+
+
+def predict_from_player_features(blue_players, red_players, save_json=False, checkpoint=None):
+    """집계가 끝난 양 팀 피처로 저장된 모델을 정확히 한 번 실행한다."""
+    checkpoint = checkpoint or create_prediction_checkpoint()
+
     checkpoint("팀 피처 생성 시작")
     X = build_team_feature(
         blue_players,
@@ -172,6 +182,8 @@ def predict_blue_win(blue_team, red_team, save_json=False, db=None, debug_checkp
     checkpoint("모델 추론 완료")
 
     probability = float(proba[0][1])
+    logging.getLogger(__name__).debug("[TEAM FEATURE] %s", X.to_dict("records")[0])
+    logging.getLogger(__name__).debug("[PREDICTION] blue_probability=%s", probability)
     winner = "BLUE" if probability >= 0.5 else "RED"
 
     result = {
