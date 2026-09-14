@@ -4,11 +4,16 @@ import { fetchMyTeamPlayers, fetchMyTeamPlayerDetail } from '../../../api/myTeam
 import PlayerListView from './PlayerListView';
 import PlayerDetailView from './PlayerDetailView';
 import LoadingText from '../../../components/common/LoadingText';
+import { useCooldown } from '../../../hooks/useCooldown';
 
 export default function PlayerAnalysisTab() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [players, setPlayers] = useState(null);
   const [detail, setDetail] = useState(null);
+  // 로스터(Henrik member 목록)는 서버가 team_id 기준으로 무기한 캐싱한다(속도 우선,
+  // services/my_team_players.py 참고) - 그래서 신규 영입/방출 반영용으로 새로고침
+  // 버튼을 두고, 스팸 방지용 쿨다운은 ProfileHeader의 "전적 갱신"과 동일한 훅을 쓴다.
+  const { isReady, trigger } = useCooldown('my-team-roster');
 
   // URL 쿼리 파라미터에서 선택된 선수 ID를 읽어옴
   const selectedId = searchParams.get('playerId');
@@ -16,6 +21,11 @@ export default function PlayerAnalysisTab() {
   useEffect(() => {
     fetchMyTeamPlayers().then(setPlayers);
   }, []);
+
+  function handleRosterRefresh() {
+    trigger();
+    fetchMyTeamPlayers(true).then(setPlayers);
+  }
 
   useEffect(() => {
     if (!selectedId) {
@@ -50,5 +60,19 @@ export default function PlayerAnalysisTab() {
     return detail ? <PlayerDetailView player={detail} onBack={handleBack} /> : <LoadingText />;
   }
 
-  return <PlayerListView players={players} selectedId={selectedId} onSelect={handleSelect} />;
+  return (
+    <>
+      <div className="roster-refresh-row">
+        <button
+          className={`refresh-btn ${isReady ? 'active' : 'disabled'}`}
+          onClick={handleRosterRefresh}
+          disabled={!isReady}
+          type="button"
+        >
+          ⟳ 로스터 새로고침
+        </button>
+      </div>
+      <PlayerListView players={players} selectedId={selectedId} onSelect={handleSelect} />
+    </>
+  );
 }
