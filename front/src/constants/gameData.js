@@ -78,9 +78,17 @@ export const gameData = {
   ],
   tiers: {
     personal: [
-      { id: 'ascendant1', name: '불멸 1', image: '../assets/images/tiers/ascendant1.png' },
-      { id: 'ascendant2', name: '불멸 2', image: '../assets/images/tiers/ascendant2.png' },
-      { id: 'ascendant3', name: '불멸 3', image: '../assets/images/tiers/ascendant3.png' },
+      // NOTE(2026-09-15): id/이미지 파일명(ascendant*/immortal*)은 라이엇 공식 영문 티어명
+      // 그대로인데, 이 배열의 name(한글)이 서로 뒤바뀌어 있었다 - Ascendant(영문) =
+      // "초월자"(한글), Immortal(영문) = "불멸"(한글)인데 정반대로 적혀 있어서, "불멸"로
+      // 조회하면 ascendant*.png(초월자 아이콘)가 나오는 버그가 있었다(services/
+      // player_profile.py::TIER_LABELS는 이미 올바르게 매핑돼 있어 텍스트는 항상
+      // 맞았고, 이 파일의 name만 틀려서 아이콘만 어긋났다). id/image는 그대로 두고
+      // name만 올바르게 맞바꿨다 - 다른 코드가 id/파일명을 참조하고 있을 수 있어서
+      // 그쪽은 건드리지 않는 게 안전하다.
+      { id: 'ascendant1', name: '초월자 1', image: '../assets/images/tiers/ascendant1.png' },
+      { id: 'ascendant2', name: '초월자 2', image: '../assets/images/tiers/ascendant2.png' },
+      { id: 'ascendant3', name: '초월자 3', image: '../assets/images/tiers/ascendant3.png' },
       { id: 'bronze1', name: '브론즈 1', image: '../assets/images/tiers/bronze1.png' },
       { id: 'bronze2', name: '브론즈 2', image: '../assets/images/tiers/bronze2.png' },
       { id: 'bronze3', name: '브론즈 3', image: '../assets/images/tiers/bronze3.png' },
@@ -90,9 +98,9 @@ export const gameData = {
       { id: 'gold1', name: '골드 1', image: '../assets/images/tiers/gold1.png' },
       { id: 'gold2', name: '골드 2', image: '../assets/images/tiers/gold2.png' },
       { id: 'gold3', name: '골드 3', image: '../assets/images/tiers/gold3.png' },
-      { id: 'immortal1', name: '초월자 1', image: '../assets/images/tiers/immortal1.png' },
-      { id: 'immortal2', name: '초월자 2', image: '../assets/images/tiers/immortal2.png' },
-      { id: 'immortal3', name: '초월자 3', image: '../assets/images/tiers/immortal3.png' },
+      { id: 'immortal1', name: '불멸 1', image: '../assets/images/tiers/immortal1.png' },
+      { id: 'immortal2', name: '불멸 2', image: '../assets/images/tiers/immortal2.png' },
+      { id: 'immortal3', name: '불멸 3', image: '../assets/images/tiers/immortal3.png' },
       { id: 'iron1', name: '아이언 1', image: '../assets/images/tiers/iron1.png' },
       { id: 'iron2', name: '아이언 2', image: '../assets/images/tiers/iron2.png' },
       { id: 'iron3', name: '아이언 3', image: '../assets/images/tiers/iron3.png' },
