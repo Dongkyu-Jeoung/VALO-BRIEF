@@ -1,6 +1,8 @@
 # VALO-BRIEF
 Team Project
 
+Docker 배포: [설정 및 실행 안내](deploy/README.md). React/Nginx와 FastAPI를 `docker compose up -d --build`로 실행하고 기존 AWS MySQL에 연결합니다. 먼저 루트 `.env` 설정이 필요합니다.
+
 ## Premier 승부예측
 
 화면에서 사용하는 `GET /api/predict/{team_name}/{team_tag}`는 로그인 팀과 상대 팀의
