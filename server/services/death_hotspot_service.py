@@ -6,6 +6,9 @@
 # services/team_profile.py·services/my_team_analysis.py가 정규화(0~100)까지 끝낸 원본 사망
 # 좌표 리스트를 compute_player_hotspots로 넘겨 그 자리에서 집계한다 - "선수 1명당 대표
 # 위치 1개"를 이 방식으로 만든다.
+from sqlalchemy.orm import Session
+
+from models.death_event import DeathEvent
 
 # 0~100 정규화 좌표계 기준 격자 한 칸 크기. 이 값을 줄이면 칸이 잘게 쪼개져 핫스팟이
 # 더 정밀해지지만 표본이 적은 맵에서는 칸마다 표본이 1개씩만 흩어져 대표성이 떨어질 수
@@ -23,7 +26,7 @@ def compute_player_hotspots(points: list[dict]) -> list[dict]:
       2. 칸별로 몇 번 죽었는지 카운트
       3. 가장 많이 죽은 칸을 찾아, 그 칸에 속한 좌표들의 평균을 대표 위치로 삼음
     한 선수당 항목 1개만 반환한다 - 팀 로스터가 5명이면 결과도 최대 5개.
-    playerName은 여기서 채우지 않는다(이 함수는 좌표만 알고 이름은 모름) - 호출부가
+    playerName은 여기서 채우지 않는다(이 함수는 좌표만 알고 이름은 모른다) - 호출부가
     이미 갖고 있는 puuid->이름 조회로 결과에 덧붙여야 한다."""
     by_player: dict[str, dict[tuple[int, int], list[tuple[float, float]]]] = {}
     for p in points:
@@ -49,8 +52,16 @@ def compute_player_hotspots(points: list[dict]) -> list[dict]:
     return hotspots
 
 
-def get_death_hotspots(team_id: str, map_id: str):
-    # DB(death_event 테이블) 기반 조회 경로 - DeathEvent를 실제로 저장하는 파이프라인이
-    # 생기면 여기서 구현. 지금은 team_profile.py/my_team_analysis.py가 raw match
-    # 데이터로 compute_player_hotspots를 직접 호출하는 경로만 쓰인다.
-    pass
+def get_death_hotspots(db: Session, team_id: str, map_id: str) -> list[dict]:
+    """DeathEvent 테이블에서 team_id+map_id로 저장된 사망 이벤트를 조회해
+    compute_player_hotspots에 넘길 point 형태로 변환 후 그대로 집계한다.
+    DeathEvent에 실제로 데이터가 쌓이는 저장 파이프라인이 아직 없다면
+    (매치 처리 시 insert하는 코드), 이 함수는 항상 빈 리스트를 반환한다 -
+    저장 로직부터 먼저 확인할 것."""
+    rows = (
+        db.query(DeathEvent)
+        .filter(DeathEvent.team_id == team_id, DeathEvent.map_id == map_id)
+        .all()
+    )
+    points = [{"x": row.x, "y": row.y, "puuid": row.player_id} for row in rows]
+    return compute_player_hotspots(points)

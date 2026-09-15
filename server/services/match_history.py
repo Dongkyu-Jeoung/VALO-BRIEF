@@ -4,11 +4,55 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from sqlalchemy import text as sa_text
+
 from ml import engagement_predictor
+from models.death_event import DeathEvent
 from models.team import Team
 from services import team_engagement_cache
+from services.map_coords_service import normalize_location
+
+# --- 아래 3개는 models/team.py -> Team, models/death_event.py -> DeathEvent 와 같은
+# 네이밍 규칙(파일명 = 클래스명 snake_case)을 근거로 한 추정 경로입니다.
+# 실제 파일 위치가 다르면 이 3줄만 맞게 고쳐주세요.
+from models.match import Match  # noqa: 경로 확인 필요
+from models.match_player_stat import MatchPlayerStat  # noqa: 경로 확인 필요
+from models.riot_account import RiotAccount  # noqa: 경로 확인 필요
+
+# calculate_match_kast는 services.match_sync에 있지만 여기서 최상단(top-level)으로
+# import하면 순환 참조가 생긴다 - match_sync.py가 `from services import ... match_history
+# ...`로 이 파일을 이미 가져오고 있어서, 이 파일이 다시 match_sync를 최상단에서 가져오면
+# 두 모듈이 서로를 기다리다 "partially initialized module" ImportError가 난다.
+# 그래서 실제로 쓰는 함수(upsert_match_history) 안에서 지연 import한다.
+
+# services/team_profile.py가 동일한 이름을 이 경로에서 가져오는 걸 이미 확인함(근거 있음).
+from services.player_profile import ROLE_LABELS, _load_ref_agents
 
 _KST = timezone(timedelta(hours=9))
+
+# ref_maps는 _load_ref_maps(player_profile.py)가 이미 캐싱해서 로드하지만 한글 표시명만
+# 리턴하고 uuid가 없다(match_row.map_uuid 저장엔 uuid가 필요) - 그래서 재사용하지 않고
+# 별도로 uuid 기준 캐시를 둔다. ref_maps에 uuid 컬럼이 있다는 전제(ref_agents와 동일
+# 스키마 패턴) - 실제 컬럼명이 다르면 이 SELECT문만 고치면 된다.
+_map_uuid_cache: dict | None = None
+
+
+def _load_agent_info_by_name(db: Session) -> dict:
+    """character(영문 요원명, 소문자+슬래시 제거 기준) -> {"name_ko", "role_type"} 딕셔너리.
+    services/player_profile.py::_load_ref_agents가 이미 by_name 형태로 캐싱해둔 걸
+    그대로 재사용한다(그쪽 by_name 키도 동일하게 display_name.lower()라 KAY/O 같은
+    슬래시 포함 이름도 호출부의 .replace("/", "") 처리와 맞아떨어짐)."""
+    return _load_ref_agents(db)["by_name"]
+
+
+def _load_map_uuid_by_name(db: Session) -> dict:
+    """ref_maps 테이블에서 맵 영문명(소문자) -> uuid 딕셔너리로 로드(캐시됨)."""
+    global _map_uuid_cache
+    if _map_uuid_cache is not None:
+        return _map_uuid_cache
+    rows = db.execute(sa_text("SELECT uuid, display_name FROM ref_maps")).mappings().all()
+    _map_uuid_cache = {r["display_name"].lower(): r["uuid"] for r in rows}
+    return _map_uuid_cache
 
 
 def _parse_game_start(value) -> datetime | None:
@@ -146,6 +190,9 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     match_row.round_detail_json = match.get("rounds") or []
     match_row.api_source = "henrik"
 
+    # 순환 참조 방지를 위한 지연 import(위 상단 주석 참고).
+    from services.match_sync import calculate_match_kast
+
     all_players = (match.get("players") or {}).get("all_players") or []
     kast_by_puuid = calculate_match_kast(match)
     agent_info = _load_agent_info_by_name(db)
@@ -268,26 +315,77 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         if puuid in kast_by_puuid:
             stat_row.kast = kast_by_puuid[puuid]
 
+    # 사망 위치 저장(히트맵용) - services/death_hotspot_service.py::get_death_hotspots가
+    # 이 테이블을 읽는다. 좌표 변환/재료는 services/team_profile.py::_death_locations와
+    # 동일(kills[].victim_death_location -> normalize_location으로 0~100 정규화).
+    # 이 매치를 재처리(re-upsert)할 때 중복 저장되지 않도록, 먼저 이 match_id의 기존
+    # death_events를 지우고 새로 채운다.
+    db.query(DeathEvent).filter(DeathEvent.match_id == match_id).delete()
+    map_name_en = metadata.get("map") or ""
+    for kill in match.get("kills") or []:
+        victim_puuid = kill.get("victim_puuid")
+        if not victim_puuid:
+            continue
+        if victim_puuid in red_puuids:
+            death_team_id = red_team_id
+        elif victim_puuid in blue_puuids:
+            death_team_id = blue_team_id
+        else:
+            death_team_id = None
+        # death_events.team_id는 teams FK(NOT NULL)라 미가입 팀 선수의 사망은 저장할 수
+        # 없다 - 조용히 스킵.
+        if not death_team_id:
+            continue
+        loc = kill.get("victim_death_location") or {}
+        if loc.get("x") is None or loc.get("y") is None:
+            continue
+        normalized = normalize_location(loc["x"], loc["y"], map_name_en=map_name_en)
+        if not normalized:
+            continue
+        round_num = kill.get("round")
+        if round_num is None:
+            continue
+        db.add(DeathEvent(
+            match_id=match_id,
+            team_id=death_team_id,
+            player_id=victim_puuid,
+            map_id=map_name_en,
+            x=normalized["x"],
+            y=normalized["y"],
+            round_num=round_num,
+        ))
+
     db.commit()
 
     # write-through - 가입 여부와 무관하게 이 매치에 나온 두 팀 다 team_engagement_cache에
     # 쌓는다(위 red_engagement_id/blue_engagement_id 참고 - services/team_engagement_
     # cache.py 모듈 docstring도 같이 참고). ENGAGEMENT_CACHE_ENABLED가 False면 내부에서
-    # 조용히 스킵된다.
+    # 조용히 스킵된다. 두 팀 각각에 대해 상대팀 관점으로 한 번씩 write-through한다.
     red_won = red.get("has_won")
     blue_won = blue.get("has_won")
     if red_engagement_id:
         team_engagement_cache.upsert_match_engagement(
-            db, team_ids[side], match_id,
-            opponent_team_id=team_ids[opponent],
+            db, red_engagement_id, match_id,
+            opponent_team_id=blue_engagement_id,
             game_start=game_start,
             trade_rate=engagement_predictor.trade_rate_from_matches(
-                [match], roster.get("name", ""), roster.get("tag", ""),
+                [match], red_roster.get("name", ""), red_roster.get("tag", ""),
             ),
             duelist_acs=engagement_predictor.duelist_acs_from_matches(
-                [match], roster.get("name", ""), roster.get("tag", ""),
+                [match], red_roster.get("name", ""), red_roster.get("tag", ""),
             ),
-            win=won if isinstance(won, bool) else None,
+            win=red_won if isinstance(red_won, bool) else None,
         )
-        saved += 1
-    return saved
+    if blue_engagement_id:
+        team_engagement_cache.upsert_match_engagement(
+            db, blue_engagement_id, match_id,
+            opponent_team_id=red_engagement_id,
+            game_start=game_start,
+            trade_rate=engagement_predictor.trade_rate_from_matches(
+                [match], blue_roster.get("name", ""), blue_roster.get("tag", ""),
+            ),
+            duelist_acs=engagement_predictor.duelist_acs_from_matches(
+                [match], blue_roster.get("name", ""), blue_roster.get("tag", ""),
+            ),
+            win=blue_won if isinstance(blue_won, bool) else None,
+        )
