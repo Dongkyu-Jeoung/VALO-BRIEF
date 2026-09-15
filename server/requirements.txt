@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 sqlalchemy
-pymysql
+pymysql[rsa]
 pydantic
 python-dotenv
 bcrypt==4.0.1

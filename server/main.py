@@ -15,6 +15,12 @@ from services import henrik_api, valorant_api
 app = FastAPI()
 
 
+@app.get("/health", include_in_schema=False)
+async def health():
+    # Liveness only: do not consume external API quota on health checks.
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 async def _warm_henrik_client():
     await henrik_api.warm_up()

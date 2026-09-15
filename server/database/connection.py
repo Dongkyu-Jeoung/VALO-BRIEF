@@ -3,6 +3,7 @@ from collections.abc import Generator
 import os
 from services.environment import load_environment
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # .env 경로 가져오기
@@ -20,10 +21,14 @@ DB_NAME=os.getenv("DB_NAME")
 if not all([DB_USER, DB_PASSWORD, DB_NAME]):
     raise RuntimeError("환경변수 파일의 (DB_USER, DB_PASSWORD, DB_NAME)를 확인하세요")
 
-DATABASE_URL = (
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}"
-    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    "?charset=utf8mb4"
+DATABASE_URL = URL.create(
+    "mysql+pymysql",
+    username=DB_USER,
+    password=DB_PASSWORD,
+    host=DB_HOST,
+    port=int(DB_PORT or "3306"),
+    database=DB_NAME,
+    query={"charset": "utf8mb4"},
 )
 
 # Engine 생성
