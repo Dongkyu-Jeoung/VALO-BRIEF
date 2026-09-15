@@ -1,7 +1,7 @@
-"""Prefill compact engagement statistics after signup and compute KAST from API events.
-
-Raw matches and player statistics are no longer inserted or updated here.
-"""
+"""Prefill matches/match_player_stats + engagement statistics after signup, and
+compute KAST from API events (services/match_history.py::upsert_match_history does
+the actual matches/match_player_stats upsert; this module just drives the per-team
+loop and rate-limit handling)."""
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -488,11 +488,12 @@ async def _sync(db: Session, team_id: str, team_name: str, team_tag: str) -> Non
             break
         if not match or _match_our_side(match, team_name, team_tag) is None:
             continue
-        match_history.upsert_match_engagement_summary(db, match_id, match, entry.get("started_at"))
+        match_history.upsert_match_history(db, match_id, match, entry.get("started_at"))
 
 
 async def sync_team_match_history(team_name: str, team_tag: str) -> None:
-    """Signup entry point: populate only team_engagement_cache."""
+    """Signup entry point: pre-fill matches/match_player_stats + team_engagement_cache
+    via services/match_history.py::upsert_match_history."""
     if not team_engagement_cache.ENGAGEMENT_CACHE_ENABLED:
         return
     with SessionLocal() as db:

@@ -1,4 +1,6 @@
-"""Persist compact engagement statistics without storing raw matches or player rows."""
+"""Persist matches/match_player_stats (incl. first_bloods/first_deaths/kast/
+most_used_weapon_uuid/detail_json) + death_events, and write-through the compact
+team_engagement_cache summary."""
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -35,6 +37,25 @@ _KST = timezone(timedelta(hours=9))
 # 별도로 uuid 기준 캐시를 둔다. ref_maps에 uuid 컬럼이 있다는 전제(ref_agents와 동일
 # 스키마 패턴) - 실제 컬럼명이 다르면 이 SELECT문만 고치면 된다.
 _map_uuid_cache: dict | None = None
+_weapon_uuid_cache: set | None = None
+_death_events_ready: bool | None = None
+
+
+def _death_events_table_ready(db: Session) -> bool:
+    """death_events(사망 위치 히트맵용, models/death_event.py)는 아직 마이그레이션이 실행
+    안 된 환경이 있다 - 그리고 이 테이블을 읽는 쪽(services/death_hotspot_service.py::
+    get_death_hotspots)도 아직 main.py에 라우터가 안 붙어있어 실제로 쓰이지 않는 WIP다.
+    그래서 테이블이 없다고 first_bloods 등 나머지 저장까지 롤백되면 안 된다 - 프로세스당
+    한 번만 존재 여부를 확인하고(있으면 이후 계속 저장 시도, 없으면 계속 스킵) 캐싱한다."""
+    global _death_events_ready
+    if _death_events_ready is None:
+        try:
+            db.execute(sa_text("SELECT 1 FROM death_events LIMIT 1"))
+            _death_events_ready = True
+        except Exception:
+            db.rollback()
+            _death_events_ready = False
+    return _death_events_ready
 
 
 def _load_agent_info_by_name(db: Session) -> dict:
@@ -53,6 +74,19 @@ def _load_map_uuid_by_name(db: Session) -> dict:
     rows = db.execute(sa_text("SELECT uuid, display_name FROM ref_maps")).mappings().all()
     _map_uuid_cache = {r["display_name"].lower(): r["uuid"] for r in rows}
     return _map_uuid_cache
+
+
+def _load_weapon_uuids(db: Session) -> set:
+    """ref_weapons.uuid(소문자) 전체 집합 - most_used_weapon_uuid 검증용. kill 이벤트의
+    damage_weapon_id가 항상 진짜 무기 UUID는 아니다(어빌리티 처치는 스킬 UUID가 들어옴,
+    services/my_team_player_detail.py의 동일 검증 참고) - ref_weapons에 없는 값은 저장하지
+    않는다."""
+    global _weapon_uuid_cache
+    if _weapon_uuid_cache is not None:
+        return _weapon_uuid_cache
+    rows = db.execute(sa_text("SELECT uuid FROM ref_weapons")).mappings().all()
+    _weapon_uuid_cache = {r["uuid"].lower() for r in rows}
+    return _weapon_uuid_cache
 
 
 def _parse_game_start(value) -> datetime | None:
@@ -132,6 +166,11 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     if not match_id:
         return
 
+    # 아래 어떤 db.add/변경보다 먼저 확인 - 이 체크 자체가 실패하면 db.rollback()을 타는데,
+    # 그 시점에 이미 대기 중인 변경사항이 있으면 같이 날아간다(아래 _death_events_table_
+    # ready 함수 docstring 참고).
+    death_events_ready = _death_events_table_ready(db)
+
     metadata = match.get("metadata") or {}
     teams = match.get("teams") or {}
     red = teams.get("red") or {}
@@ -191,10 +230,12 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
     match_row.api_source = "henrik"
 
     # 순환 참조 방지를 위한 지연 import(위 상단 주석 참고).
-    from services.match_sync import calculate_match_kast
+    from services.match_sync import _compute_player_round_stats, _group_kills_by_round, calculate_match_kast
 
     all_players = (match.get("players") or {}).get("all_players") or []
     kast_by_puuid = calculate_match_kast(match)
+    kills_by_round = _group_kills_by_round(match.get("kills") or [])
+    weapon_uuids = _load_weapon_uuids(db)
     agent_info = _load_agent_info_by_name(db)
 
     # riot_accounts placeholder를 먼저 다 만들고 명시적으로 flush - models/match_player_
@@ -315,45 +356,54 @@ def upsert_match_history(db: Session, match_id: str, match: dict, started_at_raw
         if puuid in kast_by_puuid:
             stat_row.kast = kast_by_puuid[puuid]
 
+        advanced = _compute_player_round_stats(kills_by_round, puuid, rounds_played)
+        stat_row.first_bloods = advanced["first_bloods"]
+        stat_row.first_deaths = advanced["first_deaths"]
+        weapon_uuid = advanced["most_used_weapon_uuid"]
+        stat_row.most_used_weapon_uuid = weapon_uuid if weapon_uuid in weapon_uuids else None
+        stat_row.detail_json = advanced["round_events"]
+
     # 사망 위치 저장(히트맵용) - services/death_hotspot_service.py::get_death_hotspots가
     # 이 테이블을 읽는다. 좌표 변환/재료는 services/team_profile.py::_death_locations와
     # 동일(kills[].victim_death_location -> normalize_location으로 0~100 정규화).
     # 이 매치를 재처리(re-upsert)할 때 중복 저장되지 않도록, 먼저 이 match_id의 기존
-    # death_events를 지우고 새로 채운다.
-    db.query(DeathEvent).filter(DeathEvent.match_id == match_id).delete()
-    map_name_en = metadata.get("map") or ""
-    for kill in match.get("kills") or []:
-        victim_puuid = kill.get("victim_puuid")
-        if not victim_puuid:
-            continue
-        if victim_puuid in red_puuids:
-            death_team_id = red_team_id
-        elif victim_puuid in blue_puuids:
-            death_team_id = blue_team_id
-        else:
-            death_team_id = None
-        # death_events.team_id는 teams FK(NOT NULL)라 미가입 팀 선수의 사망은 저장할 수
-        # 없다 - 조용히 스킵.
-        if not death_team_id:
-            continue
-        loc = kill.get("victim_death_location") or {}
-        if loc.get("x") is None or loc.get("y") is None:
-            continue
-        normalized = normalize_location(loc["x"], loc["y"], map_name_en=map_name_en)
-        if not normalized:
-            continue
-        round_num = kill.get("round")
-        if round_num is None:
-            continue
-        db.add(DeathEvent(
-            match_id=match_id,
-            team_id=death_team_id,
-            player_id=victim_puuid,
-            map_id=map_name_en,
-            x=normalized["x"],
-            y=normalized["y"],
-            round_num=round_num,
-        ))
+    # death_events를 지우고 새로 채운다. death_events 테이블이 아직 없는 환경(위
+    # death_events_ready 참고)에서는 통째로 스킵 - 아직 아무도 안 읽는 기능이라 안전하다.
+    if death_events_ready:
+        db.query(DeathEvent).filter(DeathEvent.match_id == match_id).delete()
+        map_name_en = metadata.get("map") or ""
+        for kill in match.get("kills") or []:
+            victim_puuid = kill.get("victim_puuid")
+            if not victim_puuid:
+                continue
+            if victim_puuid in red_puuids:
+                death_team_id = red_team_id
+            elif victim_puuid in blue_puuids:
+                death_team_id = blue_team_id
+            else:
+                death_team_id = None
+            # death_events.team_id는 teams FK(NOT NULL)라 미가입 팀 선수의 사망은 저장할 수
+            # 없다 - 조용히 스킵.
+            if not death_team_id:
+                continue
+            loc = kill.get("victim_death_location") or {}
+            if loc.get("x") is None or loc.get("y") is None:
+                continue
+            normalized = normalize_location(loc["x"], loc["y"], map_name_en=map_name_en)
+            if not normalized:
+                continue
+            round_num = kill.get("round")
+            if round_num is None:
+                continue
+            db.add(DeathEvent(
+                match_id=match_id,
+                team_id=death_team_id,
+                player_id=victim_puuid,
+                map_id=map_name_en,
+                x=normalized["x"],
+                y=normalized["y"],
+                round_num=round_num,
+            ))
 
     db.commit()
 
