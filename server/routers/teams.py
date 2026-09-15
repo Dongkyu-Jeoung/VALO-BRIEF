@@ -28,15 +28,15 @@ from services.team_profile import (
 def _accumulate_match_history(
     db: Session, match_ids: list[str], match_details: list, started_at_by_id: dict[str, str] | None = None
 ) -> None:
-    """Persist compact engagement summaries from already fetched API responses.
-    Raw match rows and player statistics are not stored. Roll back failures so
-    the next summary can still be processed."""
+    """Persist match/player rows and engagement summaries from already fetched API
+    responses (services/match_history.py::upsert_match_history). Roll back failures
+    so the next match can still be processed."""
     started_at_by_id = started_at_by_id or {}
     for match_id, detail in zip(match_ids, match_details):
         if not detail:
             continue
         try:
-            match_history.upsert_match_engagement_summary(db, match_id, detail, started_at_by_id.get(match_id))
+            match_history.upsert_match_history(db, match_id, detail, started_at_by_id.get(match_id))
         except Exception as e:
             db.rollback()
             print(f"  [match_history] upsert 실패(match_id={match_id}): {e}")
