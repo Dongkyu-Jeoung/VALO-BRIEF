@@ -29,6 +29,7 @@ export async function fetchRecentOpponent() {
 }
 
 export function fetchPrediction(teamName, teamTag) {
+  
   // FORCE_MOCK_PREDICTION(config.js) - 승부예측 ML 파이프라인이 너무 느려서 백엔드
   // 성능 개선 전까지 임시로 항상 mock을 쓴다(config.js 주석 참고).
   if (FORCE_MOCK_PREDICTION || _isDemoTeam(teamName, teamTag)) {
@@ -45,6 +46,16 @@ export function fetchPrediction(teamName, teamTag) {
     }),
     predictionMock,
     'fetchPrediction',
-    (err) => err.message?.startsWith('[HTTP 422]')
+    // 422(입력값 오류, 예: 팀을 못 찾음)뿐 아니라 5xx(모델 파일 없음, LLM 호출 실패 등
+    // 실제 서버 장애)도 mock으로 조용히 대체하지 않고 그대로 재던진다(2026-09-15) -
+    // 예전엔 422만 재던지고 나머지는 전부 mock으로 덮어써서, 백엔드가 진짜 장애
+    // 상태(모델 미존재 등)일 때도 사용자에게는 정상 예측 결과처럼 보이는 문제가 있었다.
+    // 5xx를 재던지면 MatchPredictionPage.jsx의 predictionError 처리(이미 구현돼 있음)가
+    // 동작해서 "승부예측을 진행할 수 없습니다" 같은 명확한 안내가 사용자에게 표시된다.
+    (err) => {
+      const match = err.message?.match(/^\[HTTP (\d+)\]/);
+      const status = match ? Number(match[1]) : null;
+      return status === 422 || (status !== null && status >= 500);
+    }
   );
 }

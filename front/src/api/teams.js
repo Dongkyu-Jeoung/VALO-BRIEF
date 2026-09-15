@@ -84,6 +84,7 @@ export function fetchTeamAnalysis(teamName, teamTag) {
 // 정상 status 값들은 그대로 통과한다 - MatchPredictionPage/index.jsx가 "generating"이면
 // 잠시 후 다시 이 함수를 호출해 폴링한다.
 export function fetchTeamAiReport(teamName, teamTag) {
+  
   if (_isDemoTeam(teamName, teamTag)) {
     return delay(MOCK_DELAY_MS).then(() => ({ status: 'ready', report: predictionMock.aiReport }));
   }
@@ -92,6 +93,17 @@ export function fetchTeamAiReport(teamName, teamTag) {
   return withFallback(
     () => httpClient.get(`/api/teams/${cleanName}/${cleanTag}/ai-report`),
     { status: 'ready', report: predictionMock.aiReport },
-    'fetchTeamAiReport'
+    'fetchTeamAiReport',
+    // 5xx(LLM 호출 실패, Claude 미설정 등 실제 서버 장애)는 mock으로 조용히 대체하지
+    // 않고 그대로 재던진다(2026-09-15) - 이전엔 shouldRethrow를 안 넘겨 기본값(항상
+    // false)이 적용돼, LLM 호출이 진짜로 실패해도 사용자에게는 항상
+    // { status: 'ready', report: predictionMock.aiReport }가 "실제 리포트"처럼
+    // 보였다. 404/미준비 같은 정상 상태는 애초에 예외가 아니라 status 필드로
+    // 내려오므로(백엔드 계약) 여기서 걸러질 필요가 없다.
+    (err) => {
+      const match = err.message?.match(/^\[HTTP (\d+)\]/);
+      const status = match ? Number(match[1]) : null;
+      return status !== null && status >= 500;
+    }
   );
 }
