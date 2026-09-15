@@ -154,6 +154,26 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
     map_names = _load_map_name_by_uuid(db)
     agents = _load_ref_agents(db)
 
+    # 선수별 "고정 열 순번" - 그 경기에 뛴 5명끼리만 puuid로 정렬하면, 서브 선수가 한
+    # 명만 들어와도(그 서브의 puuid가 주전들보다 사전순으로 앞서면) 주전 4명 전체가
+    # 한 칸씩 밀려버리는 문제가 있었다(예: 평소 A,B,C,D,E 순이었는데 E 대신 서브 F가
+    # 들어오면 F,A,B,C,D로 재정렬돼 A~D까지 다 밀림). 이를 막기 위해 "이 팀 최근
+    # MATCH_HISTORY_LIMIT경기 전체"에서 각 puuid가 몇 번 등장했는지 먼저 한 번만 세어
+    # 등장 횟수가 많은 순으로 고정 순번을 매긴다(동률이면 puuid로 안정적으로 타이브레이크).
+    # 이러면 주전(등장 횟수多)은 항상 앞쪽 고정 칸에 배치되고, 어쩌다 한 번 뛴 서브만
+    # 순번이 밀려 맨 뒤쪽 칸에 배치되어 주전들의 열은 흔들리지 않는다.
+    _appearance_count: dict[str, int] = {}
+    for _match_id in match_ids:
+        for _row in by_match.get(_match_id) or []:
+            if _row.team_id == team_id:
+                _appearance_count[_row.puuid] = _appearance_count.get(_row.puuid, 0) + 1
+    _player_rank = {
+        puuid: idx
+        for idx, puuid in enumerate(
+            sorted(_appearance_count, key=lambda p: (-_appearance_count[p], p))
+        )
+    }
+
     all_records: list[dict] = []
     trade_totals = {"deathTotal": 0, "trade1v1": 0, "trade1v2": 0}
     our_duelist_acs: list[int] = []
@@ -165,7 +185,13 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
         if not rounds:
             continue
         roster = by_match.get(match.match_id) or []
-        our_rows = [r for r in roster if r.team_id == team_id]
+        # 위에서 계산한 _player_rank(등장 빈도 기준 고정 순번)로 정렬한다 - puuid 단독
+        # 정렬과 달리, 서브 선수가 끼어 있어도 주전들의 상대적 순서는 유지되고 서브만
+        # 뒤로 밀린다("요원 조합" 표에서 특정 경기만 순서가 어긋나던 문제의 원인).
+        our_rows = sorted(
+            (r for r in roster if r.team_id == team_id),
+            key=lambda r: (_player_rank.get(r.puuid, 10**9), r.puuid),
+        )
         opp_rows = [r for r in roster if r.team_id != team_id]
         if not our_rows:
             continue
@@ -226,6 +252,9 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
         # 우리 로스터 사망 좌표 - 맵별로 누적해 히트맵 데이터로 쓴다. _death_locations_for_match 참고.
         bucket["death_locations"].extend(_death_locations_for_match(rounds, our_puuids, match.map_uuid))
 
+        # our_rows가 이제 puuid 기준으로 정렬돼 있으므로, 여기서 만든 agent_names의 순서가
+        # 곧 "요원 조합" 표의 열 순서가 된다 - 로스터가 유지되는 한 매치가 바뀌어도 같은
+        # 선수(보통 같은 요원)가 항상 같은 열에 표시된다.
         agent_names = [
             (agents["by_uuid"].get((r.agent_uuid or "").lower()) or {}).get("name_ko") or "-"
             for r in our_rows
@@ -284,6 +313,8 @@ def _compute_and_cache(db: Session, team_id: str) -> None:
 
         # 요원 조합: 맵당 표본이 보통 1~2경기뿐이라 승률로 집계하면 0%/100%만 나와 의미가 없다.
         # 조합을 묶지 않고 실제 치른 경기(최신순, matches와 동일한 정렬)를 그대로 한 줄씩 노출한다.
+        # 각 줄의 agents 배열은 위에서 puuid 정렬된 our_rows로 만들어졌으므로 열 순서가
+        # 매치 간에 일관된다.
         game_combos = b["combos"]
 
         player_summaries = []
