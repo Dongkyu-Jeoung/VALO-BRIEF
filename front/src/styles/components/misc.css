@@ -114,6 +114,36 @@
   font-size: 13px;
 }
 
+.error-state__message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4, 16px);   
+  color: var(--accent);
+}
+
+.error-state__message::before {
+  content: '!';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;          
+}
+
+.error-state__message span {
+  font-family: 'Rajdhani', 'Pretendard', sans-serif;
+  font-weight: 600;
+  font-size: 18px;          
+  letter-spacing: 0.02em;
+}
+
 /* 승/패 인디케이터 도트 */
 .dot.win {
   background: var(--win, #4c7eff);

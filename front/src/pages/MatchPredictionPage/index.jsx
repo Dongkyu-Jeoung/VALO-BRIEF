@@ -34,6 +34,11 @@ export default function MatchPredictionPage() {
   // 백엔드 status 그대로("ready"/"not_ready"/"generating") - AiReportTab이 이 값으로
   // 세 가지 화면(리포트/준비 중 안내/생성 중 안내)을 구분한다.
   const [aiReportStatus, setAiReportStatus] = useState(null);
+  // fetchTeamAiReport가 5xx(LLM 호출 실패 등 실제 서버 장애)를 재던지는 경우를 위한
+  // 에러 메시지 - status 기반 3분기(ready/not_ready/generating)와 별개로 "요청 자체가
+  // 실패했다"는 네 번째 상태를 표현한다(2026-09-15, api/teams.js::fetchTeamAiReport
+  // 참고). null이면 정상 status 분기를 그대로 사용한다.
+  const [aiReportError, setAiReportError] = useState(null);
   // aiReport는 정상적으로 null일 수 있어서(상대팀 데이터가 아직 준비 안 됨) "아직 요청
   // 자체를 안 보냈다"와 구분하는 별도 플래그가 필요하다 - 없으면 null인 동안 매 렌더마다
   // 계속 재요청하게 된다.
@@ -51,6 +56,7 @@ export default function MatchPredictionPage() {
     setResolvedOpponent(null);
     setAiReport(null);
     setAiReportStatus(null);
+    setAiReportError(null);
     setAiReportRequested(false);
     setAiReportSettled(false);
 
@@ -128,14 +134,25 @@ export default function MatchPredictionPage() {
     let timer = null;
 
     async function poll() {
-      const data = await fetchTeamAiReport(resolvedOpponent.name, resolvedOpponent.tag);
-      if (!active) return;
-      const status = data?.status ?? 'not_ready';
-      setAiReportStatus(status);
-      setAiReport(status === 'ready' ? data.report : null);
-      setAiReportSettled(true);
-      if (status === 'generating') {
-        timer = setTimeout(poll, 4000);
+      // fetchTeamAiReport는 이제 5xx(LLM 호출 실패 등 실제 서버 장애)를 mock으로
+      // 덮지 않고 그대로 던진다(2026-09-15, api/teams.js 참고) - 여기서 안 잡으면
+      // 처리 안 된 예외로 폴링이 조용히 멈추고 "AI 리포트" 탭이 로딩 상태로 영원히
+      // 멈춘 것처럼 보인다. predictionError와 같은 패턴으로 명확한 에러 메시지를
+      // 상태에 담아 화면에 보여준다.
+      try {
+        const data = await fetchTeamAiReport(resolvedOpponent.name, resolvedOpponent.tag);
+        if (!active) return;
+        const status = data?.status ?? 'not_ready';
+        setAiReportStatus(status);
+        setAiReport(status === 'ready' ? data.report : null);
+        setAiReportSettled(true);
+        if (status === 'generating') {
+          timer = setTimeout(poll, 4000);
+        }
+      } catch {
+        if (!active) return;
+        setAiReportError('AI 리포트를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.');
+        setAiReportSettled(true);
       }
     }
     poll();
@@ -147,7 +164,13 @@ export default function MatchPredictionPage() {
   }, [aiReportRequested, resolvedOpponent]);
 
   // 승률은 프로필·분석 요청의 완료를 기다리지 않고 먼저 표시한다.
-  if (predictionError) return <div className="container" role="alert">{predictionError}</div>;
+  if (predictionError) {
+    return (
+      <div className="error-state" role="alert">
+        <span className="error-state__message">{predictionError}</span>
+      </div>
+    );
+  }
   if (!prediction) return <LoadingText full />;
 
   // 로그인 상태인데도 /api/predict가 실패(최근 매치 로스터 5인을 못 찾는 등)해서
@@ -206,7 +229,13 @@ export default function MatchPredictionPage() {
       ) : null}
       {activeTab === 'AI 리포트' ? (
         aiReportSettled ? (
-          <AiReportTab report={aiReport} status={aiReportStatus} opponentName={displayOpponentTeam.name} />
+          aiReportError ? (
+            <div className="error-state" role="alert">
+              <span className="error-state__message">{aiReportError}</span>
+            </div>
+          ) : (
+            <AiReportTab report={aiReport} status={aiReportStatus} opponentName={displayOpponentTeam.name} />
+          )
         ) : <LoadingText />
       ) : null}
     </div>
