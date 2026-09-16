@@ -24,6 +24,20 @@ from services.round_phase_analysis import aggregate_round_phase, analyze_rounds,
 # 항상 같은 매치 집합을 캐시하도록 이 상수 하나를 공유해서 쓴다.
 MATCH_HISTORY_LIMIT = 10
 
+
+def resolve_team_icon_url(customization: dict) -> str | None:
+    """Henrik team-icon 엔드포인트(cdn.henrikdev.xyz)는 요청마다 아이콘+색상을 새로
+    합성해서 내려주고 캐싱 헤더가 전혀 없어 매번 ~1.7초씩 걸린다(실측). icon uuid+색상
+    조합이 같으면 항상 같은 이미지라, 원본 URL 대신 우리 프록시(routers/team_icon.py,
+    한 번 받으면 디스크에 캐싱해 재서빙)를 가리키는 상대경로를 돌려준다."""
+    icon = customization.get("icon")
+    if not icon:
+        return customization.get("image")
+    primary = (customization.get("primary") or "").lstrip("#")
+    secondary = (customization.get("secondary") or "").lstrip("#")
+    tertiary = (customization.get("tertiary") or "").lstrip("#")
+    return f"/api/team-icons/{icon}?primary={primary}&secondary={secondary}&tertiary={tertiary}"
+
 # 요원 조합(combos) 표시 순서 고정용. Henrik이 내려주는 roster 순서는 매치마다 들쭉날쭉해서
 # (참가 순서/내부 정렬 기준 불명) 같은 5인 조합이어도 경기마다 표시 순서가 달라 보이는 문제가
 # 있었다 - 화면(요원 조합 섹션)에서 항상 같은 순서로 보이도록 역할군 기준으로 정렬한다.
@@ -171,7 +185,7 @@ def build_team_header(team_name: str, team_tag: str, team_info: dict) -> dict:
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
     matches_played = stats.get("matches") or 0
-    logo_image = customization.get("image")
+    logo_image = resolve_team_icon_url(customization)
     return {
         "name": team_info.get("name") or team_name,
         "tag": team_info.get("tag") or team_tag,
@@ -486,7 +500,7 @@ def build_team_profile(
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
     matches_played = stats.get("matches") or 0
-    logo_image = customization.get("image")
+    logo_image = resolve_team_icon_url(customization)
 
     records: list = []
     all_roster_stats: list = []
@@ -587,7 +601,7 @@ def build_quick_analysis(
 
     placement = team_info.get("placement") or {}
     customization = team_info.get("customization") or {}
-    logo_image = customization.get("image")
+    logo_image = resolve_team_icon_url(customization)
 
     return {
         "teamName": team_info.get("name") or team_name,

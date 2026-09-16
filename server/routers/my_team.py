@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.team import Team
 from routers.auth import get_current_team
-from services import ai_report, my_team_analysis, my_team_player_detail, my_team_players, my_team_stats
+from services import ai_report, my_team_analysis, my_team_player_detail, my_team_players, my_team_stats, prediction_cache
 
 router = APIRouter(prefix="/api/my-team", tags=["my-team"])
+SEARCH_TARGET_CACHE_TTL_SECONDS = 5 * 60
 
 
 @router.get("/stats")
@@ -40,6 +41,14 @@ async def get_my_team_personal_search_target(current: Team = Depends(get_current
     Henrik에서 실제로 조회되는 선수(Riot ID를 바꾼 선수를 건너뛰기 위한 라이브 재검증,
     services/my_team_players.py::resolve_personal_search_target 참고). 이 라우트가
     "/players/{puuid}"보다 먼저 등록돼야 "search-target"이 puuid 파라미터로 먹히지 않는다."""
+    key = ("my-team-search-target", current.team_id)
+    return await prediction_cache.get_or_create(
+        key, lambda: _compute_personal_search_target(db, current),
+        ttl_seconds=SEARCH_TARGET_CACHE_TTL_SECONDS,
+    )
+
+
+async def _compute_personal_search_target(db: Session, current: Team):
     target = await my_team_players.resolve_personal_search_target(db, current)
     if target is None:
         raise HTTPException(status_code=404, detail="이동할 선수를 찾지 못했습니다.")

@@ -17,8 +17,9 @@ from ml.predictor import predict_blue_win, predict_from_player_features, create_
 from models.team import Team
 from routers.auth import get_current_team
 from schema.predict import PredictRequest, PredictResponse
-from services import predict_service
+from services import predict_service, prediction_cache
 from services.henrik_api import HenrikRateLimitError
+from services.team_profile import resolve_team_icon_url
 
 router = APIRouter(prefix="/api/predict", tags=["Predict"])
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 # 새 문자열을 만들지 않고 기존 값을 그대로 이어서 써서 model_version 기준으로 과거
 # 데이터와 끊기지 않게 한다.
 MATCH_MODEL_VERSION = "xgboost-v1"
+RECENT_OPPONENT_CACHE_TTL_SECONDS = 5 * 60
 
 
 def _save_prediction_result(team_a_id, team_name, team_tag, result) -> None:
@@ -69,7 +71,15 @@ def predict(request: PredictRequest):
 @router.get("/recent-opponent")
 async def get_recent_opponent(current: Team = Depends(get_current_team)):
     """로그인한 팀의 가장 최근 프리미어 매치 상대팀을 찾는다."""
-    opponent = await predict_service.resolve_recent_opponent(current.team_name, current.team_tag)
+    key = ("recent-opponent", current.team_id)
+    return await prediction_cache.get_or_create(
+        key, lambda: _compute_recent_opponent(current.team_name, current.team_tag),
+        ttl_seconds=RECENT_OPPONENT_CACHE_TTL_SECONDS,
+    )
+
+
+async def _compute_recent_opponent(team_name: str, team_tag: str):
+    opponent = await predict_service.resolve_recent_opponent(team_name, team_tag)
     if opponent is None:
         raise HTTPException(status_code=404, detail="최근 매치 상대팀을 찾을 수 없습니다.")
     return opponent
@@ -108,8 +118,8 @@ async def predict_match(
         our_customization = (our_full_info or {}).get("customization") or {}
         opp_customization = (opp_info or {}).get("customization") or {}
         
-        our_logo = our_customization.get("image")
-        opp_logo = opp_customization.get("image")
+        our_logo = resolve_team_icon_url(our_customization)
+        opp_logo = resolve_team_icon_url(opp_customization)
 
         # 프론트엔드가 우리팀/상대팀 객체 내부에서 logoUrl을 바로 참조할 수 있도록 구조 반영
         result["ourTeam"] = {

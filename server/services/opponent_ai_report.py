@@ -27,6 +27,7 @@ save)은 BackgroundTasks로 넘긴다. 프론트(MatchPredictionPage/index.jsx)�
 """
 import asyncio
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import BackgroundTasks
@@ -446,6 +447,39 @@ def _fallback_report(our_context: dict, opponent_name: str, opponent_context: di
     }
 
 
+def _highlight_player_names(report: dict, opponent_context: dict) -> dict:
+    """opponentPickAnalysis.detail은 Claude가 자유 문장으로 쓰다 보니 선수 닉네임이
+    다른 텍스트와 구분 없이 섞여 나온다(실측 예: "kyokkyokk·Lily 선수 중심 듀얼 화력" -
+    가운데점(·)만으로 나열돼 어디까지가 닉네임인지 알아보기 어려움). Claude에게 표시를
+    맡기는 대신, 실제 로스터 닉네임(opponent_context의 playerRanking, ground truth)과
+    정확히 일치하는 부분만 **닉네임**으로 감싸 프론트(OpponentPickAnalysis.jsx)가 배지로
+    분리해 보여주게 한다. 짧은 이름이 긴 이름의 부분 문자열일 때 잘못 끊기지 않도록
+    긴 이름부터 치환한다."""
+    pick = report.get("opponentPickAnalysis")
+    if not pick:
+        return report
+    names = sorted(
+        {p.get("name") for p in (opponent_context["profile"].get("playerRanking") or []) if p.get("name") and p["name"] != "-"},
+        key=len, reverse=True,
+    )
+    if not names:
+        return report
+    pick["detail"] = [
+        _wrap_names(line, names) for line in pick.get("detail") or []
+    ]
+    return report
+
+
+def _wrap_names(text: str, names: list[str]) -> str:
+    """닉네임을 **닉네임**으로 감싸고, 바로 뒤에 "선수"가 없으면 붙여준다(사용자 피드백 -
+    "Night journey·XOXO"처럼 닉네임만 나열되면 뭘 가리키는지 모호하다). 이미 "닉네임
+    선수"로 쓰여 있으면 그 "선수"를 그대로 두고 중복으로 더 붙이지 않는다."""
+    for name in names:
+        pattern = re.compile(re.escape(name) + r"(\s*선수)?")
+        text = pattern.sub(lambda m: f"**{name}**{m.group(1) or ' 선수'}", text)
+    return text
+
+
 # (our_team_id, opponent_id) 쌍 중 지금 백그라운드에서 생성 중인 것들 - 이 프로세스
 # 안에서만 유효한 메모리 락이다(여러 워커 프로세스로 띄우면 워커별로 따로 논다 - 지금
 # uvicorn 단일 프로세스 전제, server/AI_리포트_개발_설계.md 참고). 프론트가 몇 초 간격으로
@@ -549,6 +583,7 @@ async def _generate_and_save(db: Session, our_team_id: str, opponent_name: str, 
         report = _fallback_report(our_context, opponent_name, opponent_context)
         source = "fallback"
 
+    report = _highlight_player_names(report, opponent_context)
     _save_report(db, current.team_id, opponent_id, report, source)
 
 

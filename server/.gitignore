@@ -6,3 +6,4 @@
 *.csv
 __pycache__/
 *.__pycache__
+static/team_icons/

@@ -60,6 +60,8 @@ logger = logging.getLogger(__name__)
 # 구조 변경 등) 올려서 이전 캐시가 새 형식과 섞여 반환되지 않게 한다(routers/predict.py의
 # MATCH_MODEL_VERSION과 같은 역할, services/prediction_cache.py 참고).
 TEAM_ANALYSIS_CACHE_VERSION = "v1"
+TEAM_PROFILE_CACHE_VERSION = "v1"
+TEAM_QUICK_ANALYSIS_CACHE_VERSION = "v1"
 
 
 @router.get("/{team_name}/{team_tag}")
@@ -71,6 +73,13 @@ async def get_team_profile(
     불러온다 - 상세 없이는 맵/스코어/로스터 스탯을 알 수 없어 이력 조회가 먼저 끝나야 한다."""
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
+    key = ("team-profile", clean_name, clean_tag, TEAM_PROFILE_CACHE_VERSION)
+    return await prediction_cache.get_or_create(
+        key, lambda: _compute_team_profile(clean_name, clean_tag, db, background_tasks),
+    )
+
+
+async def _compute_team_profile(clean_name: str, clean_tag: str, db: Session, background_tasks: BackgroundTasks):
     team_info, history = await asyncio.gather(
         henrik_api.get_premier_team(clean_name, clean_tag),
         henrik_api.get_premier_team_history(clean_name, clean_tag),
@@ -109,6 +118,13 @@ async def get_team_quick_analysis(
     한 번 더 동시에 불러오지만, 매치 건수는 QUICK_ANALYSIS_MATCH_LIMIT(5)로 더 적게 가져온다."""
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
+    key = ("team-quick-analysis", clean_name, clean_tag, TEAM_QUICK_ANALYSIS_CACHE_VERSION)
+    return await prediction_cache.get_or_create(
+        key, lambda: _compute_team_quick_analysis(clean_name, clean_tag, db, background_tasks),
+    )
+
+
+async def _compute_team_quick_analysis(clean_name: str, clean_tag: str, db: Session, background_tasks: BackgroundTasks):
     team_info, history = await asyncio.gather(
         henrik_api.get_premier_team(clean_name, clean_tag),
         henrik_api.get_premier_team_history(clean_name, clean_tag),
@@ -142,13 +158,7 @@ async def get_team_quick_analysis(
 
 @router.get("/{team_name}/{team_tag}/header")
 async def get_team_header(team_name: str, team_tag: str):
-    """성능 개선(엔드포인트 분리) - ProfileHeader(팀 로고/이름/디비전/누적 승률)만 필요할 때
-    쓰는 경량 엔드포인트. get_team_profile은 매치 이력+상세 10건까지 다 기다려야 응답이
-    나가서(~2.5~3.1s, 실측) 팀 로고가 늦게 뜨는 원인이었는데, 이 엔드포인트는 get_premier_team
-    한 번(~0.3~0.6s, 대부분 search.py의 존재확인 프리페치로 이미 캐시돼 있어 더 빠름)만으로
-    응답한다. TeamProfilePage가 이 엔드포인트와 get_team_profile을 동시에 호출해서, 먼저
-    도착하는 이 응답으로 헤더부터 그리고 나머지(매치 이력/순위 등)는 get_team_profile이
-    도착하는 대로 채운다."""
+    
     team_info = await henrik_api.get_premier_team(team_name, team_tag)
     if not team_info:
         raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
@@ -163,17 +173,7 @@ async def get_team_analysis(
     current: Team = Depends(get_current_team),
     db: Session = Depends(get_db),
 ):
-    """상대 팀 분석 및 승부 예측 탭 전용 상세 통계 조회.
-    get_team_profile과 동일한 매치 히스토리를 바탕으로 분석 탭에 필요한 데이터를 구성한다.
-
-    로그인이 필요하다(Depends(get_current_team)) - engagementPrediction(교전 매치업 예측)이
-    "우리팀 vs 상대팀"을 비교하려면 로그인한 팀이 누군지 알아야 한다.
-
-    Henrik 팀 조회 + 이력 + 매치 상세(건당 ~1.3MB) 여러 건을 매번 실시간으로 불러오는 무거운
-    엔드포인트라 routers/predict.py::predict_match와 같은 이유로 prediction_cache(40분 TTL,
-    동시요청 공유)를 적용했다. 캐시 히트 시엔 _compute_team_analysis가 실행되지 않으므로
-    write-through/predictions 테이블 저장도 40분에 한 번만(최초 호출자에 한해) 일어나,
-    매 조회마다 predictions에 중복 행이 쌓이던 문제도 같이 줄어든다."""
+    
     clean_name = team_name.strip()
     clean_tag = team_tag.strip()
     key = (
@@ -298,12 +298,5 @@ async def get_team_ai_report(
     current: Team = Depends(get_current_team),
     db: Session = Depends(get_db),
 ):
-    """승부예측 페이지 "AI 리포트" 탭(상대팀 인사이트) - services/opponent_ai_report.py 참고.
-    실제 Claude 생성은 20~45초 걸려이 요청 안에서 기다리지 않는다 -
-    캐시가 있으면 {"status":"ready","report":{...}}를 바로 주고, 없으면 백그라운드로
-    생성을 시작시키고 {"status":"generating"}을(를) 바로 준다(front가 몇 초 간격으로
-    다시 호출해 폴링). 상대팀 기준정보(team_engagement_cache)가 아직 DB에 없으면(한 번도
-    검색/조회된 적 없는 팀) {"status":"not_ready"}를 200으로 내려준다 - 이건 에러가
-    아니라 "아직 준비 안 됨"인 정상 상태라, HTTPException으로 던지면 withFallback이
-    실패로 착각해 mock으로 대체해버린다(진짜 "준비 중" 안내 대신 가짜 데이터가 보이게 됨)."""
+    
     return await opponent_ai_report.get_or_start_opponent_ai_report(db, current, team_name, team_tag, background_tasks)
