@@ -12,10 +12,10 @@ _inflight = {}
 logger = logging.getLogger(__name__)
 
 
-async def _compute(key, factory):
+async def _compute(key, factory, ttl_seconds):
     try:
         result = await factory()
-        _results[key] = (monotonic() + TTL_SECONDS, deepcopy(result))
+        _results[key] = (monotonic() + ttl_seconds, deepcopy(result))
         _results.move_to_end(key)
         while len(_results) > MAX_ENTRIES:
             _results.popitem(last=False)
@@ -30,7 +30,7 @@ def _consume_exception(task):
         task.exception()
 
 
-async def get_or_create(key, factory):
+async def get_or_create(key, factory, ttl_seconds=TTL_SECONDS):
     """Share concurrent requests; TTL starts on success and never slides on hits."""
     now = monotonic()
     for expired in [k for k, (deadline, _) in _results.items() if deadline <= now]:
@@ -44,7 +44,7 @@ async def get_or_create(key, factory):
     task = _inflight.get(key)
     if task is None:
         logger.info("[PREDICTION CACHE] MISS key=%s", key)
-        task = asyncio.create_task(_compute(key, factory))
+        task = asyncio.create_task(_compute(key, factory, ttl_seconds))
         _inflight[key] = task
         task.add_done_callback(_consume_exception)
     else:

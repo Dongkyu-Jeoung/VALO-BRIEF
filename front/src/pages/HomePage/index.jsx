@@ -5,9 +5,11 @@ import QuickAnalysisModal from '../QuickAnalysisModal';
 import { quickAnalysisMock } from '../../mocks/team.mock';
 import { ROUTES } from '../../constants/routes';
 import { DEMO_TEAM_NAME, DEMO_TEAM_TAG } from '../../constants/demoTeam';
+import { useResolvedNavLinks } from '../../hooks/useResolvedNavLinks';
 
 export default function HomePage() {
   const [quickAnalysisTeam, setQuickAnalysisTeam] = useState(null);
+  const { goToPredict } = useResolvedNavLinks();
 
   const openQuickAnalysis = () => setQuickAnalysisTeam({ name: DEMO_TEAM_NAME, tag: DEMO_TEAM_TAG });
   const closeQuickAnalysis = () => setQuickAnalysisTeam(null);
@@ -29,7 +31,7 @@ export default function HomePage() {
       title: '상대팀 VS 우리팀 분석',
       description: '저장된 우리 팀 데이터를 기반으로 승률을 예측하고 세부 통계를 비교합니다.',
       linkText: '비교 분석 보러가기',
-      to: ROUTES.predict(DEMO_TEAM_NAME, DEMO_TEAM_TAG),
+      onClick: goToPredict,
     },
     {
       title: '우리팀 맞춤 전략 제안',
