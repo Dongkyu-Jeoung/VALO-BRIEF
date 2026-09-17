@@ -39,6 +39,7 @@ TIER_LABELS = {
     "ascendant": "초월자",
     "immortal": "불멸",
     "radiant": "레디언트",
+    "unrated": "언랭크",
 }
 
 # Henrik 매치의 season.short(예: "e11a5")는 Riot 공식 Episode/Act 번호 그대로다(임의 계산 아님).
@@ -92,7 +93,7 @@ def _load_ref_agents(db: Session) -> dict:
     rows = db.execute(text("SELECT uuid, display_name, name_ko, role_type FROM ref_agents")).mappings().all()
     by_uuid, by_name = {}, {}
     for r in rows:
-        entry = {"name_ko": r["name_ko"] or r["display_name"], "role_type": r["role_type"]}
+        entry = {"uuid": r["uuid"], "name_ko": r["name_ko"] or r["display_name"], "role_type": r["role_type"]}
         by_uuid[r["uuid"].lower()] = entry
         by_name[r["display_name"].lower()] = entry
     _ref_agents_cache = {"by_uuid": by_uuid, "by_name": by_name}

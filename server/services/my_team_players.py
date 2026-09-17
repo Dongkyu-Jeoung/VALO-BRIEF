@@ -18,8 +18,8 @@ Henrik 계정/MMR을 조회해 riot_accounts를 채우고, 성공하면 이후�
 여전히 로스터로 잡혀 실제 로스터와 전혀 안 맞는 문제가 있었다. 그래서 지금은
 henrik_api.get_premier_team()의 "member" 필드(Henrik에 등록된 지금 이 순간의 로스터,
 puuid 포함)를 로스터 판별의 유일한 기준으로 쓴다. ACS/KD 등 스탯은 여전히
-match_player_stats에서 그 puuid로 매칭하고, 매치 기록이 없는 신규 영입 선수는
-0/None으로 표시한다.
+match_player_stats에서 그 puuid로 매칭하고, 매치 기록이 아직 하나도 없는 신규 영입
+선수는 목록에서 제외한다(2026-09-17부터 - 이전엔 0/None으로 표시했었음).
 
 로스터 조회 캐싱: get_premier_team() 호출이 매번 1.5초 안팎(레이트리밋 시 수십 초)
 걸려 이 응답을 team_id 기준 프로세스 메모리에 무기한 캐싱한다(신선도보다 속도 우선).
@@ -178,9 +178,12 @@ async def build_my_team_players(db: Session, team: Team, force_refresh: bool = F
         if not puuid:
             continue  # 방어적 스킵 - Henrik 응답 이상으로 puuid가 없는 항목
 
-        # 우리 DB에 매치 기록이 없는 신규 영입 선수는 rows/account가 비어 아래 스탯이
-        # 전부 0/None으로 내려간다 - 매치가 쌓이면 다음 조회부터 자동으로 채워진다.
+        # 우리 DB에 매치 기록이 아직 하나도 없는 신규 영입 선수는 통계를 전부 0/None으로
+        # 보여주는 대신 목록 자체에서 제외한다(2026-09-17 사용자 요청) - 매치가 쌓여
+        # match_player_stats에 기록이 생기면 다음 조회부터 자동으로 목록에 나타난다.
         rows = by_puuid.get(puuid, [])
+        if not rows:
+            continue
         account = accounts.get(puuid)
 
         kills = sum(r.kills or 0 for r in rows)

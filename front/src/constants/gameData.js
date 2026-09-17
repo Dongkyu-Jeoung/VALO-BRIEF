@@ -37,7 +37,7 @@ export const gameData = {
     { id: 'harbor', name: '하버', image: '../assets/images/agents/harbor.png' },
     { id: 'iso', name: '아이소', image: '../assets/images/agents/iso.png' },
     { id: 'jett', name: '제트', image: '../assets/images/agents/jett.png' },
-    { id: 'kayo', name: '케이오', image: '../assets/images/agents/kay-o.png' },
+    { id: 'kayo', name: '케이오', image: '../assets/images/agents/kayo.png' },
     { id: 'killjoy', name: '킬조이', image: '../assets/images/agents/killjoy.png' },
     { id: 'miks', name: '믹스', image: '../assets/images/agents/miks.png' },
     { id: 'neon', name: '네온', image: '../assets/images/agents/neon.png' },
