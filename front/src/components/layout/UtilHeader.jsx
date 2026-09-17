@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useResolvedNavLinks } from '../../hooks/useResolvedNavLinks';
 import { ROUTES } from '../../constants/routes';
 import LoadingText from '../common/LoadingText';
+import ThemeToggle from '../common/ThemeToggle';
 
 /** 로그인 이후 공통 유틸 헤더 (Frame 04,06,07,08,09~13) */
 export default function UtilHeader() {
@@ -120,6 +121,9 @@ export default function UtilHeader() {
                 )
               ))}
             </div>
+
+            <div className="sidebar-divider" />
+            <ThemeToggle />
 
             {isAuthenticated ? (
               <div className="sidebar-footer">

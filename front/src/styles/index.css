@@ -30,3 +30,5 @@
 @import './pages/login.css';
 @import './pages/signup.css';
 @import './pages/myPage.css';
+@import './components/auth.css';
+@import './components/theme-toggle.css';
