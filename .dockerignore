@@ -13,3 +13,4 @@
 **/*.log
 .codex
 .agents
+server/static/team_icons
