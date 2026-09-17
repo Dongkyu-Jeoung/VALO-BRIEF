@@ -7,10 +7,6 @@ export default function StepTeamInfo({ form, onChange, onSubmit }) {
   const [status, setStatus] = useState('idle');
   const [errors, setErrors] = useState({});
 
-  // 범용 라이엇 계정 로그인 URL (만료 파라미터 제거) — 시각적 흐름을 위해 그대로 열되,
-  // 인증 상태는 팝업 자체가 아니라 verifyRiotId() 응답으로만 결정합니다.
-  const RIOT_AUTH_URL = 'https://auth.riotgames.com/authorize?client_id=play-valorant-web-prod&response_type=token&redirect_uri=https://playvalorant.com/opt_in&scope=openid+account';
-
   // Riot ID 검증: idle → verifying → verified/failed (mock API 응답이 상태를 결정)
   async function handleVerify() {
     if (!form.teamName?.trim() || !form.teamTag?.trim()) {
@@ -26,17 +22,6 @@ export default function StepTeamInfo({ form, onChange, onSubmit }) {
 
       if (res?.verified) {
         setStatus('verified');
-
-        // 화면 중앙 팝업창은 시각적 연출용으로만 유지 (인증 완료 여부에는 영향 없음)
-        const width = 480;
-        const height = 640;
-        const left = window.screenX + (window.innerWidth - width) / 2;
-        const top = window.screenY + (window.innerHeight - height) / 2;
-        window.open(
-          RIOT_AUTH_URL,
-          'RiotAuthPopup',
-          `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`
-        );
       } else {
         setStatus('failed');
         setErrors((prev) => ({ ...prev, riot: 'Riot 계정을 찾을 수 없거나 인증에 실패했습니다.' }));
