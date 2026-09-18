@@ -67,7 +67,7 @@
 }
 
 .filter-tab.on {
-  color: #ffffff;
+  color: var(--text-1);
   background: transparent;
   border-color: transparent;
   font-weight: 700;

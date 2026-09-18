@@ -71,3 +71,35 @@
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
 }
+
+
+[data-theme="light"] {
+  --canvas: #F4F3F1;
+  --bg-void: #FFFFFF;
+  --bg-panel: #FFFFFF;
+  --bg-panel-2: #F5F4F2;
+  --bg-panel-3: #ECEAE6;
+  --bg-panel-hover: #E4E2DD;
+  --border: #DEDBD4;
+  --border-soft: #EAE8E3;
+  --border-strong: #C7C3B9;
+  --text-1: #17171A;
+  --text-2: #4B4B52;
+  --text-3: #7A7A82;
+
+  --accent: #D6293A;
+  --accent-hover: #C21F30;
+  --accent-soft: rgba(214, 41, 58, 0.10);
+  --accent-dim: #F0A9AF;
+
+  --win: #2F5FE0;
+  --win-soft: rgba(47, 95, 224, 0.10);
+  --lose: #D6293A;
+  --lose-soft: rgba(214, 41, 58, 0.10);
+  --gold: #B4791E;
+  --success: #1E9153;
+
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 16px 48px rgba(0,0,0,0.10);
+}
