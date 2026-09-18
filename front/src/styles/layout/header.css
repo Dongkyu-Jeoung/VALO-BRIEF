@@ -91,6 +91,14 @@
   color: #ffffff;
 }
 
+[data-theme="light"] .btn-pill {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="light"] .btn-pill:hover {
+  color: #000000;
+}
+
 .btn-pill.primary {
   background: var(--accent);
   color: #ffffff;
