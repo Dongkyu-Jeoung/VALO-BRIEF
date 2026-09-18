@@ -1,9 +1,75 @@
+/* ==========================================================================
+   Prediction / Navigation Loading — Theme Tokens
+   기본값(:root)은 다크 모드, [data-theme="light"]에서 라이트 모드로 오버라이드.
+   전역 테마 전환 방식이 media query(prefers-color-scheme) 기반이라면
+   아래 [data-theme="light"] 셀렉터만 @media (prefers-color-scheme: light) 로 교체하면 됩니다.
+   ========================================================================== */
+
+:root {
+  /* base surfaces */
+  --bg-void: #0a0b0f;
+  --bg-2: #14161d;
+  --border: #303440;
+  --radius-lg: 16px;
+  --text-1: #edf0f6;
+  --text-2: #a6afbd;
+
+  /* component-specific tokens (dark defaults) */
+  --pl-shadow: #0002;
+  --pl-track-bg: #ffffff0d;
+  --pl-grad-1: #4c7eff18;
+  --pl-grad-2: #ff465512;
+
+  --pl-blue-text: #8bacff;
+  --pl-blue-bg: #4c7eff24;
+  --pl-red-text: #ff8892;
+  --pl-red-bg: #ff465524;
+
+  --pl-beam-start: transparent;
+  --pl-beam-mid1: #4c7eff;
+  --pl-beam-mid2: #b6caff;
+  --pl-beam-end: #ff4655;
+
+  --pl-dot: #8bacff;
+}
+
+[data-theme="light"] {
+  /* base surfaces */
+  --bg-void: #f5f6f9;
+  --bg-2: #ffffff;
+  --border: #e1e4ea;
+  --text-1: #1a1c22;
+  --text-2: #5c6270;
+
+  /* component-specific tokens (light overrides) */
+  --pl-shadow: #0000001a;
+  --pl-track-bg: #0000000d;
+  --pl-grad-1: #4c7eff10;
+  --pl-grad-2: #ff465510;
+
+  --pl-blue-text: #3a5fd9;
+  --pl-blue-bg: #4c7eff1a;
+  --pl-red-text: #d93a4c;
+  --pl-red-bg: #ff46551a;
+
+  --pl-beam-start: transparent;
+  --pl-beam-mid1: #3a5fd9;
+  --pl-beam-mid2: #4c7eff;
+  --pl-beam-end: #d93a4c;
+
+  --pl-dot: #3a5fd9;
+}
+
+/* ==========================================================================
+   Layout
+   ========================================================================== */
+
 .navigation-loading-overlay {
   position: fixed;
   inset: 80px 0 0;
   z-index: 500;
   overflow-y: auto;
-  background: var(--bg-void, #0a0b0f);
+  background: var(--bg-void);
 }
 
 .prediction-loading {
@@ -18,21 +84,32 @@
   width: min(100%, 560px);
   overflow: hidden;
   padding: 40px 36px 28px;
-  border: 1px solid var(--border, #303440);
-  border-radius: var(--radius-lg, 16px);
-  background: radial-gradient(ellipse at 5% 0%, #4c7eff18, transparent 60%),
-    radial-gradient(ellipse at 100% 70%, #ff465512, transparent 60%), var(--bg-2, #14161d);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(ellipse at 5% 0%, var(--pl-grad-1), transparent 60%),
+    radial-gradient(ellipse at 100% 70%, var(--pl-grad-2), transparent 60%), var(--bg-2);
   text-align: center;
-  box-shadow: 0 20px 60px #0002;
+  box-shadow: 0 20px 60px var(--pl-shadow);
 }
 
 .prediction-loading__eyebrow {
-  color: var(--text-2, #a6afbd);
+  color: var(--text-2);
   font: 11px monospace;
   letter-spacing: 0.22em;
 }
 
-.prediction-loading__matchup { display: flex; align-items: center; justify-content: center; gap: 30px; margin: 32px 0 26px; }
+/* ==========================================================================
+   Matchup / Emblems
+   ========================================================================== */
+
+.prediction-loading__matchup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  margin: 32px 0 26px;
+}
+
 .prediction-loading__emblem {
   display: grid;
   place-items: center;
@@ -42,7 +119,18 @@
   font: 700 26px monospace;
   animation: prediction-emblem-pulse 2.8s ease-in-out infinite;
 }
-.prediction-loading__emblem--blue { color: #8bacff; background: #4c7eff24; }
+
+.prediction-loading__emblem--blue {
+  color: var(--pl-blue-text);
+  background: var(--pl-blue-bg);
+}
+
+.prediction-loading__emblem--red {
+  color: var(--pl-red-text);
+  background: var(--pl-red-bg);
+  animation-delay: 1.4s;
+}
+
 .prediction-loading__emblem--label {
   width: 70px;
   height: 74px;
@@ -52,28 +140,126 @@
   line-height: 1;
   white-space: nowrap;
 }
-.prediction-loading__emblem--red { color: #ff8892; background: #ff465524; animation-delay: 1.4s; }
-.prediction-loading__vs { font: italic 700 17px monospace; color: var(--text-2, #a6afbd); }
-.prediction-loading__card h2 { margin: 0; font-size: clamp(20px, 4vw, 26px); color: var(--text-1, #edf0f6); }
-.prediction-loading__opponent { margin: 12px 0 0; color: var(--text-2, #a6afbd); font-size: 13px; overflow-wrap: anywhere; }
-.prediction-loading__message { min-height: 44px; margin: 16px 0 26px; font-size: 13px; line-height: 1.7; color: var(--text-2, #a6afbd); }
-.prediction-loading__track { position: relative; height: 8px; overflow: hidden; border-radius: 8px; background: #ffffff0d; }
+
+.prediction-loading__vs {
+  font: italic 700 17px monospace;
+  color: var(--text-2);
+}
+
+/* ==========================================================================
+   Text
+   ========================================================================== */
+
+.prediction-loading__card h2 {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 26px);
+  color: var(--text-1);
+}
+
+.prediction-loading__opponent {
+  margin: 12px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.prediction-loading__message {
+  min-height: 44px;
+  margin: 16px 0 26px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+/* ==========================================================================
+   Progress Track
+   ========================================================================== */
+
+.prediction-loading__track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--pl-track-bg);
+}
+
 .prediction-loading__beam {
   position: absolute;
   inset: 0 auto 0 0;
   width: 45%;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, #4c7eff 30%, #b6caff 65%, #ff4655);
+  background: linear-gradient(
+    90deg,
+    var(--pl-beam-start),
+    var(--pl-beam-mid1) 30%,
+    var(--pl-beam-mid2) 65%,
+    var(--pl-beam-end)
+  );
   animation: prediction-beam-travel 2.4s ease-in-out infinite;
 }
-.prediction-loading__footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; color: var(--text-2, #a6afbd); font-size: 12px; }
-.prediction-loading__phase { display: inline-flex; align-items: center; gap: 8px; }
-.prediction-loading__phase i { width: 5px; height: 5px; border-radius: 50%; background: #8bacff; }
-.prediction-loading__elapsed { font-family: monospace; font-variant-numeric: tabular-nums; }
-@keyframes prediction-beam-travel { from { transform: translateX(-110%); } to { transform: translateX(330%); } }
-@keyframes prediction-emblem-pulse { 0%, 100% { transform: translateY(0); opacity: .65; } 50% { transform: translateY(-5px); opacity: 1; } }
-@media (max-width: 480px) { .prediction-loading { padding: 24px 12px; } .prediction-loading__card { padding: 30px 20px 22px; } }
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.prediction-loading__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.prediction-loading__phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prediction-loading__phase i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--pl-dot);
+}
+
+.prediction-loading__elapsed {
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+@keyframes prediction-beam-travel {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(330%); }
+}
+
+@keyframes prediction-emblem-pulse {
+  0%, 100% { transform: translateY(0); opacity: .65; }
+  50% { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ==========================================================================
+   Responsive / Accessibility
+   ========================================================================== */
+
+@media (max-width: 480px) {
+  .prediction-loading { padding: 24px 12px; }
+  .prediction-loading__card { padding: 30px 20px 22px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .prediction-loading__emblem, .prediction-loading__beam { animation: none; }
-  .prediction-loading__beam { width: 100%; opacity: .65; }
+  .prediction-loading__emblem,
+  .prediction-loading__beam {
+    animation: none;
+  }
+  .prediction-loading__beam {
+    width: 100%;
+    opacity: .65;
+  }
 }
