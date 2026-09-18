@@ -1,0 +1,50 @@
+.sidebar-divider {
+  height: 1px;
+  margin: var(--sp-2) 0;
+  background: var(--border-soft);
+}
+
+.theme-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--sp-3) var(--sp-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.theme-toggle-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel-3);
+  border: 1px solid var(--border);
+  transition: background var(--transition-base), border-color var(--transition-base);
+  flex-shrink: 0;
+}
+
+.theme-toggle-switch .theme-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform var(--transition-base), background var(--transition-base);
+}
+
+.theme-toggle-switch.is-light {
+  background: var(--accent-soft);
+  border-color: var(--accent-dim);
+}
+
+.theme-toggle-switch.is-light .theme-toggle-knob {
+  transform: translateX(18px);
+  background: var(--accent);
+}

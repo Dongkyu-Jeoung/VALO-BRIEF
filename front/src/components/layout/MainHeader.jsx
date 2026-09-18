@@ -5,6 +5,8 @@ import { ROUTES } from '../../constants/routes';
 import { useAuth } from '../../context/AuthContext';
 import { useResolvedNavLinks } from '../../hooks/useResolvedNavLinks';
 import NavigationLoading from '../common/NavigationLoading';
+import LoadingText from '../common/LoadingText';
+import ThemeToggle from '../common/ThemeToggle';
 
 export default function MainHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -136,6 +138,9 @@ export default function MainHeader() {
                 )
               ))}
             </div>
+
+            <div className="sidebar-divider" />
+            <ThemeToggle />
           </nav>
         </>
       )}
