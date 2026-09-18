@@ -10,6 +10,7 @@ import { TeamProfileBody } from '../TeamProfilePage';
 import AnalysisTab from './AnalysisTab';
 import AiReportTab from './AiReportTab';
 import LoadingText from '../../components/common/LoadingText';
+import PredictionLoading from '../../components/predict/PredictionLoading';
 
 const TABS = ['통계', '분석', 'AI 리포트'];
 
@@ -171,7 +172,14 @@ export default function MatchPredictionPage() {
       </div>
     );
   }
-  if (!prediction) return <LoadingText full />;
+  if (!prediction) {
+    return (
+      <PredictionLoading
+        opponentName={resolvedOpponent?.name}
+        opponentResolved={!!resolvedOpponent}
+      />
+    );
+  }
 
   // 로그인 상태인데도 /api/predict가 실패(최근 매치 로스터 5인을 못 찾는 등)해서
   // predictionMock으로 폴백하면 우리팀 이름까지 mock("Team Phoenix")으로 보일 수 있다 -

@@ -4,7 +4,7 @@ import Logo from './Logo';
 import { ROUTES } from '../../constants/routes';
 import { useAuth } from '../../context/AuthContext';
 import { useResolvedNavLinks } from '../../hooks/useResolvedNavLinks';
-import LoadingText from '../common/LoadingText';
+import NavigationLoading from '../common/NavigationLoading';
 
 export default function MainHeader() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -21,17 +21,18 @@ export default function MainHeader() {
     { label: '승부 예측', prefix: '/predict', onSelect: goToPredict },
     { label: '우리팀 분석', prefix: ROUTES.myTeam, to: ROUTES.myTeam },
   ];
-  // 조회 중인지 여부 - true인 동안 화면 전체를 덮는 로딩 오버레이를 띄운다
-  // (UtilHeader와 동일 패턴 - 그쪽 주석 참고).
-  const [resolving, setResolving] = useState(false);
+  // 조회 중인 메뉴 항목 - non-null인 동안 화면 전체를 덮는 로딩 오버레이를 띄운다
+  // (UtilHeader와 동일 패턴 - 그쪽 주석 참고). item.prefix로 NavigationLoading에
+  // 어떤 문구를 보여줄지 알려줘야 해서 boolean이 아니라 item 자체를 들고 있는다.
+  const [resolvingItem, setResolvingItem] = useState(null);
 
   async function handleSelect(item) {
-    if (resolving) return;
-    setResolving(true);
+    if (resolvingItem) return;
+    setResolvingItem(item);
     try {
       await item.onSelect();
     } finally {
-      setResolving(false);
+      setResolvingItem(null);
     }
   }
 
@@ -66,7 +67,7 @@ export default function MainHeader() {
         </nav>
       )}
 
-      {resolving && <LoadingText full />}
+      {resolvingItem && <NavigationLoading destination={resolvingItem.prefix} />}
 
       <div className="header-right">
         {isAuthenticated ? (

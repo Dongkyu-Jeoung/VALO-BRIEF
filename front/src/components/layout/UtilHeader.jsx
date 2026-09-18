@@ -6,7 +6,7 @@ import HeaderSearchBar from '../search/HeaderSearchBar';
 import { useAuth } from '../../context/AuthContext';
 import { useResolvedNavLinks } from '../../hooks/useResolvedNavLinks';
 import { ROUTES } from '../../constants/routes';
-import LoadingText from '../common/LoadingText';
+import NavigationLoading from '../common/NavigationLoading';
 
 /** 로그인 이후 공통 유틸 헤더 (Frame 04,06,07,08,09~13) */
 export default function UtilHeader() {
@@ -28,21 +28,21 @@ export default function UtilHeader() {
     { label: '승부 예측', prefix: '/predict', onSelect: goToPredict },
     { label: '우리팀 분석', prefix: ROUTES.myTeam, to: ROUTES.myTeam },
   ];
-  // 조회 중인지 여부 - true인 동안 화면 전체를 덮는 로딩 오버레이(LoadingText full,
-  // PlayerProfilePage/TeamProfilePage가 자체 데이터 로딩에 쓰는 것과 같은 컴포넌트)를
-  // 띄운다. 주소는 실제 목적지가 정해졌을 때 딱 한 번만 바뀌므로(useResolvedNavLinks
+  // 조회 중인 메뉴 항목 - non-null인 동안 화면 전체를 덮는 로딩 오버레이(NavigationLoading)를
+  // 띄운다. item.prefix로 어떤 문구를 보여줄지 알려줘야 해서 boolean이 아니라 item 자체를
+  // 들고 있는다. 주소는 실제 목적지가 정해졌을 때 딱 한 번만 바뀌므로(useResolvedNavLinks
   // 참고) 중간 경로가 주소창에 노출되는 일은 없다(2026-09-14 정리 - 처음엔 메뉴
   // 항목에만 작은 스피너를 붙였는데 눈에 잘 안 띄고 어색하다는 지적을 받아 전체 화면
   // 오버레이로 바꿨다).
-  const [resolving, setResolving] = useState(false);
+  const [resolvingItem, setResolvingItem] = useState(null);
 
   async function handleSelect(item) {
-    if (resolving) return;
-    setResolving(true);
+    if (resolvingItem) return;
+    setResolvingItem(item);
     try {
       await item.onSelect();
     } finally {
-      setResolving(false);
+      setResolvingItem(null);
     }
   }
 
@@ -75,7 +75,7 @@ export default function UtilHeader() {
         ))}
       </nav>
 
-      {resolving && <LoadingText full />}
+      {resolvingItem && <NavigationLoading destination={resolvingItem.prefix} />}
 
       <div className="header-right">
         {!isHome && <HeaderSearchBar />}
