@@ -8,6 +8,7 @@ import TopAgentsList from './TopAgentsList';
 import MatchHistoryList from '../../components/match/MatchHistoryList';
 import DonutChart from '../../components/common/DonutChart';
 import LoadingText from '../../components/common/LoadingText';
+import ProgressLoading from '../../components/common/ProgressLoading';
 import { useSeasonActFilter } from '../../hooks/useSeasonActFilter';
 import { useListFilter } from '../../hooks/useListFilter';
 import { useCooldown } from '../../hooks/useCooldown';
@@ -18,7 +19,6 @@ export default function PlayerProfilePage() {
   const [profile, setProfile] = useState(null);
   const [modeStats, setModeStats] = useState(null);
   const [mode, setMode] = useState('전체');
-  // actOptions: 백엔드가 실제 데이터 기준으로 내려주는 [{season, acts}] (프로필 로드 전엔 없음)
   const { season, setSeason, act, setAct, seasons, acts } = useSeasonActFilter(profile?.actOptions);
   const { isReady, trigger } = useCooldown(`${riotId}-${tag}`);
 
@@ -27,17 +27,12 @@ export default function PlayerProfilePage() {
     fetchPlayerProfile(riotId, tag).then((data) => {
       if (active) {
         setProfile(data);
-        setModeStats(data.modeStats); // 기본 선택 Act(actOptions[0]) 스탯은 이미 여기 포함됨
+        setModeStats(data.modeStats); 
       }
     });
     return () => { active = false; };
   }, [riotId, tag]);
 
-  // 시즌/Act 선택박스 전용 - ModeStatCards만 이 구간 스탯으로 갱신한다.
-  // 매치 기록(matchHistory)은 season/act와 무관하게 항상 최근 20게임 그대로 보여준다.
-  // 현재 선택이 프로필 응답의 기본 Act와 같으면(최초 로드, 또는 기본 Act로 되돌아온 경우)
-  // 이미 갖고 있는 profile.modeStats를 그대로 쓰고 재조회하지 않는다 - 사용자가 실제로
-  // 다른 Act를 선택했을 때만 호출한다.
   useEffect(() => {
     if (!profile) return;
     const defaultOption = profile.actOptions?.[0];
@@ -55,11 +50,8 @@ export default function PlayerProfilePage() {
   const matchModeFilter = useCallback((m) => mode === '전체' || m.mode === mode, [mode]);
   const filteredHistory = useListFilter(profile?.matchHistory, matchModeFilter);
 
-  if (!profile) return <LoadingText full />;
+  if (!profile) return <ProgressLoading variant="player" />;
 
-  // modeStats 갱신은 위 season/act/profile을 지켜보는 useEffect가 이미 처리하므로
-  // (기본 Act면 profile.modeStats 재사용, 아니면 fetchPlayerModeStats) 여기서는
-  // profile만 새로 받아오면 된다 - 두 곳에서 같은 API를 중복 호출하지 않도록 한다.
   function handleRefresh() {
     trigger();
     fetchPlayerProfile(riotId, tag).then(setProfile);

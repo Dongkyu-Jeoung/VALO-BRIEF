@@ -3,13 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { getMe, updateMe, deleteMe } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import EmptyImageBox from '../../components/common/EmptyImageBox';
-import LoadingText from '../../components/common/LoadingText';
+import ProgressLoading from '../../components/common/ProgressLoading';
 import '@/styles/pages/myPage.css';
 
-/**
- * 마이페이지 - 로그인한 팀 계정 조회/수정/탈퇴 (routers/auth.py: GET·PATCH·DELETE /api/auth/me).
- * 헤더 햄버거 메뉴(UtilHeader.jsx)의 '마이페이지' 링크로 진입.
- */
 export default function MyPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -107,9 +103,9 @@ export default function MyPage() {
     }
   }
 
-  if (loading || !team) return <LoadingText full />;
+  if (loading || !team) return <ProgressLoading variant="account" />;
 
-    return (
+  return (
     <div className="page-container my-page">
       <div className="my-page-inner">
         <div className="profile-card">

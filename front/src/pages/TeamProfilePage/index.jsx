@@ -7,7 +7,7 @@ import MiniRankTable from '../../components/common/MiniRankTable';
 import MapWinrateList from './MapWinrateList';
 import TeamMatchHistoryList from '../../components/match/TeamMatchHistoryList';
 import DonutChart from '../../components/common/DonutChart';
-import LoadingText from '../../components/common/LoadingText';
+import ProgressLoading from '../../components/common/ProgressLoading';
 import { useSeasonActFilter } from '../../hooks/useSeasonActFilter';
 import { useListFilter } from '../../hooks/useListFilter';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +25,10 @@ import { ROUTES } from '../../constants/routes';
  * fetchTeamProfile 응답 하나만 기다렸다가 전체를 한 번에 그린다(PlayerProfilePage와 동일
  * 패턴) - 응답 자체를 빠르게 만드는 쪽(services/search.py의 존재확인 프리페치, routers/
  * teams.py의 write-through 백그라운드화)으로 성능을 개선한다.
+ *
+ * 페이지 전체 로딩 화면은 ProgressLoading으로 통일한다(승부예측 페이지와 같은 화면).
+ * LoadingText full(스피너 + "불러오는 중...")을 섞어 쓰면 로딩 단계마다 화면이 바뀌어
+ * 깜빡여 보이므로 페이지 단위 로딩에는 쓰지 않는다.
  */
 export default function TeamProfilePage() {
   const { teamName, teamTag } = useParams();
@@ -34,12 +38,6 @@ export default function TeamProfilePage() {
   useEffect(() => {
     let active = true;
     setTeam(null);
-
-    // 헤더/메뉴의 "상대팀 전적 검색"은 항상 데모 팀(team-ascend#ASC)으로 연결돼 있다.
-    // 로그인 상태에서 그 데모 링크로 들어온 경우에만 MatchPredictionPage와 동일한
-    // 규칙으로 우리 팀이 가장 최근에 매치했던 상대팀으로 자동 대체한다 - 최근 상대를
-    // 못 찾으면(매치 이력 없음 등) URL의 팀으로 그냥 둔다. 헤더 검색으로 실제 팀을
-    // 검색해 들어온 경우(URL이 데모 링크가 아님)는 이 자동 대체를 건너뛴다.
     async function resolveTeam() {
       const isDemoLink = teamName === DEMO_TEAM_NAME && teamTag === DEMO_TEAM_TAG;
       if (!isAuthenticated || !isDemoLink) return { name: teamName, tag: teamTag };
@@ -54,7 +52,7 @@ export default function TeamProfilePage() {
     return () => { active = false; };
   }, [teamName, teamTag, isAuthenticated]);
 
-  if (!team) return <LoadingText full />;
+  if (!team) return <ProgressLoading variant="team" />;
 
   return (
     <div className="page-container">
@@ -62,11 +60,6 @@ export default function TeamProfilePage() {
     </div>
   );
 }
-
-// filteredHistory(선택된 season/act의 실제 매치)에 roundsWon/roundsLost가 다 있으면
-// 그걸로 "최근 N게임 요약"을 직접 계산해 Act 선택에 따라 값이 바뀌게 한다.
-// 그 필드가 없는 경우(아직 team_profile.py 연동 전 mock, 예: MyTeamAnalysisPage/StatsTab의
-// myTeamStatsMock)는 기존처럼 team.recentSummary(고정값)를 그대로 쓴다 - 하위 호환.
 function summarizeMatches(matches, fallback) {
   const hasRounds = matches?.length > 0
     && matches.every((m) => typeof m.roundsWon === 'number' && typeof m.roundsLost === 'number');
@@ -75,10 +68,6 @@ function summarizeMatches(matches, fallback) {
   const wins = matches.filter((m) => m.result === 'win').length;
   const roundsWon = matches.reduce((sum, m) => sum + m.roundsWon, 0);
   const roundsLost = matches.reduce((sum, m) => sum + m.roundsLost, 0);
-  // 팀 전체(5명 합산) KDA - 각 매치 record.kda(services/team_profile.py::_parse_team_match가
-  // 이미 5명 합산 kills+assists / 합산 deaths로 계산해둔 값)를 필터링된 매치 수만큼
-  // 평균낸다. team.recentSummary.avgKda(백엔드 build_team_profile)와 동일한 정의를
-  // Act 필터링 시에도 그대로 유지하기 위함.
   const avgKda = Math.round(
     (matches.reduce((sum, m) => sum + (m.kda ?? 0), 0) / matches.length) * 100
   ) / 100;
@@ -93,8 +82,6 @@ function summarizeMatches(matches, fallback) {
 }
 
 export function TeamProfileBody({ team, showPredictCta = false }) {
-  // actOptions: team_profile.py가 실제 데이터 기준으로 내려주는 [{season, acts}] (없으면
-  // 기존 고정 SEASONS/ACTS로 자동 폴백 - useSeasonActFilter 참고).
   const { user, isAuthenticated } = useAuth();
   const { season, setSeason, act, setAct, seasons, acts } = useSeasonActFilter(team.actOptions);
   const filteredHistory = useListFilter(
@@ -103,12 +90,7 @@ export function TeamProfileBody({ team, showPredictCta = false }) {
   );
   const recentSummary = summarizeMatches(filteredHistory, team.recentSummary);
   const isComputedSummary = recentSummary !== team.recentSummary;
-  // 검색된 팀이 로그인한 내 팀 자신이면(자기 팀 이름으로 검색해 들어온 경우) "승부 예측"은
-  // 의미가 없으므로 CTA를 숨긴다.
   const isOwnTeam = user?.teamName === team.name && user?.teamTag === team.tag;
-  // 비로그인 상태면 버튼을 아예 숨긴다 - /predict/*가 ProtectedRoute라 눌러도 로그인
-  // 페이지로 리다이렉트될 뿐이지만, 그 전에 "누를 수 있는데 로그인 페이지로 튕기는"
-  // 어색한 흐름 대신 애초에 안 보이는 쪽이 낫다는 요청(2026-09-14).
   const showPredictButton = showPredictCta && isAuthenticated && !isOwnTeam;
 
   return (
