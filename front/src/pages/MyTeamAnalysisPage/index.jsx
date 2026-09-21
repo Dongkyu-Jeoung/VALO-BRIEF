@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchMyTeamStats, fetchMyTeamAnalysis, fetchMyTeamAiReport } from '../../api/myTeam';
-import { myTeamProfileMock } from '../../mocks/myTeam.mock';
 import { gameData } from '../../constants/gameData';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import RecentSummaryBox from '../../components/profile/RecentSummaryBox';
 import FilterTabs from '../../components/common/FilterTabs';
 import LoadingText from '../../components/common/LoadingText';
+import ProgressLoading from '../../components/common/ProgressLoading';
 import StatsTab from './StatsTab';
 import PlayerAnalysisTab from './PlayerAnalysisTab';
 import TeamAnalysisTab from './TeamAnalysisTab';
@@ -49,32 +49,34 @@ export default function MyTeamAnalysisPage() {
   const currentMapMeta = gameData.maps.find(m => m.id === selectedMapId) || gameData.maps[0];
   const currentMapStats = analysis?.mapInfoByMap?.[selectedMapId] || null;
 
+  // 페이지 첫 로딩(stats 도착 전)은 ProgressLoading으로 통일한다(다른 페이지와 같은 화면).
+  // 훅은 전부 위에서 호출한 뒤라서 여기서 early return 해도 안전하다. 이 아래부터는
+  // stats가 항상 있으므로 헤더/통계 탭에는 stats null 분기를 두지 않는다.
+  // 팀 분석 탭의 <LoadingText />는 탭 안 일부 영역용(analysis만 늦게 오는 경우)이라 그대로 쓴다.
+  if (!stats) return <ProgressLoading variant="team" />;
+
   return (
     <div className="page-container">
-      {stats ? (
-        <ProfileHeader
-          type="team"
-          name={stats.name}
-          tag={stats.tag}
-          division={stats.division}
-          avatarUrl={stats.ratingIconUrl}
-          showSeasonSelect
-          season={season}
-          onSeasonChange={setSeason}
-          act={act}
-          onActChange={setAct}
-          seasons={seasons}
-          acts={acts}
-        />
-      ) : (
-        <LoadingText />
-      )}
+      <ProfileHeader
+        type="team"
+        name={stats.name}
+        tag={stats.tag}
+        division={stats.division}
+        avatarUrl={stats.ratingIconUrl}
+        showSeasonSelect
+        season={season}
+        onSeasonChange={setSeason}
+        act={act}
+        onActChange={setAct}
+        seasons={seasons}
+        acts={acts}
+      />
 
-      {stats ? <RecentSummaryBox recentSummary={stats.recentSummary} /> : null}
+      <RecentSummaryBox recentSummary={stats.recentSummary} />
 
       <FilterTabs tabs={TABS} activeTab={activeTab} onChange={(tab) => setSearchParams({ tab })} />
 
-      {activeTab === '통계' ? (stats ? <StatsTab stats={stats} matches={filteredHistory} /> : <LoadingText />) : null}
+      {activeTab === '통계' ? <StatsTab stats={stats} matches={filteredHistory} /> : null}
       {activeTab === '개인 분석' ? <PlayerAnalysisTab /> : null}
       
       {/* 팀 분석 탭에 최상위에서 정제한 맵 데이터와 상태 제어 함수를 안전하게 전달 */}
@@ -92,7 +94,7 @@ export default function MyTeamAnalysisPage() {
 
       {activeTab === 'AI 리포트' ? (
         aiReport ? (
-          <AiReportTab report={aiReport} teamName={stats?.name ?? myTeamProfileMock.name} />
+          <AiReportTab report={aiReport} teamName={stats.name} />
         ) : (
           // AI 리포트는 상대팀과 달리 폴링 없이 이 요청 하나가 끝나야 뜬다(Claude 호출이
           // 요청 안에서 동기로 실행됨 - services/ai_report.py::build_my_team_ai_report 참고,
@@ -102,7 +104,7 @@ export default function MyTeamAnalysisPage() {
             <div className="popup-head plain">
               <div className="bolt" />
               <div className="popup-title display lg">
-                AI 전술 리포트 — {stats?.name ?? myTeamProfileMock.name} 팀 분석
+                AI 전술 리포트 — {stats.name} 팀 분석
               </div>
             </div>
             <div className="empty-text">
